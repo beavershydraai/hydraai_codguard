@@ -1,0 +1,135 @@
+# AGENTS.md
+
+Guidance for AI coding agents (Claude Code, Codex, Gemini CLI, Cursor and others) working in this repository. Human contributors should read it too.
+
+## Project
+
+COD Guard scores cash-on-delivery (COD) orders from Vietnamese social-commerce and website sellers for refusal risk (*"bom hàng"*). It explains the risk in plain Vietnamese and takes the least intrusive action that still protects the seller: ship, send a confirmation link, place an AI confirmation call, require a deposit, or hold the order for review.
+
+It is a prototype for the Google Cloud AI Builder Cup 2026 (Retail & Commerce track).
+
+| Document | Use it for |
+|---|---|
+| `README.md` | Product overview, architecture, planned layout and setup |
+| `COD_Guard_Scope_of_Work.md` | Deliverables, workstreams, milestones, scope cut line, out of scope (Vietnamese) |
+| `COD_Guard_Epics.md` | Epics E1–E10 and sub-epics, each with its acceptance criteria ("Done khi"), priority and dependencies (Vietnamese) |
+
+- The "Done khi" column in `COD_Guard_Epics.md` is the acceptance criterion for a piece of work. If it disagrees with this file, the epics file wins; point out the conflict in the PR.
+- `COD_Guard_Scope_of_Work.md` and `COD_Guard_Epics.md` are maintained by the repo owner. Change them only when asked.
+
+## Status
+
+There is no application code yet. The layout, stack and commands below are the plan from `README.md`. When you add the first real code for an area, replace the planned command with the real one, here and in the README, in the same PR. Never document a command you have not run.
+
+## Planned layout
+
+```
+backend/        Python service on Cloud Run: API, decision engine, ADK agents
+  app/
+  scoring/      hard rules, expected loss, model calls
+  agents/       ADK orchestration
+  voice/        Gemini Live session handling
+  tests/
+frontend/       Shop web app + buyer confirmation page (Firebase Hosting)
+ml/             Data prep, synthetic data generator, BigQuery ML SQL, backtest
+data/seed/      Pseudonymised demo data only
+infra/          Deployment and Firebase config
+scripts/        Demo reset, abuse simulation, call test runner
+```
+
+## Stack
+
+- Backend: Python 3.11+, ASGI app served by uvicorn (`app.main:app`)
+- Frontend: Node.js 20+
+- AI: Gemini (signal extraction and reasons), Gemini Live API (voice), Agent Development Kit (orchestration)
+- Data: BigQuery ML boosted trees (risk model), BigQuery (training data, analytics), Firestore (app state)
+- Secrets in Secret Manager; region `asia-southeast1`
+- Model IDs come from environment variables (`GEMINI_MODEL`, `GEMINI_LIVE_MODEL`). Never hard-code them.
+
+## Commands (planned)
+
+| Task | Command |
+|---|---|
+| Backend dev server | `cd backend && uvicorn app.main:app --reload --port 8080` |
+| Frontend dev server | `cd frontend && npm run dev` |
+| Reset demo data | `python scripts/reset_demo.py` |
+| Backend tests | TBD, add when `backend/tests` lands |
+| Deploy | Automatic on merge to `main` (E1.2). Do not deploy by hand unless asked. |
+
+## Domain rules
+
+These rules come from the README and the epics. Code and tests must enforce them. If a task seems to require breaking one, stop and raise it in the PR.
+
+### Scoring
+
+- Gemini extracts signals and writes reasons. It never sets or changes the score, the tier or the action.
+- At most 3 reasons per order, in Vietnamese, each backed by a signal actually present on the order. A check rejects reasons that do not match a real signal. Target: 0 invented reasons on the 30-order evaluation set.
+- Hard rules run first:
+  - fully prepaid order → skipped;
+  - invalid phone number → held for review;
+  - phone with a ≥75% return rate over at least 3 past orders → Very High.
+- Location may contribute to a score but is never the only reason for High or Very High.
+- The training label "failed" counts buyer-caused failures only (refused, unreachable), never carrier or shop errors.
+
+### Decisions
+
+- `expected_loss = P(failed delivery) × cost of one failed delivery`, based on the amount still to collect after any deposit.
+- Contact the buyer only when `expected_loss` is higher than the cost of the contact action.
+- Default policy:
+
+  | Tier | Action | If no response |
+  |---|---|---|
+  | Low | Ship now | — |
+  | Medium | Send confirmation link | AI call after 2 hours |
+  | High | AI call | Hold for review after the last attempt |
+  | Very High | Require deposit | Hold for review if unpaid |
+
+- Order states: Mới, Được gửi, Chờ xác nhận, Chờ cọc, Chờ duyệt, Đã hủy, Đã gửi, Giao thành công, Giao thất bại.
+- Editing an order before it ships triggers a rescore. A confirmed order is never contacted again.
+- A policy change applies only to decisions made after the change.
+- Every manual override records who made it, when, and why, in the audit log.
+
+### Contact protection
+
+| Rule | Default |
+|---|---|
+| AI calls per phone number, across all shops | At most 1 per 24 hours |
+| Orders to the same phone batched into one contact | Within 15 minutes |
+| Contact hours | 08:00–21:00, Vietnam time (`Asia/Ho_Chi_Minh`) |
+| Call attempts per order | 2, at least 30 minutes apart |
+| After *"Tôi không đặt"* | Block the phone for 30 days, all shops |
+| After a confirmed order | Trust the phone for 7 days, same shop |
+| Gift orders | Verify with the buyer only, never the recipient |
+| Content | Order-related only, never promotional |
+
+### AI call and confirmation page
+
+- The AI call discloses that it is an automated assistant and names the shop. It reads the order summary, reads any changes back before ending, and records exactly one of 7 outcomes: Xác nhận, Đã sửa, Hủy, Không đặt, Không nghe máy, Nhầm người, Không rõ.
+- The confirmation page needs no login and offers Xác nhận / Sửa địa chỉ / Hủy / *"Tôi không đặt"*. Personal data is partially masked. The link expires after 48 hours.
+
+## Privacy and secrets
+
+- No real phone numbers, names or addresses anywhere in the repo: seed data, fixtures, tests, screenshots and logs included. Use the synthetic data generator.
+- Hash phone numbers wherever they are shared across shops.
+- Secrets live in Secret Manager. Never commit `.env`, keys or tokens; keep `.env.example` up to date instead.
+- Cap Gemini calls on public demo paths so judges cannot exhaust the quota (E1.4).
+
+## Language
+
+- Code, identifiers, comments, commit messages and PRs: English.
+- Shop UI, buyer confirmation page, AI reasons and call scripts: Vietnamese, with English available for the demo call.
+- Predicted figures in the UI carry the label "ước tính". Simulated Zalo ZNS / SMS previews carry the label "mock".
+
+## Scope and timeline
+
+- Milestones: M1 9 Oct · M2 13 Oct (end-to-end flow) · M3 16 Oct evening (feature freeze) · M4 18 Oct (submission). After M3, bug fixes only.
+- Build Must items first, then Should. Could items wait until after submission.
+- Out of scope for the prototype: contacting buyers of marketplace orders (Shopee, Lazada, TikTok Shop), real Zalo ZNS / SMS, real deposits or payments, ready-made connectors (Pancake, Haravan, Sapo, KiotViet), mobile apps, shop billing, languages other than Vietnamese and English. Add new ideas to the roadmap instead of building them.
+
+## Git workflow
+
+- `main` is the default branch and the deploy branch. Never commit or push to it directly, and never force-push it.
+- One branch per change, named `feat/…`, `fix/…`, `docs/…`, `chore/…` or `test/…`. Include the sub-epic ID when there is one, e.g. `feat/e4-3-contact-protection`.
+- Commit messages: English, imperative summary of at most 72 characters.
+- Every change goes through a PR into `main`. Title it with the sub-epic ID when there is one, e.g. `[E4.3] Contact protection limits`. The body says what changed, how it was tested, and which "Done khi" criteria it meets.
+- Keep PRs small: one sub-epic per PR where possible.
