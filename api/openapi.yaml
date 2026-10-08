@@ -1,0 +1,3730 @@
+openapi: 3.1.0
+info:
+  title: COD Guard API
+  description: |-
+    Contract between the COD Guard backend and its clients (shop web app, buyer confirmation page,
+    external sales tools).
+
+    Conventions:
+
+    - Money is integer VND in fields ending `_vnd`.
+    - Times are ISO 8601 with offset; shops operate in Vietnam time (`+07:00`).
+    - Enum values are English snake_case. Each enum's description lists its Vietnamese UI labels.
+    - Errors use `application/problem+json` (RFC 9457) with a machine-readable `code`.
+    - Lists use cursor pagination: pass `next_cursor` back as `cursor`.
+  version: 0.1.0
+paths:
+  /api/v1/me:
+    get:
+      tags:
+      - me
+      summary: Current user
+      operationId: get_me
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+      security:
+      - firebaseAuth: []
+  /api/v1/shop:
+    get:
+      tags:
+      - shop
+      summary: Current user's shop and settings
+      operationId: get_shop
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Shop'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+      security:
+      - firebaseAuth: []
+    patch:
+      tags:
+      - shop
+      summary: Update shop name or settings (owner only)
+      operationId: update_shop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShopUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Shop'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+        '403':
+          description: Authenticated but not allowed (e.g. staff changing policy).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Forbidden
+                status: 403
+                code: forbidden
+                detail: Only the shop owner can change the policy.
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Validation error
+                status: 422
+                code: validation_error
+                errors:
+                - loc:
+                  - body
+                  - buyer_phone
+                  msg: String should match pattern '^\+?[0-9]{9,15}$'
+                  type: string_pattern_mismatch
+      security:
+      - firebaseAuth: []
+  /api/v1/shop/policy:
+    get:
+      tags:
+      - shop
+      summary: Tier policy in force
+      operationId: get_policy
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+      security:
+      - firebaseAuth: []
+    put:
+      tags:
+      - shop
+      summary: Replace the tier policy (owner only)
+      description: Creates a new version. It applies only to decisions made after `effective_from`; earlier
+        decisions keep their version.
+      operationId: update_policy
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+        '403':
+          description: Authenticated but not allowed (e.g. staff changing policy).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Forbidden
+                status: 403
+                code: forbidden
+                detail: Only the shop owner can change the policy.
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Validation error
+                status: 422
+                code: validation_error
+                errors:
+                - loc:
+                  - body
+                  - buyer_phone
+                  msg: String should match pattern '^\+?[0-9]{9,15}$'
+                  type: string_pattern_mismatch
+      security:
+      - firebaseAuth: []
+  /api/v1/shop/policy/versions:
+    get:
+      tags:
+      - shop
+      summary: All policy versions, newest first (audit)
+      operationId: list_policy_versions
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Policy'
+                type: array
+                title: Response List Policy Versions
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+      security:
+      - firebaseAuth: []
+  /api/v1/orders:
+    get:
+      tags:
+      - orders
+      summary: Order inbox
+      description: Filter by status and tier. The manual review queue is `status=pending_review`.
+      operationId: list_orders
+      security:
+      - firebaseAuth: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderStatus'
+          title: Status
+      - name: tier
+        in: query
+        required: false
+        schema:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiskTier'
+          title: Tier
+      - name: q
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          description: Search buyer name, phone or external_id.
+          title: Q
+        description: Search buyer name, phone or external_id.
+      - name: placed_from
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Placed From
+      - name: placed_to
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Placed To
+      - name: sort
+        in: query
+        required: false
+        schema:
+          enum:
+          - -placed_at
+          - placed_at
+          - -risk_score
+          - -cod_amount_vnd
+          - -updated_at
+          type: string
+          default: -placed_at
+          title: Sort
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderPage'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Validation error
+                status: 422
+                code: validation_error
+                errors:
+                - loc:
+                  - body
+                  - buyer_phone
+                  msg: String should match pattern '^\+?[0-9]{9,15}$'
+                  type: string_pattern_mismatch
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+    post:
+      tags:
+      - orders
+      summary: Create one order
+      description: Scoring runs asynchronously; poll the order to see the score.
+      operationId: create_order
+      security:
+      - firebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderSummary'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '409':
+          description: Request conflicts with the current state. See `code`.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Conflict
+                status: 409
+                code: conflict
+                detail: An order with external_id FB-20261009-0042 already exists.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Validation error
+                status: 422
+                code: validation_error
+                errors:
+                - loc:
+                  - body
+                  - buyer_phone
+                  msg: String should match pattern '^\+?[0-9]{9,15}$'
+                  type: string_pattern_mismatch
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+  /api/v1/orders/import:
+    post:
+      tags:
+      - orders
+      summary: Import orders from a CSV file
+      description: One row per order, columns as in OrderCreate (items as JSON). Up to 1,000 rows per
+        file.
+      operationId: import_orders
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_import_orders'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+        '400':
+          description: Malformed request or file.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Bad request
+                status: 400
+                code: validation_error
+                detail: CSV header is missing the buyer_phone column.
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Validation error
+                status: 422
+                code: validation_error
+                errors:
+                - loc:
+                  - body
+                  - buyer_phone
+                  msg: String should match pattern '^\+?[0-9]{9,15}$'
+                  type: string_pattern_mismatch
+      security:
+      - firebaseAuth: []
+  /api/v1/orders/{order_id}:
+    get:
+      tags:
+      - orders
+      summary: 'Order page: score, reasons, decision, contacts, calls, timeline'
+      operationId: get_order
+      security:
+      - firebaseAuth: []
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          description: Order ID.
+          examples:
+          - ord_01
+          title: Order Id
+        description: Order ID.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: Resource not found.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Not found
+                status: 404
+                code: not_found
+                detail: Order ord_99 not found.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example: &id001
+                type: about:blank
+                title: Validation error
+                status: 422
+                code: validation_error
+                errors:
+                - loc:
+                  - body
+                  - buyer_phone
+                  msg: String should match pattern '^\+?[0-9]{9,15}$'
+                  type: string_pattern_mismatch
+    patch:
+      tags:
+      - orders
+      summary: Edit an order before it ships
+      description: Triggers a new scoring run. 409 `order_not_editable` once shipped.
+      operationId: update_order
+      security:
+      - firebaseAuth: []
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          description: Order ID.
+          examples:
+          - ord_01
+          title: Order Id
+        description: Order ID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: Resource not found.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Not found
+                status: 404
+                code: not_found
+                detail: Order ord_99 not found.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '409':
+          description: Request conflicts with the current state. See `code`.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Conflict
+                status: 409
+                code: order_not_editable
+                detail: Order ord_01 has already shipped.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Validation error
+                status: 422
+                code: validation_error
+                errors:
+                - loc:
+                  - body
+                  - buyer_phone
+                  msg: String should match pattern '^\+?[0-9]{9,15}$'
+                  type: string_pattern_mismatch
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+  /api/v1/orders/{order_id}/override:
+    post:
+      tags:
+      - orders
+      summary: Apply a staff decision with a reason
+      description: Recorded in the audit log. The action must be in `allowed_overrides` of the order.
+      operationId: override_order
+      security:
+      - firebaseAuth: []
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          description: Order ID.
+          examples:
+          - ord_01
+          title: Order Id
+        description: Order ID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OverrideRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: Resource not found.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Not found
+                status: 404
+                code: not_found
+                detail: Order ord_99 not found.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '409':
+          description: Request conflicts with the current state. See `code`.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Conflict
+                status: 409
+                code: order_not_editable
+                detail: Order ord_01 has already shipped.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Validation error
+                status: 422
+                code: validation_error
+                errors:
+                - loc:
+                  - body
+                  - buyer_phone
+                  msg: String should match pattern '^\+?[0-9]{9,15}$'
+                  type: string_pattern_mismatch
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+  /api/v1/orders/{order_id}/calls:
+    post:
+      tags:
+      - orders
+      summary: Start an AI confirmation call now
+      description: 'Contact protection still applies: 409 `contact_blocked` with `block_reasons` when
+        the call is not allowed.'
+      operationId: start_call
+      security:
+      - firebaseAuth: []
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          description: Order ID.
+          examples:
+          - ord_01
+          title: Order Id
+        description: Order ID.
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Call'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: Resource not found.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Not found
+                status: 404
+                code: not_found
+                detail: Order ord_99 not found.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '409':
+          description: Request conflicts with the current state. See `code`.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Contact blocked
+                status: 409
+                code: contact_blocked
+                detail: This phone already had an AI call in the last 24 hours.
+                block_reasons:
+                - daily_call_limit
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example: *id001
+  /api/v1/calls/{call_id}:
+    get:
+      tags:
+      - calls
+      summary: Call status and result (poll during a live call)
+      operationId: get_call
+      security:
+      - firebaseAuth: []
+      parameters:
+      - name: call_id
+        in: path
+        required: true
+        schema:
+          type: string
+          examples:
+          - call_01
+          title: Call Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Call'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: Resource not found.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Not found
+                status: 404
+                code: not_found
+                detail: Order ord_99 not found.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example: *id001
+  /api/v1/delivery-outcomes:
+    post:
+      tags:
+      - delivery
+      summary: Record delivery outcomes (updates phone history)
+      operationId: record_delivery_outcomes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliveryOutcomeBatch'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryImportResult'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Validation error
+                status: 422
+                code: validation_error
+                errors:
+                - loc:
+                  - body
+                  - buyer_phone
+                  msg: String should match pattern '^\+?[0-9]{9,15}$'
+                  type: string_pattern_mismatch
+      security:
+      - firebaseAuth: []
+  /api/v1/delivery-outcomes/import:
+    post:
+      tags:
+      - delivery
+      summary: Import delivery outcomes from a CSV file
+      operationId: import_delivery_outcomes
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_import_delivery_outcomes'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryImportResult'
+        '400':
+          description: Malformed request or file.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Bad request
+                status: 400
+                code: validation_error
+                detail: CSV header is missing the buyer_phone column.
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Validation error
+                status: 422
+                code: validation_error
+                errors:
+                - loc:
+                  - body
+                  - buyer_phone
+                  msg: String should match pattern '^\+?[0-9]{9,15}$'
+                  type: string_pattern_mismatch
+      security:
+      - firebaseAuth: []
+  /api/v1/dashboard/summary:
+    get:
+      tags:
+      - dashboard
+      summary: ROI dashboard
+      operationId: get_dashboard_summary
+      security:
+      - firebaseAuth: []
+      parameters:
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+          title: From
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+          title: To
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardSummary'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Validation error
+                status: 422
+                code: validation_error
+                errors:
+                - loc:
+                  - body
+                  - buyer_phone
+                  msg: String should match pattern '^\+?[0-9]{9,15}$'
+                  type: string_pattern_mismatch
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+  /api/v1/dashboard/backtest:
+    get:
+      tags:
+      - dashboard
+      summary: 'Latest backtest: lift curves and policy comparison'
+      operationId: get_backtest
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BacktestResult'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+      security:
+      - firebaseAuth: []
+  /api/v1/intake/orders:
+    post:
+      tags:
+      - intake
+      summary: Receive an order from an external sales tool
+      description: 'Idempotent on `external_id`: a repeat returns the existing order with `duplicate:
+        true`.'
+      operationId: intake_order
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreate'
+        required: true
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntakeAccepted'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Validation error
+                status: 422
+                code: validation_error
+                errors:
+                - loc:
+                  - body
+                  - buyer_phone
+                  msg: String should match pattern '^\+?[0-9]{9,15}$'
+                  type: string_pattern_mismatch
+      security:
+      - intakeApiKey: []
+  /api/v1/public/confirmations/{token}:
+    get:
+      tags:
+      - public
+      summary: Buyer confirmation page data (no login)
+      operationId: get_confirmation
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+          description: Signed link token.
+          examples:
+          - tk_9fQ2xL7mVb3sR8cZ1yN4
+          title: Token
+        description: Signed link token.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuyerOrderView'
+        '404':
+          description: Resource not found.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Not found
+                status: 404
+                code: not_found
+                detail: Order ord_99 not found.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '410':
+          description: Confirmation link expired or already used.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Gone
+                status: 410
+                code: link_expired
+                detail: This confirmation link expired 48 hours after it was sent.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example: *id001
+    post:
+      tags:
+      - public
+      summary: 'Buyer answers: confirm, edit address, cancel, or not ordered'
+      description: '`not_ordered` blocks the phone for 30 days across all shops.'
+      operationId: respond_confirmation
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 16
+          maxLength: 128
+          description: Signed link token.
+          examples:
+          - tk_9fQ2xL7mVb3sR8cZ1yN4
+          title: Token
+        description: Signed link token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuyerResponse'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuyerResponseResult'
+        '404':
+          description: Resource not found.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Not found
+                status: 404
+                code: not_found
+                detail: Order ord_99 not found.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '409':
+          description: Request conflicts with the current state. See `code`.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Conflict
+                status: 409
+                code: link_already_used
+                detail: This order was already answered.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '410':
+          description: Confirmation link expired or already used.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Gone
+                status: 410
+                code: link_expired
+                detail: This confirmation link expired 48 hours after it was sent.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Validation error
+                status: 422
+                code: validation_error
+                errors:
+                - loc:
+                  - body
+                  - buyer_phone
+                  msg: String should match pattern '^\+?[0-9]{9,15}$'
+                  type: string_pattern_mismatch
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+  /api/v1/demo/reset:
+    post:
+      tags:
+      - demo
+      summary: Reset the demo shop to its fixed seed data
+      operationId: reset_demo
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemoResetResult'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+        '403':
+          description: Authenticated but not allowed (e.g. staff changing policy).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Forbidden
+                status: 403
+                code: forbidden
+                detail: Only the shop owner can change the policy.
+        '429':
+          description: Rate limit hit (demo paths).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Too many requests
+                status: 429
+                code: rate_limited
+                detail: Demo rate limit reached. Try again in a minute.
+      security:
+      - firebaseAuth: []
+  /api/v1/demo/spam-simulation:
+    post:
+      tags:
+      - demo
+      summary: 'Run the abuse scenario: 50 orders from 20 accounts to one phone'
+      operationId: run_spam_simulation
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpamSimulationResult'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired Firebase ID token.
+        '403':
+          description: Authenticated but not allowed (e.g. staff changing policy).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Forbidden
+                status: 403
+                code: forbidden
+                detail: Only the shop owner can change the policy.
+        '429':
+          description: Rate limit hit (demo paths).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Too many requests
+                status: 429
+                code: rate_limited
+                detail: Demo rate limit reached. Try again in a minute.
+      security:
+      - firebaseAuth: []
+components:
+  schemas:
+    ActionCount:
+      properties:
+        action:
+          $ref: '#/components/schemas/DecisionAction'
+        count:
+          type: integer
+          minimum: 0.0
+          title: Count
+      additionalProperties: false
+      type: object
+      required:
+      - action
+      - count
+      title: ActionCount
+    Address:
+      properties:
+        raw:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Raw
+          examples:
+          - Số 12 ngõ 34, phường Láng, Hà Nội
+        street:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Street
+          examples:
+          - Số 12 ngõ 34
+        ward:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Ward
+          examples:
+          - Phường Láng
+        province:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Province
+          examples:
+          - Hà Nội
+      additionalProperties: false
+      type: object
+      required:
+      - raw
+      title: Address
+      description: |-
+        Delivery address. `raw` is what the buyer wrote; the parsed parts are filled when known.
+        Province and ward follow the 2025 two-level administrative units.
+    BacktestResult:
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+          title: Generated At
+        dataset:
+          type: string
+          title: Dataset
+        orders:
+          type: integer
+          minimum: 0.0
+          title: Orders
+        orders_per_day:
+          type: integer
+          minimum: 1.0
+          title: Orders Per Day
+          description: Shop size used for the savings estimate.
+        failed_delivery_cost_vnd:
+          type: integer
+          minimum: 0.0
+          title: Failed Delivery Cost Vnd
+          description: Amount in VND (integer, no decimals).
+        lift:
+          items:
+            $ref: '#/components/schemas/LiftSeries'
+          type: array
+          title: Lift
+        comparison:
+          items:
+            $ref: '#/components/schemas/PolicyComparison'
+          type: array
+          title: Comparison
+      additionalProperties: false
+      type: object
+      required:
+      - generated_at
+      - dataset
+      - orders
+      - orders_per_day
+      - failed_delivery_cost_vnd
+      - lift
+      - comparison
+      title: BacktestResult
+      examples:
+      - comparison:
+        - contact_rate: 0
+          failures_caught_rate: 0
+          monthly_savings_vnd: 0
+          policy: do_nothing
+        - contact_rate: 1
+          failures_caught_rate: 0.7
+          monthly_savings_vnd: 9100000
+          policy: call_everyone
+        - contact_rate: 0.2
+          failures_caught_rate: 0.63
+          monthly_savings_vnd: 18300000
+          policy: cod_guard
+        dataset: public-ecommerce-cod-sample
+        failed_delivery_cost_vnd: 60000
+        generated_at: '2026-10-15T20:00:00+07:00'
+        lift:
+        - points:
+          - contacted_share: 0.1
+            failures_caught_share: 0.42
+          - contacted_share: 0.2
+            failures_caught_share: 0.63
+          policy: cod_guard
+        - points:
+          - contacted_share: 0.1
+            failures_caught_share: 0.21
+          - contacted_share: 0.2
+            failures_caught_share: 0.33
+          policy: phone_history_only
+        orders: 48000
+        orders_per_day: 300
+    Body_import_delivery_outcomes:
+      properties:
+        file:
+          type: string
+          contentMediaType: application/octet-stream
+          title: File
+          description: CSV, UTF-8.
+      type: object
+      required:
+      - file
+      title: Body_import_delivery_outcomes
+    Body_import_orders:
+      properties:
+        file:
+          type: string
+          contentMediaType: application/octet-stream
+          title: File
+          description: CSV, UTF-8.
+      type: object
+      required:
+      - file
+      title: Body_import_orders
+    BuyerAction:
+      type: string
+      enum:
+      - confirm
+      - edit_address
+      - cancel
+      - not_ordered
+      title: BuyerAction
+      description: |-
+        Action on the buyer confirmation page. confirm: Xác nhận · edit_address: Sửa địa chỉ ·
+        cancel: Hủy · not_ordered: Tôi không đặt
+    BuyerItem:
+      properties:
+        name:
+          type: string
+          title: Name
+        variant:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Variant
+        quantity:
+          type: integer
+          minimum: 1.0
+          title: Quantity
+      additionalProperties: false
+      type: object
+      required:
+      - name
+      - quantity
+      title: BuyerItem
+    BuyerOrderView:
+      properties:
+        shop_name:
+          type: string
+          title: Shop Name
+        order_ref:
+          type: string
+          title: Order Ref
+          description: Short code the buyer can quote to the shop.
+        items:
+          items:
+            $ref: '#/components/schemas/BuyerItem'
+          type: array
+          title: Items
+        cod_amount_vnd:
+          type: integer
+          minimum: 0.0
+          title: Cod Amount Vnd
+          description: Amount in VND (integer, no decimals).
+        recipient_name_masked:
+          type: string
+          title: Recipient Name Masked
+        phone_masked:
+          type: string
+          title: Phone Masked
+          description: Partially masked phone.
+          examples:
+          - +84******001
+        address_masked:
+          type: string
+          title: Address Masked
+        expires_at:
+          type: string
+          format: date-time
+          title: Expires At
+          description: 48 hours after the link was sent.
+        allowed_actions:
+          items:
+            $ref: '#/components/schemas/BuyerAction'
+          type: array
+          title: Allowed Actions
+        responded_action:
+          anyOf:
+          - $ref: '#/components/schemas/BuyerAction'
+          - type: 'null'
+          description: Set if the buyer already answered.
+      additionalProperties: false
+      type: object
+      required:
+      - shop_name
+      - order_ref
+      - items
+      - cod_amount_vnd
+      - recipient_name_masked
+      - phone_masked
+      - address_masked
+      - expires_at
+      - allowed_actions
+      title: BuyerOrderView
+      description: What the buyer sees. Personal data is partially masked.
+      examples:
+      - address_masked: Số 1* ngõ 3*, phường Láng, Hà Nội
+        allowed_actions:
+        - confirm
+        - edit_address
+        - cancel
+        - not_ordered
+        cod_amount_vnd: 330000
+        expires_at: '2026-10-11T10:15:06+07:00'
+        items:
+        - name: Áo thun basic
+          quantity: 2
+          variant: Size M, màu đen
+        order_ref: A7K2
+        phone_masked: +84******001
+        recipient_name_masked: Nguyễn V** A
+        shop_name: Shop Thời Trang Mẫu
+    BuyerResponse:
+      properties:
+        action:
+          $ref: '#/components/schemas/BuyerAction'
+        new_address:
+          anyOf:
+          - $ref: '#/components/schemas/Address'
+          - type: 'null'
+          description: Required for edit_address.
+      additionalProperties: false
+      type: object
+      required:
+      - action
+      title: BuyerResponse
+      examples:
+      - action: confirm
+      - action: edit_address
+        new_address:
+          raw: Số 15 ngõ 34, phường Láng, Hà Nội
+    BuyerResponseResult:
+      properties:
+        action:
+          $ref: '#/components/schemas/BuyerAction'
+        message_vi:
+          type: string
+          title: Message Vi
+      additionalProperties: false
+      type: object
+      required:
+      - action
+      - message_vi
+      title: BuyerResponseResult
+      examples:
+      - action: confirm
+        message_vi: Cảm ơn bạn. Đơn hàng đã được xác nhận.
+    Call:
+      properties:
+        id:
+          type: string
+          title: Id
+        order_ids:
+          items:
+            type: string
+          type: array
+          minItems: 1
+          title: Order Ids
+        phone_masked:
+          type: string
+          title: Phone Masked
+          description: Partially masked phone.
+          examples:
+          - +84******001
+        status:
+          $ref: '#/components/schemas/CallStatus'
+        attempt:
+          type: integer
+          maximum: 2.0
+          minimum: 1.0
+          title: Attempt
+        queued_at:
+          type: string
+          format: date-time
+          title: Queued At
+        started_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Started At
+        ended_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Ended At
+        duration_seconds:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+          - type: 'null'
+          title: Duration Seconds
+        outcome:
+          anyOf:
+          - $ref: '#/components/schemas/CallOutcome'
+          - type: 'null'
+          description: Set when status is completed.
+        changes:
+          items:
+            $ref: '#/components/schemas/CallChange'
+          type: array
+          title: Changes
+        cancel_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cancel Reason
+        human_callback_requested:
+          type: boolean
+          title: Human Callback Requested
+          default: false
+        buyer_requests:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Buyer Requests
+          description: Requests the call could not handle, for the shop to follow up.
+        summary_vi:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Summary Vi
+          description: One or two sentences for the shop.
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - order_ids
+      - phone_masked
+      - status
+      - attempt
+      - queued_at
+      title: Call
+      description: One AI confirmation call. Orders to the same phone within 15 minutes share one call.
+      examples:
+      - attempt: 1
+        changes:
+        - field: delivery_address
+          new_value: Số 15 ngõ 34, phường Láng, Hà Nội
+          order_id: ord_01
+        duration_seconds: 71
+        ended_at: '2026-10-09T10:16:31+07:00'
+        human_callback_requested: false
+        id: call_01
+        order_ids:
+        - ord_01
+        outcome: edited
+        phone_masked: +84******001
+        queued_at: '2026-10-09T10:15:06+07:00'
+        started_at: '2026-10-09T10:15:20+07:00'
+        status: completed
+        summary_vi: Người mua nghe máy, xác nhận đơn và sửa số nhà từ 12 thành 15.
+    CallChange:
+      properties:
+        order_id:
+          type: string
+          title: Order Id
+        field:
+          $ref: '#/components/schemas/CallChangeField'
+        item_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Item Name
+          description: Required for item_* fields.
+        new_value:
+          type: string
+          title: New Value
+          examples:
+          - Số 15 ngõ 34, phường Láng, Hà Nội
+      additionalProperties: false
+      type: object
+      required:
+      - order_id
+      - field
+      - new_value
+      title: CallChange
+      description: A change the buyer confirmed during the read-back.
+    CallChangeField:
+      type: string
+      enum:
+      - delivery_address
+      - recipient_name
+      - item_variant
+      - item_quantity
+      - delivery_note
+      - cancel_order
+      title: CallChangeField
+      description: Field the buyer changed during a call.
+    CallOutcome:
+      type: string
+      enum:
+      - confirmed
+      - edited
+      - cancelled
+      - not_ordered
+      - no_answer
+      - wrong_person
+      - unclear
+      title: CallOutcome
+      description: |-
+        Exactly one result per completed call (the voice tool's uppercase values map 1:1).
+
+        confirmed: Xác nhận · edited: Đã sửa · cancelled: Hủy · not_ordered: Không đặt ·
+        no_answer: Không nghe máy · wrong_person: Nhầm người · unclear: Không rõ
+    CallStatus:
+      type: string
+      enum:
+      - queued
+      - dialing
+      - in_progress
+      - completed
+      - failed
+      title: CallStatus
+      description: Technical state of a call. queued · dialing · in_progress · completed · failed
+    Carrier:
+      type: string
+      enum:
+      - ghn
+      - ghtk
+      - viettel_post
+      - jt
+      - spx
+      - other
+      title: Carrier
+      description: Delivery carrier.
+    ContactAttempt:
+      properties:
+        id:
+          type: string
+          title: Id
+        channel:
+          $ref: '#/components/schemas/ContactChannel'
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        call_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Call Id
+          description: Set when channel is ai_call.
+        link_expires_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Link Expires At
+          description: Set when channel is confirmation_link (48 hours).
+        responded_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Responded At
+        result:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Result
+          description: CallOutcome or BuyerAction value, depending on the channel.
+          examples:
+          - confirmed
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - channel
+      - created_at
+      title: ContactAttempt
+      description: 'Any contact with the buyer about an order: call, confirmation link or deposit request.'
+    ContactBlockReason:
+      type: string
+      enum:
+      - expected_loss_below_cost
+      - daily_call_limit
+      - outside_contact_hours
+      - phone_blocked
+      - phone_trusted
+      - already_confirmed
+      - batched
+      - attempts_exhausted
+      title: ContactBlockReason
+      description: |-
+        Why the buyer was not contacted.
+
+        expected_loss_below_cost: lỗ dự kiến thấp hơn chi phí liên hệ ·
+        daily_call_limit: đã có 1 cuộc gọi AI tới SĐT này trong 24 giờ ·
+        outside_contact_hours: ngoài giờ liên hệ ·
+        phone_blocked: SĐT bị chặn 30 ngày sau "Tôi không đặt" ·
+        phone_trusted: SĐT đang được tin tưởng 7 ngày sau khi xác nhận ·
+        already_confirmed: đơn đã xác nhận · batched: gộp vào lần liên hệ của đơn khác trong 15 phút ·
+        attempts_exhausted: đã gọi đủ 2 lần
+    ContactChannel:
+      type: string
+      enum:
+      - ai_call
+      - confirmation_link
+      - deposit_request
+      title: ContactChannel
+      description: |-
+        How the buyer was contacted. ai_call: AI gọi · confirmation_link: Link xác nhận ·
+        deposit_request: Yêu cầu cọc
+    ContactHours:
+      properties:
+        start:
+          type: string
+          pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
+          title: Start
+          default: 08:00
+        end:
+          type: string
+          pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
+          title: End
+          default: '21:00'
+      additionalProperties: false
+      type: object
+      title: ContactHours
+      description: Window when the buyer may be contacted, Vietnam time (Asia/Ho_Chi_Minh).
+    DashboardSummary:
+      properties:
+        period_from:
+          type: string
+          format: date
+          title: Period From
+        period_to:
+          type: string
+          format: date
+          title: Period To
+        orders_screened:
+          type: integer
+          minimum: 0.0
+          title: Orders Screened
+        actions:
+          items:
+            $ref: '#/components/schemas/ActionCount'
+          type: array
+          title: Actions
+        cancelled_before_ship:
+          type: integer
+          minimum: 0.0
+          title: Cancelled Before Ship
+        delivered:
+          type: integer
+          minimum: 0.0
+          title: Delivered
+        delivery_failed:
+          type: integer
+          minimum: 0.0
+          title: Delivery Failed
+          description: Buyer-caused failures only.
+        estimated_savings_vnd:
+          type: integer
+          title: Estimated Savings Vnd
+          description: Estimate (ước tính). May be negative.
+        good_orders_contacted_rate:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Good Orders Contacted Rate
+          description: Share of orders that were delivered fine but still contacted.
+      additionalProperties: false
+      type: object
+      required:
+      - period_from
+      - period_to
+      - orders_screened
+      - actions
+      - cancelled_before_ship
+      - delivered
+      - delivery_failed
+      - estimated_savings_vnd
+      - good_orders_contacted_rate
+      title: DashboardSummary
+      examples:
+      - actions:
+        - action: ship_now
+          count: 2150
+        - action: send_confirmation_link
+          count: 320
+        - action: ai_call
+          count: 180
+        - action: require_deposit
+          count: 30
+        - action: hold_for_review
+          count: 20
+        cancelled_before_ship: 64
+        delivered: 2410
+        delivery_failed: 96
+        estimated_savings_vnd: 3840000
+        good_orders_contacted_rate: 0.12
+        orders_screened: 2700
+        period_from: '2026-10-01'
+        period_to: '2026-10-09'
+    Decision:
+      properties:
+        decided_at:
+          type: string
+          format: date-time
+          title: Decided At
+        action:
+          $ref: '#/components/schemas/DecisionAction'
+        policy_version:
+          type: integer
+          minimum: 1.0
+          title: Policy Version
+        expected_loss_vnd:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+            description: Amount in VND (integer, no decimals).
+          - type: 'null'
+          title: Expected Loss Vnd
+        contact_cost_vnd:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+            description: Amount in VND (integer, no decimals).
+          - type: 'null'
+          title: Contact Cost Vnd
+          description: Cost of the chosen contact action, if any.
+        block_reasons:
+          items:
+            $ref: '#/components/schemas/ContactBlockReason'
+          type: array
+          title: Block Reasons
+          description: Why a contact was skipped or delayed.
+        next_action:
+          anyOf:
+          - $ref: '#/components/schemas/DecisionAction'
+          - type: 'null'
+          description: Escalation if the buyer does not respond.
+        next_action_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Next Action At
+        decided_by:
+          type: string
+          enum:
+          - engine
+          - staff
+          title: Decided By
+          default: engine
+      additionalProperties: false
+      type: object
+      required:
+      - decided_at
+      - action
+      - policy_version
+      title: Decision
+      description: What the decision engine chose for the current score, under the policy version in force.
+    DecisionAction:
+      type: string
+      enum:
+      - ship_now
+      - send_confirmation_link
+      - ai_call
+      - require_deposit
+      - hold_for_review
+      - cancel
+      title: DecisionAction
+      description: |-
+        Action chosen by the decision engine or a staff override.
+
+        ship_now: Gửi ngay · send_confirmation_link: Gửi link xác nhận · ai_call: AI gọi ·
+        require_deposit: Yêu cầu cọc · hold_for_review: Chờ duyệt · cancel: Hủy đơn
+    DeliveryImportResult:
+      properties:
+        received:
+          type: integer
+          minimum: 0.0
+          title: Received
+        applied:
+          type: integer
+          minimum: 0.0
+          title: Applied
+        unknown_orders:
+          type: integer
+          minimum: 0.0
+          title: Unknown Orders
+        rejected:
+          items:
+            $ref: '#/components/schemas/ImportRowError'
+          type: array
+          title: Rejected
+      additionalProperties: false
+      type: object
+      required:
+      - received
+      - applied
+      - unknown_orders
+      title: DeliveryImportResult
+      examples:
+      - applied: 118
+        received: 120
+        rejected: []
+        unknown_orders: 1
+    DeliveryOutcome:
+      properties:
+        order_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Order Id
+        external_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: External Id
+        carrier:
+          $ref: '#/components/schemas/Carrier'
+        tracking_code:
+          anyOf:
+          - type: string
+            maxLength: 64
+          - type: 'null'
+          title: Tracking Code
+        result:
+          $ref: '#/components/schemas/DeliveryResult'
+        occurred_at:
+          type: string
+          format: date-time
+          title: Occurred At
+      additionalProperties: false
+      type: object
+      required:
+      - carrier
+      - result
+      - occurred_at
+      title: DeliveryOutcome
+      description: Identify the order by `order_id` or by `external_id`.
+      examples:
+      - carrier: ghn
+        occurred_at: '2026-10-12T15:30:00+07:00'
+        order_id: ord_01
+        result: refused
+        tracking_code: GHN0000001
+    DeliveryOutcomeBatch:
+      properties:
+        outcomes:
+          items:
+            $ref: '#/components/schemas/DeliveryOutcome'
+          type: array
+          maxItems: 1000
+          minItems: 1
+          title: Outcomes
+      additionalProperties: false
+      type: object
+      required:
+      - outcomes
+      title: DeliveryOutcomeBatch
+    DeliveryResult:
+      type: string
+      enum:
+      - delivered
+      - refused
+      - unreachable
+      - carrier_issue
+      - shop_issue
+      title: DeliveryResult
+      description: |-
+        Delivery result from the carrier. Only refused and unreachable count as a failed
+        delivery for training; carrier_issue and shop_issue do not.
+
+        delivered: Giao thành công · refused: Người mua từ chối nhận ·
+        unreachable: Không liên lạc được · carrier_issue: Lỗi hãng vận chuyển · shop_issue: Lỗi shop
+    DemoResetResult:
+      properties:
+        seed:
+          type: integer
+          title: Seed
+        orders:
+          type: integer
+          minimum: 0.0
+          title: Orders
+      additionalProperties: false
+      type: object
+      required:
+      - seed
+      - orders
+      title: DemoResetResult
+      examples:
+      - orders: 1000
+        seed: 42
+    ErrorCode:
+      type: string
+      enum:
+      - validation_error
+      - unauthorized
+      - forbidden
+      - not_found
+      - conflict
+      - contact_blocked
+      - order_not_editable
+      - link_expired
+      - link_already_used
+      - rate_limited
+      - not_implemented
+      title: ErrorCode
+      description: Machine-readable error code carried in ProblemDetail.code.
+    FieldError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Loc
+          description: Path to the invalid field.
+          examples:
+          - - body
+            - buyer_phone
+        msg:
+          type: string
+          title: Msg
+          examples:
+          - String should match pattern '^\+?[0-9]{9,15}$'
+        type:
+          type: string
+          title: Type
+          examples:
+          - string_pattern_mismatch
+      additionalProperties: false
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: FieldError
+    HardRule:
+      type: string
+      enum:
+      - prepaid_skip
+      - invalid_phone
+      - high_return_phone
+      title: HardRule
+      description: |-
+        Hard rule that fired before the model.
+
+        prepaid_skip: fully prepaid, not scored · invalid_phone: invalid phone, held for review ·
+        high_return_phone: phone with a ≥75% return rate over at least 3 orders, Very High
+    ImportResult:
+      properties:
+        received:
+          type: integer
+          minimum: 0.0
+          title: Received
+        imported:
+          type: integer
+          minimum: 0.0
+          title: Imported
+        duplicates:
+          type: integer
+          minimum: 0.0
+          title: Duplicates
+          description: Rows whose external_id already exists.
+        rejected:
+          items:
+            $ref: '#/components/schemas/ImportRowError'
+          type: array
+          title: Rejected
+      additionalProperties: false
+      type: object
+      required:
+      - received
+      - imported
+      - duplicates
+      title: ImportResult
+      examples:
+      - duplicates: 2
+        imported: 996
+        received: 1000
+        rejected:
+        - field: buyer_phone
+          message: Invalid phone number
+          row: 17
+    ImportRowError:
+      properties:
+        row:
+          type: integer
+          minimum: 1.0
+          title: Row
+          description: 1-based row number in the file, header excluded.
+        field:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Field
+        message:
+          type: string
+          title: Message
+      additionalProperties: false
+      type: object
+      required:
+      - row
+      - message
+      title: ImportRowError
+    IntakeAccepted:
+      properties:
+        order_id:
+          type: string
+          title: Order Id
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        duplicate:
+          type: boolean
+          title: Duplicate
+          description: True if this external_id was already received.
+      additionalProperties: false
+      type: object
+      required:
+      - order_id
+      - status
+      - duplicate
+      title: IntakeAccepted
+      description: Order accepted from an external sales tool. Scoring runs asynchronously.
+      examples:
+      - duplicate: false
+        order_id: ord_01
+        status: new
+    LiftPoint:
+      properties:
+        contacted_share:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Contacted Share
+          description: Share of orders contacted (x).
+        failures_caught_share:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Failures Caught Share
+          description: Share of failed deliveries among contacted orders (y).
+      additionalProperties: false
+      type: object
+      required:
+      - contacted_share
+      - failures_caught_share
+      title: LiftPoint
+    LiftSeries:
+      properties:
+        policy:
+          type: string
+          enum:
+          - cod_guard
+          - phone_history_only
+          - call_everyone
+          - do_nothing
+          - deposit_all
+          title: Policy
+        points:
+          items:
+            $ref: '#/components/schemas/LiftPoint'
+          type: array
+          title: Points
+      additionalProperties: false
+      type: object
+      required:
+      - policy
+      - points
+      title: LiftSeries
+    Me:
+      properties:
+        user_id:
+          type: string
+          title: User Id
+        email:
+          type: string
+          title: Email
+        display_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Display Name
+        role:
+          $ref: '#/components/schemas/Role'
+        shop_id:
+          type: string
+          title: Shop Id
+      additionalProperties: false
+      type: object
+      required:
+      - user_id
+      - email
+      - role
+      - shop_id
+      title: Me
+      examples:
+      - display_name: Chủ shop
+        email: owner@example.com
+        role: owner
+        shop_id: shp_01
+        user_id: usr_01
+    OrderCreate:
+      properties:
+        external_id:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: External Id
+          description: Order ID in the seller's system. Unique per shop; repeats are ignored.
+        channel:
+          $ref: '#/components/schemas/SalesChannel'
+        buyer_name:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Buyer Name
+        buyer_phone:
+          type: string
+          pattern: ^\+?[0-9]{9,15}$
+          title: Buyer Phone
+          description: Phone number. Input accepts 0xxxxxxxxx or +84xxxxxxxxx; output is E.164.
+          examples:
+          - '+84000000001'
+        is_gift:
+          type: boolean
+          title: Is Gift
+          description: Gift orders are verified with the buyer, never the recipient.
+          default: false
+        recipient_name:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Recipient Name
+        recipient_phone:
+          anyOf:
+          - type: string
+            pattern: ^\+?[0-9]{9,15}$
+            description: Phone number. Input accepts 0xxxxxxxxx or +84xxxxxxxxx; output is E.164.
+            examples:
+            - '+84000000001'
+          - type: 'null'
+          title: Recipient Phone
+          description: Never contacted.
+        address:
+          $ref: '#/components/schemas/Address'
+        items:
+          items:
+            $ref: '#/components/schemas/OrderItem'
+          type: array
+          maxItems: 50
+          minItems: 1
+          title: Items
+        shipping_fee_vnd:
+          type: integer
+          minimum: 0.0
+          title: Shipping Fee Vnd
+          description: Amount in VND (integer, no decimals).
+          default: 0
+        discount_vnd:
+          type: integer
+          minimum: 0.0
+          title: Discount Vnd
+          description: Amount in VND (integer, no decimals).
+          default: 0
+        prepaid_vnd:
+          type: integer
+          minimum: 0.0
+          title: Prepaid Vnd
+          description: Amount already paid (deposit or prepaid).
+          default: 0
+        placed_at:
+          type: string
+          format: date-time
+          title: Placed At
+        conversation_text:
+          anyOf:
+          - type: string
+            maxLength: 5000
+          - type: 'null'
+          title: Conversation Text
+          description: Sales chat that closed the order, if any.
+        note:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Note
+      additionalProperties: false
+      type: object
+      required:
+      - channel
+      - buyer_name
+      - buyer_phone
+      - address
+      - items
+      - placed_at
+      title: OrderCreate
+      description: New COD order, from the web app, a file import row or the intake API.
+      examples:
+      - address:
+          province: Hà Nội
+          raw: Số 12 ngõ 34, phường Láng, Hà Nội
+          street: Số 12 ngõ 34
+          ward: Phường Láng
+        buyer_name: Nguyễn Văn A
+        buyer_phone: '+84000000001'
+        channel: facebook
+        conversation_text: 'Khách: còn size M màu đen không shop? Shop: còn ạ. Khách: chốt 2 cái.'
+        discount_vnd: 0
+        external_id: FB-20261009-0042
+        is_gift: false
+        items:
+        - name: Áo thun basic
+          quantity: 2
+          sku: AT-123-M
+          unit_price_vnd: 150000
+          variant: Size M, màu đen
+        placed_at: '2026-10-09T10:15:00+07:00'
+        prepaid_vnd: 0
+        shipping_fee_vnd: 30000
+    OrderDetail:
+      properties:
+        id:
+          type: string
+          title: Id
+        external_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: External Id
+        channel:
+          $ref: '#/components/schemas/SalesChannel'
+        buyer_name:
+          type: string
+          title: Buyer Name
+        buyer_phone:
+          type: string
+          pattern: ^\+?[0-9]{9,15}$
+          title: Buyer Phone
+          description: Phone number. Input accepts 0xxxxxxxxx or +84xxxxxxxxx; output is E.164.
+          examples:
+          - '+84000000001'
+        is_gift:
+          type: boolean
+          title: Is Gift
+        total_vnd:
+          type: integer
+          minimum: 0.0
+          title: Total Vnd
+          description: Items − discount + shipping fee.
+        cod_amount_vnd:
+          type: integer
+          minimum: 0.0
+          title: Cod Amount Vnd
+          description: 'Amount still to collect: total − prepaid.'
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        tier:
+          anyOf:
+          - $ref: '#/components/schemas/RiskTier'
+          - type: 'null'
+          description: Null until scored or when skipped.
+        risk_score:
+          anyOf:
+          - type: integer
+            maximum: 100.0
+            minimum: 0.0
+          - type: 'null'
+          title: Risk Score
+        current_action:
+          anyOf:
+          - $ref: '#/components/schemas/DecisionAction'
+          - type: 'null'
+        placed_at:
+          type: string
+          format: date-time
+          title: Placed At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+        recipient_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Recipient Name
+        recipient_phone:
+          anyOf:
+          - type: string
+            pattern: ^\+?[0-9]{9,15}$
+            description: Phone number. Input accepts 0xxxxxxxxx or +84xxxxxxxxx; output is E.164.
+            examples:
+            - '+84000000001'
+          - type: 'null'
+          title: Recipient Phone
+        address:
+          $ref: '#/components/schemas/Address'
+        items:
+          items:
+            $ref: '#/components/schemas/OrderItem'
+          type: array
+          title: Items
+        shipping_fee_vnd:
+          type: integer
+          minimum: 0.0
+          title: Shipping Fee Vnd
+          description: Amount in VND (integer, no decimals).
+        discount_vnd:
+          type: integer
+          minimum: 0.0
+          title: Discount Vnd
+          description: Amount in VND (integer, no decimals).
+        prepaid_vnd:
+          type: integer
+          minimum: 0.0
+          title: Prepaid Vnd
+          description: Amount in VND (integer, no decimals).
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+        current_score:
+          anyOf:
+          - $ref: '#/components/schemas/RiskScore'
+          - type: 'null'
+        score_history:
+          items:
+            $ref: '#/components/schemas/RiskScore'
+          type: array
+          title: Score History
+          description: All scoring runs, newest first.
+        decision:
+          anyOf:
+          - $ref: '#/components/schemas/Decision'
+          - type: 'null'
+        contacts:
+          items:
+            $ref: '#/components/schemas/ContactAttempt'
+          type: array
+          title: Contacts
+        calls:
+          items:
+            $ref: '#/components/schemas/Call'
+          type: array
+          title: Calls
+        timeline:
+          items:
+            $ref: '#/components/schemas/OrderEvent'
+          type: array
+          title: Timeline
+          description: Newest first.
+        allowed_overrides:
+          items:
+            $ref: '#/components/schemas/DecisionAction'
+          type: array
+          title: Allowed Overrides
+          description: Actions staff may apply now, given the status.
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - channel
+      - buyer_name
+      - buyer_phone
+      - is_gift
+      - total_vnd
+      - cod_amount_vnd
+      - status
+      - placed_at
+      - updated_at
+      - address
+      - items
+      - shipping_fee_vnd
+      - discount_vnd
+      - prepaid_vnd
+      title: OrderDetail
+      description: Everything the order page shows.
+      examples:
+      - address:
+          province: Hà Nội
+          raw: Số 12 ngõ 34, phường Láng, Hà Nội
+          street: Số 12 ngõ 34
+          ward: Phường Láng
+        allowed_overrides:
+        - ship_now
+        - require_deposit
+        - hold_for_review
+        - cancel
+        buyer_name: Nguyễn Văn A
+        buyer_phone: '+84000000001'
+        calls:
+        - attempt: 1
+          changes:
+          - field: delivery_address
+            new_value: Số 15 ngõ 34, phường Láng, Hà Nội
+            order_id: ord_01
+          duration_seconds: 71
+          ended_at: '2026-10-09T10:16:31+07:00'
+          human_callback_requested: false
+          id: call_01
+          order_ids:
+          - ord_01
+          outcome: edited
+          phone_masked: +84******001
+          queued_at: '2026-10-09T10:15:06+07:00'
+          started_at: '2026-10-09T10:15:20+07:00'
+          status: completed
+          summary_vi: Người mua nghe máy, xác nhận đơn và sửa số nhà từ 12 thành 15.
+        channel: facebook
+        cod_amount_vnd: 330000
+        contacts:
+        - call_id: call_01
+          channel: ai_call
+          created_at: '2026-10-09T10:15:06+07:00'
+          id: cnt_01
+          responded_at: '2026-10-09T10:16:31+07:00'
+          result: edited
+        current_action: ai_call
+        current_score:
+          expected_loss_vnd: 24600
+          failed_delivery_cost_vnd: 60000
+          hard_rules: []
+          id: scr_01
+          model_version: bqml-2026-10-09
+          probability: 0.41
+          reasons:
+          - signal_keys:
+            - phone_return_rate
+            text_vi: SĐT này đã hoàn 2 trên 4 đơn trước đây.
+          - signal_keys:
+            - address_missing_house_number
+            text_vi: Địa chỉ thiếu số nhà.
+          risk_score: 41
+          scored_at: '2026-10-09T10:15:04+07:00'
+          status: scored
+          tier: high
+          top_signals:
+          - contribution: 0.18
+            group: phone_history
+            key: phone_return_rate
+            label_vi: Tỷ lệ hoàn của SĐT
+            value: 0.5
+          - contribution: 0.07
+            group: address_quality
+            key: address_missing_house_number
+            label_vi: Địa chỉ thiếu số nhà
+            value: true
+        decision:
+          action: ai_call
+          block_reasons: []
+          contact_cost_vnd: 1500
+          decided_at: '2026-10-09T10:15:05+07:00'
+          decided_by: engine
+          expected_loss_vnd: 24600
+          next_action: hold_for_review
+          next_action_at: '2026-10-09T10:45:05+07:00'
+          policy_version: 1
+        discount_vnd: 0
+        external_id: FB-20261009-0042
+        id: ord_01
+        is_gift: false
+        items:
+        - name: Áo thun basic
+          quantity: 2
+          sku: AT-123-M
+          unit_price_vnd: 150000
+          variant: Size M, màu đen
+        placed_at: '2026-10-09T10:15:00+07:00'
+        prepaid_vnd: 0
+        risk_score: 41
+        score_history:
+        - expected_loss_vnd: 24600
+          failed_delivery_cost_vnd: 60000
+          hard_rules: []
+          id: scr_01
+          model_version: bqml-2026-10-09
+          probability: 0.41
+          reasons:
+          - signal_keys:
+            - phone_return_rate
+            text_vi: SĐT này đã hoàn 2 trên 4 đơn trước đây.
+          - signal_keys:
+            - address_missing_house_number
+            text_vi: Địa chỉ thiếu số nhà.
+          risk_score: 41
+          scored_at: '2026-10-09T10:15:04+07:00'
+          status: scored
+          tier: high
+          top_signals:
+          - contribution: 0.18
+            group: phone_history
+            key: phone_return_rate
+            label_vi: Tỷ lệ hoàn của SĐT
+            value: 0.5
+          - contribution: 0.07
+            group: address_quality
+            key: address_missing_house_number
+            label_vi: Địa chỉ thiếu số nhà
+            value: true
+        shipping_fee_vnd: 30000
+        status: awaiting_confirmation
+        tier: high
+        timeline:
+        - actor: system
+          at: '2026-10-09T10:16:31+07:00'
+          message_vi: 'Cuộc gọi AI: Đã sửa địa chỉ.'
+          type: call_completed
+        - actor: system
+          at: '2026-10-09T10:15:05+07:00'
+          message_vi: 'Quyết định: AI gọi xác nhận.'
+          type: decided
+        - actor: system
+          at: '2026-10-09T10:15:04+07:00'
+          message_vi: 'Chấm điểm: 41/100 (Cao).'
+          type: scored
+        total_vnd: 330000
+        updated_at: '2026-10-09T10:16:31+07:00'
+    OrderEvent:
+      properties:
+        at:
+          type: string
+          format: date-time
+          title: At
+        type:
+          type: string
+          enum:
+          - created
+          - scored
+          - decided
+          - contact_started
+          - call_completed
+          - buyer_responded
+          - edited
+          - override
+          - status_changed
+          - delivery_result
+          title: Type
+        actor:
+          type: string
+          title: Actor
+          description: system, buyer, or the staff member's email.
+          examples:
+          - system
+        message_vi:
+          type: string
+          title: Message Vi
+          examples:
+          - 'Chấm điểm: 41/100 (Cao).'
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+          description: Required reason for overrides.
+      additionalProperties: false
+      type: object
+      required:
+      - at
+      - type
+      - actor
+      - message_vi
+      title: OrderEvent
+      description: |-
+        Timeline entry on the order page. Overrides and policy-driven decisions also go to the
+        audit log.
+    OrderItem:
+      properties:
+        sku:
+          anyOf:
+          - type: string
+            maxLength: 64
+          - type: 'null'
+          title: Sku
+        name:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Name
+        variant:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Variant
+        quantity:
+          type: integer
+          maximum: 999.0
+          minimum: 1.0
+          title: Quantity
+        unit_price_vnd:
+          type: integer
+          minimum: 0.0
+          title: Unit Price Vnd
+          description: Amount in VND (integer, no decimals).
+      additionalProperties: false
+      type: object
+      required:
+      - name
+      - quantity
+      - unit_price_vnd
+      title: OrderItem
+    OrderPage:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/OrderSummary'
+          type: array
+          title: Items
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Next Cursor
+          description: Pass as `cursor` for the next page.
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+          description: Orders matching the filters.
+      additionalProperties: false
+      type: object
+      required:
+      - items
+      - total
+      title: OrderPage
+    OrderStatus:
+      type: string
+      enum:
+      - new
+      - cleared_to_ship
+      - awaiting_confirmation
+      - awaiting_deposit
+      - pending_review
+      - cancelled
+      - shipped
+      - delivered
+      - delivery_failed
+      title: OrderStatus
+      description: |-
+        Order lifecycle state.
+
+        new: Mới · cleared_to_ship: Được gửi · awaiting_confirmation: Chờ xác nhận ·
+        awaiting_deposit: Chờ cọc · pending_review: Chờ duyệt · cancelled: Đã hủy ·
+        shipped: Đã gửi · delivered: Giao thành công · delivery_failed: Giao thất bại
+    OrderSummary:
+      properties:
+        id:
+          type: string
+          title: Id
+        external_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: External Id
+        channel:
+          $ref: '#/components/schemas/SalesChannel'
+        buyer_name:
+          type: string
+          title: Buyer Name
+        buyer_phone:
+          type: string
+          pattern: ^\+?[0-9]{9,15}$
+          title: Buyer Phone
+          description: Phone number. Input accepts 0xxxxxxxxx or +84xxxxxxxxx; output is E.164.
+          examples:
+          - '+84000000001'
+        is_gift:
+          type: boolean
+          title: Is Gift
+        total_vnd:
+          type: integer
+          minimum: 0.0
+          title: Total Vnd
+          description: Items − discount + shipping fee.
+        cod_amount_vnd:
+          type: integer
+          minimum: 0.0
+          title: Cod Amount Vnd
+          description: 'Amount still to collect: total − prepaid.'
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        tier:
+          anyOf:
+          - $ref: '#/components/schemas/RiskTier'
+          - type: 'null'
+          description: Null until scored or when skipped.
+        risk_score:
+          anyOf:
+          - type: integer
+            maximum: 100.0
+            minimum: 0.0
+          - type: 'null'
+          title: Risk Score
+        current_action:
+          anyOf:
+          - $ref: '#/components/schemas/DecisionAction'
+          - type: 'null'
+        placed_at:
+          type: string
+          format: date-time
+          title: Placed At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - channel
+      - buyer_name
+      - buyer_phone
+      - is_gift
+      - total_vnd
+      - cod_amount_vnd
+      - status
+      - placed_at
+      - updated_at
+      title: OrderSummary
+      description: Row in the order inbox.
+      examples:
+      - buyer_name: Nguyễn Văn A
+        buyer_phone: '+84000000001'
+        channel: facebook
+        cod_amount_vnd: 330000
+        current_action: ai_call
+        external_id: FB-20261009-0042
+        id: ord_01
+        is_gift: false
+        placed_at: '2026-10-09T10:15:00+07:00'
+        risk_score: 41
+        status: awaiting_confirmation
+        tier: high
+        total_vnd: 330000
+        updated_at: '2026-10-09T10:16:31+07:00'
+    OrderUpdate:
+      properties:
+        buyer_name:
+          anyOf:
+          - type: string
+            maxLength: 100
+            minLength: 1
+          - type: 'null'
+          title: Buyer Name
+        buyer_phone:
+          anyOf:
+          - type: string
+            pattern: ^\+?[0-9]{9,15}$
+            description: Phone number. Input accepts 0xxxxxxxxx or +84xxxxxxxxx; output is E.164.
+            examples:
+            - '+84000000001'
+          - type: 'null'
+          title: Buyer Phone
+        recipient_name:
+          anyOf:
+          - type: string
+            maxLength: 100
+          - type: 'null'
+          title: Recipient Name
+        address:
+          anyOf:
+          - $ref: '#/components/schemas/Address'
+          - type: 'null'
+        items:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/OrderItem'
+            type: array
+            maxItems: 50
+            minItems: 1
+          - type: 'null'
+          title: Items
+        prepaid_vnd:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+            description: Amount in VND (integer, no decimals).
+          - type: 'null'
+          title: Prepaid Vnd
+        note:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Note
+      additionalProperties: false
+      type: object
+      title: OrderUpdate
+      description: Edit before shipping. Any change triggers a new scoring run.
+      examples:
+      - address:
+          province: Hà Nội
+          raw: Số 15 ngõ 34, phường Láng, Hà Nội
+          street: Số 15 ngõ 34
+          ward: Phường Láng
+    OverrideRequest:
+      properties:
+        action:
+          $ref: '#/components/schemas/DecisionAction'
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - action
+      - reason
+      title: OverrideRequest
+      description: Staff decision that replaces the engine's. Recorded in the audit log.
+      examples:
+      - action: ship_now
+        reason: Khách quen, đã gọi xác nhận qua Zalo.
+    Policy:
+      properties:
+        version:
+          type: integer
+          minimum: 1.0
+          title: Version
+        effective_from:
+          type: string
+          format: date-time
+          title: Effective From
+        updated_by:
+          type: string
+          title: Updated By
+        tiers:
+          items:
+            $ref: '#/components/schemas/TierPolicy'
+          type: array
+          maxItems: 4
+          minItems: 4
+          title: Tiers
+      additionalProperties: false
+      type: object
+      required:
+      - version
+      - effective_from
+      - updated_by
+      - tiers
+      title: Policy
+      description: |-
+        Tier policy. A change creates a new version that applies only to decisions made after
+        `effective_from`.
+      examples:
+      - effective_from: '2026-10-09T09:00:00+07:00'
+        tiers:
+        - action: ship_now
+          tier: low
+        - action: send_confirmation_link
+          if_no_response: ai_call
+          no_response_after_minutes: 120
+          tier: medium
+        - action: ai_call
+          if_no_response: hold_for_review
+          no_response_after_minutes: 30
+          tier: high
+        - action: require_deposit
+          if_no_response: hold_for_review
+          no_response_after_minutes: 1440
+          tier: very_high
+        updated_by: owner@example.com
+        version: 1
+    PolicyComparison:
+      properties:
+        policy:
+          type: string
+          enum:
+          - cod_guard
+          - phone_history_only
+          - call_everyone
+          - do_nothing
+          - deposit_all
+          title: Policy
+        contact_rate:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Contact Rate
+        failures_caught_rate:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Failures Caught Rate
+        monthly_savings_vnd:
+          type: integer
+          title: Monthly Savings Vnd
+          description: Estimate (ước tính) for orders_per_day.
+      additionalProperties: false
+      type: object
+      required:
+      - policy
+      - contact_rate
+      - failures_caught_rate
+      - monthly_savings_vnd
+      title: PolicyComparison
+    PolicyUpdate:
+      properties:
+        tiers:
+          items:
+            $ref: '#/components/schemas/TierPolicy'
+          type: array
+          maxItems: 4
+          minItems: 4
+          title: Tiers
+      additionalProperties: false
+      type: object
+      required:
+      - tiers
+      title: PolicyUpdate
+      description: Owner only. Must list all four tiers.
+      examples:
+      - tiers:
+        - action: ship_now
+          tier: low
+        - action: send_confirmation_link
+          if_no_response: ai_call
+          no_response_after_minutes: 120
+          tier: medium
+        - action: ai_call
+          if_no_response: hold_for_review
+          no_response_after_minutes: 30
+          tier: high
+        - action: require_deposit
+          if_no_response: hold_for_review
+          no_response_after_minutes: 1440
+          tier: very_high
+    ProblemDetail:
+      properties:
+        type:
+          type: string
+          title: Type
+          default: about:blank
+        title:
+          type: string
+          title: Title
+        status:
+          type: integer
+          title: Status
+        detail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Detail
+        instance:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Instance
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        errors:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/FieldError'
+            type: array
+          - type: 'null'
+          title: Errors
+          description: Set for validation_error.
+        block_reasons:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ContactBlockReason'
+            type: array
+          - type: 'null'
+          title: Block Reasons
+          description: Set for contact_blocked.
+      type: object
+      required:
+      - title
+      - status
+      - code
+      title: ProblemDetail
+      description: Error body (RFC 9457, `application/problem+json`).
+    Reason:
+      properties:
+        text_vi:
+          type: string
+          maxLength: 200
+          title: Text Vi
+          examples:
+          - SĐT này đã hoàn 2 trên 4 đơn trước đây.
+        signal_keys:
+          items:
+            type: string
+          type: array
+          minItems: 1
+          title: Signal Keys
+          examples:
+          - - phone_return_rate
+      additionalProperties: false
+      type: object
+      required:
+      - text_vi
+      - signal_keys
+      title: Reason
+      description: |-
+        A plain-Vietnamese reason written by Gemini. Each reason cites the signals it is based on;
+        reasons that do not match a real signal are rejected before they reach the API.
+    RiskScore:
+      properties:
+        id:
+          type: string
+          title: Id
+        scored_at:
+          type: string
+          format: date-time
+          title: Scored At
+        status:
+          type: string
+          enum:
+          - scored
+          - skipped
+          title: Status
+          description: skipped when a hard rule ends scoring early (e.g. fully prepaid order).
+        skipped_reason:
+          anyOf:
+          - $ref: '#/components/schemas/HardRule'
+          - type: 'null'
+        probability:
+          anyOf:
+          - type: number
+            maximum: 1.0
+            minimum: 0.0
+          - type: 'null'
+          title: Probability
+          description: Probability of failed delivery.
+        risk_score:
+          anyOf:
+          - type: integer
+            maximum: 100.0
+            minimum: 0.0
+          - type: 'null'
+          title: Risk Score
+          description: probability × 100.
+        tier:
+          anyOf:
+          - $ref: '#/components/schemas/RiskTier'
+          - type: 'null'
+        expected_loss_vnd:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+            description: Amount in VND (integer, no decimals).
+          - type: 'null'
+          title: Expected Loss Vnd
+          description: probability × failed_delivery_cost_vnd, in VND.
+        failed_delivery_cost_vnd:
+          type: integer
+          minimum: 0.0
+          title: Failed Delivery Cost Vnd
+          description: Cost of one failed delivery used for this run (shop setting at the time).
+        hard_rules:
+          items:
+            $ref: '#/components/schemas/HardRule'
+          type: array
+          title: Hard Rules
+        top_signals:
+          items:
+            $ref: '#/components/schemas/Signal'
+          type: array
+          maxItems: 5
+          title: Top Signals
+        reasons:
+          items:
+            $ref: '#/components/schemas/Reason'
+          type: array
+          maxItems: 3
+          title: Reasons
+        model_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model Version
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - scored_at
+      - status
+      - failed_delivery_cost_vnd
+      title: RiskScore
+      description: One scoring run. Editing an order before it ships creates a new run.
+      examples:
+      - expected_loss_vnd: 24600
+        failed_delivery_cost_vnd: 60000
+        hard_rules: []
+        id: scr_01
+        model_version: bqml-2026-10-09
+        probability: 0.41
+        reasons:
+        - signal_keys:
+          - phone_return_rate
+          text_vi: SĐT này đã hoàn 2 trên 4 đơn trước đây.
+        - signal_keys:
+          - address_missing_house_number
+          text_vi: Địa chỉ thiếu số nhà.
+        risk_score: 41
+        scored_at: '2026-10-09T10:15:04+07:00'
+        status: scored
+        tier: high
+        top_signals:
+        - contribution: 0.18
+          group: phone_history
+          key: phone_return_rate
+          label_vi: Tỷ lệ hoàn của SĐT
+          value: 0.5
+        - contribution: 0.07
+          group: address_quality
+          key: address_missing_house_number
+          label_vi: Địa chỉ thiếu số nhà
+          value: true
+    RiskTier:
+      type: string
+      enum:
+      - low
+      - medium
+      - high
+      - very_high
+      title: RiskTier
+      description: 'Risk tier. low: Thấp · medium: Trung bình · high: Cao · very_high: Rất cao'
+    Role:
+      type: string
+      enum:
+      - owner
+      - staff
+      title: Role
+      description: 'Shop role. owner: Chủ shop (đổi được policy và chi phí) · staff: Nhân viên'
+    SalesChannel:
+      type: string
+      enum:
+      - facebook
+      - tiktok
+      - zalo
+      - website
+      - other
+      title: SalesChannel
+      description: Where the order came from.
+    Shop:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        settings:
+          $ref: '#/components/schemas/ShopSettings'
+        intake_api_key_last4:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Intake Api Key Last4
+          description: Last 4 characters of the intake API key.
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - name
+      - created_at
+      - settings
+      title: Shop
+      examples:
+      - created_at: '2026-10-09T09:00:00+07:00'
+        id: shp_01
+        intake_api_key_last4: a1b2
+        name: Shop Thời Trang Mẫu
+        settings:
+          ai_call_cost_vnd: 1500
+          confirmation_link_cost_vnd: 300
+          contact_hours:
+            end: '21:00'
+            start: 08:00
+          deposit_request_cost_vnd: 5000
+          failed_delivery_cost_vnd: 60000
+    ShopSettings:
+      properties:
+        failed_delivery_cost_vnd:
+          type: integer
+          minimum: 0.0
+          title: Failed Delivery Cost Vnd
+          description: 'Cost of one failed delivery: two-way shipping plus handling.'
+          default: 60000
+        ai_call_cost_vnd:
+          type: integer
+          minimum: 0.0
+          title: Ai Call Cost Vnd
+          description: Cost of one AI call.
+          default: 1500
+        confirmation_link_cost_vnd:
+          type: integer
+          minimum: 0.0
+          title: Confirmation Link Cost Vnd
+          description: Cost of sending one link.
+          default: 300
+        deposit_request_cost_vnd:
+          type: integer
+          minimum: 0.0
+          title: Deposit Request Cost Vnd
+          description: Estimated cost of asking for a deposit (lost conversions).
+          default: 5000
+        contact_hours:
+          $ref: '#/components/schemas/ContactHours'
+      additionalProperties: false
+      type: object
+      title: ShopSettings
+      description: Costs used for expected-loss decisions, and contact rules the shop can tune.
+    ShopSettingsUpdate:
+      properties:
+        failed_delivery_cost_vnd:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+            description: Amount in VND (integer, no decimals).
+          - type: 'null'
+          title: Failed Delivery Cost Vnd
+        ai_call_cost_vnd:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+            description: Amount in VND (integer, no decimals).
+          - type: 'null'
+          title: Ai Call Cost Vnd
+        confirmation_link_cost_vnd:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+            description: Amount in VND (integer, no decimals).
+          - type: 'null'
+          title: Confirmation Link Cost Vnd
+        deposit_request_cost_vnd:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+            description: Amount in VND (integer, no decimals).
+          - type: 'null'
+          title: Deposit Request Cost Vnd
+        contact_hours:
+          anyOf:
+          - $ref: '#/components/schemas/ContactHours'
+          - type: 'null'
+      additionalProperties: false
+      type: object
+      title: ShopSettingsUpdate
+    ShopUpdate:
+      properties:
+        name:
+          anyOf:
+          - type: string
+            maxLength: 100
+            minLength: 1
+          - type: 'null'
+          title: Name
+        settings:
+          anyOf:
+          - $ref: '#/components/schemas/ShopSettingsUpdate'
+          - type: 'null'
+      additionalProperties: false
+      type: object
+      title: ShopUpdate
+      description: Owner only. Fields left out are unchanged.
+      examples:
+      - settings:
+          failed_delivery_cost_vnd: 65000
+    Signal:
+      properties:
+        key:
+          type: string
+          title: Key
+          examples:
+          - phone_return_rate
+        group:
+          $ref: '#/components/schemas/SignalGroup'
+        label_vi:
+          type: string
+          title: Label Vi
+          examples:
+          - Tỷ lệ hoàn của SĐT
+        value:
+          anyOf:
+          - type: string
+          - type: number
+          - type: integer
+          - type: boolean
+          title: Value
+          examples:
+          - 0.5
+        contribution:
+          type: number
+          title: Contribution
+          description: Signed contribution to the failure probability. Positive raises risk.
+          examples:
+          - 0.18
+      additionalProperties: false
+      type: object
+      required:
+      - key
+      - group
+      - label_vi
+      - value
+      - contribution
+      title: Signal
+      description: One input signal and its contribution to this order's score (model explanation).
+    SignalGroup:
+      type: string
+      enum:
+      - phone_history
+      - address_quality
+      - order_behavior
+      - conversation
+      - velocity
+      - context
+      - payment
+      title: SignalGroup
+      description: |-
+        Signal group. phone_history: Lịch sử SĐT · address_quality: Chất lượng địa chỉ ·
+        order_behavior: Hành vi đặt hàng · conversation: Hội thoại · velocity: Tần suất bất thường ·
+        context: Ngữ cảnh · payment: Thanh toán
+    SpamSimulationResult:
+      properties:
+        orders_created:
+          type: integer
+          minimum: 0.0
+          title: Orders Created
+        accounts:
+          type: integer
+          minimum: 0.0
+          title: Accounts
+        phone_masked:
+          type: string
+          title: Phone Masked
+          description: Partially masked phone.
+          examples:
+          - +84******001
+        contacts_made:
+          type: integer
+          minimum: 0.0
+          title: Contacts Made
+          description: 'Target: exactly 1.'
+        phone_blocked:
+          type: boolean
+          title: Phone Blocked
+      additionalProperties: false
+      type: object
+      required:
+      - orders_created
+      - accounts
+      - phone_masked
+      - contacts_made
+      - phone_blocked
+      title: SpamSimulationResult
+      description: 'Abuse scenario: 50 fake orders from 20 accounts to one phone.'
+      examples:
+      - accounts: 20
+        contacts_made: 1
+        orders_created: 50
+        phone_blocked: true
+        phone_masked: +84******999
+    TierPolicy:
+      properties:
+        tier:
+          $ref: '#/components/schemas/RiskTier'
+        action:
+          $ref: '#/components/schemas/DecisionAction'
+        if_no_response:
+          anyOf:
+          - $ref: '#/components/schemas/DecisionAction'
+          - type: 'null'
+          description: Escalation when the buyer does not respond.
+        no_response_after_minutes:
+          anyOf:
+          - type: integer
+            maximum: 2880.0
+            minimum: 1.0
+          - type: 'null'
+          title: No Response After Minutes
+      additionalProperties: false
+      type: object
+      required:
+      - tier
+      - action
+      title: TierPolicy
+  securitySchemes:
+    firebaseAuth:
+      type: http
+      description: 'Firebase ID token of a shop user (role in custom claims: owner or staff).'
+      scheme: bearer
+      bearerFormat: JWT
+    intakeApiKey:
+      type: apiKey
+      description: Per-shop API key for external sales tools.
+      in: header
+      name: X-Api-Key
+tags:
+- name: me
+  description: Signed-in user.
+- name: shop
+  description: Shop settings and tier policy.
+- name: orders
+  description: Order inbox, order page, edits, overrides, manual calls.
+- name: calls
+  description: AI confirmation calls.
+- name: delivery
+  description: Delivery outcomes that update phone history.
+- name: dashboard
+  description: ROI dashboard and backtest.
+- name: intake
+  description: Order intake for external sales tools (API key).
+- name: public
+  description: Buyer confirmation page. No login; the link token is the credential.
+- name: demo
+  description: Demo controls for the hackathon. Not for production.
+servers:
+- url: http://localhost:8080
+  description: Local

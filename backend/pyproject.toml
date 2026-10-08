@@ -1,0 +1,37 @@
+[project]
+name = "codguard-backend"
+version = "0.1.0"
+description = "COD Guard API: COD order risk scoring, decisions and buyer verification"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "pydantic>=2.9",
+    "python-multipart>=0.0.9",
+    "pyyaml>=6.0",
+    "uvicorn[standard]>=0.30",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.13.1",
+    "openapi-spec-validator>=0.7",
+    "pytest>=8.3",
+    "ruff>=0.6",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Query", "fastapi.Security", "fastapi.Depends", "fastapi.File"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

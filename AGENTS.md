@@ -19,13 +19,14 @@ It is a prototype for the Google Cloud AI Builder Cup 2026 (Retail & Commerce tr
 
 ## Status
 
-There is no application code yet. The layout, stack and commands below are the plan from `README.md`. When you add the first real code for an area, replace the planned command with the real one, here and in the README, in the same PR. Never document a command you have not run.
+The backend API contract exists; the rest of the application code does not yet. The layout and stack below are the plan from `README.md`, and commands marked "Planned" have not been run. When you add the first real code for an area, replace the planned command with the real one, here and in the README, in the same PR. Never document a command you have not run.
 
 ## Planned layout
 
 ```
+api/            OpenAPI contract (generated from backend/, used by frontend/)
 backend/        Python service on Cloud Run: API, decision engine, ADK agents
-  app/
+  app/          FastAPI app: routes (api/v1/) and request/response schemas (schemas/)
   scoring/      hard rules, expected loss, model calls
   agents/       ADK orchestration
   voice/        Gemini Live session handling
@@ -46,15 +47,28 @@ scripts/        Demo reset, abuse simulation, call test runner
 - Secrets in Secret Manager; region `asia-southeast1`
 - Model IDs come from environment variables (`GEMINI_MODEL`, `GEMINI_LIVE_MODEL`). Never hard-code them.
 
-## Commands (planned)
+## Commands
+
+Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 
 | Task | Command |
 |---|---|
-| Backend dev server | `cd backend && uvicorn app.main:app --reload --port 8080` |
-| Frontend dev server | `cd frontend && npm run dev` |
-| Reset demo data | `python scripts/reset_demo.py` |
-| Backend tests | TBD, add when `backend/tests` lands |
+| Install backend dependencies | `uv sync` |
+| Backend dev server | `uv run uvicorn app.main:app --reload --port 8080` (docs at `/docs`) |
+| Backend tests | `uv run pytest` |
+| Backend lint and format | `uv run ruff check . && uv run ruff format --check .` |
+| Export the API contract | `uv run python -m app.openapi_export` (writes `api/openapi.yaml`) |
+| Mock API for the frontend | `npx @stoplight/prism-cli mock api/openapi.yaml` (from the repo root) |
+| Frontend dev server | Planned: `cd frontend && npm run dev` |
+| Reset demo data | Planned: `python scripts/reset_demo.py` |
 | Deploy | Automatic on merge to `main` (E1.2). Do not deploy by hand unless asked. |
+
+## API contract
+
+- The contract is defined in code: Pydantic models in `backend/app/schemas/` and routes in `backend/app/api/v1/`. `api/openapi.yaml` is generated from them and committed.
+- Any change to a schema or route must re-export `api/openapi.yaml` in the same PR. `tests/test_contract.py` fails when the file is out of date.
+- Routes that are not implemented yet return 501 `not_implemented`. The frontend works against the Prism mock until then; see `api/README.md`.
+- Every schema example must validate against its model (also enforced by the tests), because the mock server returns those examples.
 
 ## Domain rules
 

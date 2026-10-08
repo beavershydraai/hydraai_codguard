@@ -1,0 +1,96 @@
+"""Endpoints outside the shop app: intake API, buyer confirmation page, demo controls."""
+
+from typing import Annotated
+
+from fastapi import APIRouter, Path, Security, status
+
+from app.api.errors import NotImplementedYet, problem_example, problem_responses
+from app.api.security import firebase_auth, intake_api_key
+from app.schemas.confirm import BuyerOrderView, BuyerResponse, BuyerResponseResult
+from app.schemas.demo import DemoResetResult, SpamSimulationResult
+from app.schemas.enums import ErrorCode
+from app.schemas.orders import IntakeAccepted, OrderCreate
+
+intake_router = APIRouter(
+    prefix="/intake", tags=["intake"], dependencies=[Security(intake_api_key)]
+)
+
+
+@intake_router.post(
+    "/orders",
+    response_model=IntakeAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses=problem_responses(401, 422),
+    summary="Receive an order from an external sales tool",
+    description="Idempotent on `external_id`: a repeat returns the existing order "
+    "with `duplicate: true`.",
+)
+async def intake_order(body: OrderCreate) -> IntakeAccepted:
+    raise NotImplementedYet("intake_order")
+
+
+public_router = APIRouter(prefix="/public", tags=["public"])
+Token = Annotated[
+    str,
+    Path(
+        min_length=16,
+        max_length=128,
+        description="Signed link token.",
+        examples=["tk_9fQ2xL7mVb3sR8cZ1yN4"],
+    ),
+]
+
+
+@public_router.get(
+    "/confirmations/{token}",
+    response_model=BuyerOrderView,
+    responses=problem_responses(404, 410),
+    summary="Buyer confirmation page data (no login)",
+)
+async def get_confirmation(token: Token) -> BuyerOrderView:
+    raise NotImplementedYet("get_confirmation")
+
+
+@public_router.post(
+    "/confirmations/{token}",
+    response_model=BuyerResponseResult,
+    responses=problem_responses(
+        404,
+        409,
+        410,
+        422,
+        examples={
+            409: problem_example(
+                409, ErrorCode.LINK_ALREADY_USED, detail="This order was already answered."
+            )
+        },
+    ),
+    summary="Buyer answers: confirm, edit address, cancel, or not ordered",
+    description="`not_ordered` blocks the phone for 30 days across all shops.",
+)
+async def respond_confirmation(token: Token, body: BuyerResponse) -> BuyerResponseResult:
+    raise NotImplementedYet("respond_confirmation")
+
+
+demo_router = APIRouter(prefix="/demo", tags=["demo"], dependencies=[Security(firebase_auth)])
+
+
+@demo_router.post(
+    "/reset",
+    response_model=DemoResetResult,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses=problem_responses(401, 403, 429),
+    summary="Reset the demo shop to its fixed seed data",
+)
+async def reset_demo() -> DemoResetResult:
+    raise NotImplementedYet("reset_demo")
+
+
+@demo_router.post(
+    "/spam-simulation",
+    response_model=SpamSimulationResult,
+    responses=problem_responses(401, 403, 429),
+    summary="Run the abuse scenario: 50 orders from 20 accounts to one phone",
+)
+async def run_spam_simulation() -> SpamSimulationResult:
+    raise NotImplementedYet("run_spam_simulation")

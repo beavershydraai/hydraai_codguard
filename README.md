@@ -200,8 +200,9 @@ FROM ML.EXPLAIN_PREDICT(
 
 ```
 cod-guard/
+├── api/                # OpenAPI contract (generated from backend, used by frontend)
 ├── backend/            # Cloud Run service: API, decision engine, ADK agents
-│   ├── app/
+│   ├── app/            # FastAPI app: routes and request/response schemas
 │   ├── scoring/        # hard rules, expected loss, model calls
 │   ├── agents/         # ADK orchestration
 │   ├── voice/          # Gemini Live session handling
@@ -253,12 +254,16 @@ GHN_API_TOKEN=<from-secret-manager>     # optional, never commit
 
 ### 2. Run the backend locally
 
+Requires [uv](https://docs.astral.sh/uv/), which also installs Python 3.12.
+
 ```bash
 cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8080
+uv sync
+uv run uvicorn app.main:app --reload --port 8080   # API docs at http://localhost:8080/docs
+uv run pytest
 ```
+
+Endpoints are defined but return `501 not_implemented` until each one is built. To work on the frontend before that, run the mock server described in [`api/README.md`](api/README.md).
 
 ### 3. Run the frontend locally
 
