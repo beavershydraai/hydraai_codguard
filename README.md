@@ -115,7 +115,7 @@ flowchart LR
 | Data | Firestore (app state), BigQuery (training data, analytics) |
 | Secrets | Secret Manager |
 | Delivery outcomes | GHN staging API, CSV import |
-| Region | `asia-southeast1` |
+| Region | `asia-southeast1`; Gemini Live API sessions in `us-central1`, because the Live API is not served from Asia regions ([details](docs/gemini-live.md)) |
 
 ---
 
@@ -205,7 +205,9 @@ cod-guard/
 │   ├── scoring/        # hard rules, expected loss, model calls
 │   ├── agents/         # ADK orchestration
 │   ├── voice/          # Gemini Live session handling
+│   │   └── prompts/    # AI call system instruction + outcome tool
 │   └── tests/
+├── docs/               # technical notes (Gemini Live integration)
 ├── frontend/           # Shop web app + buyer confirmation page
 ├── ml/                 # data prep, synthetic data generator, BigQuery ML SQL, backtest
 ├── data/
@@ -245,7 +247,8 @@ Fill in `.env`:
 GOOGLE_CLOUD_PROJECT=<your-project-id>
 GOOGLE_CLOUD_REGION=asia-southeast1
 GEMINI_MODEL=<gemini-model-id>
-GEMINI_LIVE_MODEL=<gemini-live-model-id>
+GEMINI_LIVE_MODEL=<gemini-live-model-id>   # gemini-3.8-live, see docs/gemini-live.md
+GEMINI_LIVE_LOCATION=us-central1          # Live API is not served from asia-southeast1
 BQ_DATASET=cod_guard
 GHN_API_BASE_URL=<ghn-staging-url>      # optional
 GHN_API_TOKEN=<from-secret-manager>     # optional, never commit

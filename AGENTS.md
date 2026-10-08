@@ -29,7 +29,9 @@ backend/        Python service on Cloud Run: API, decision engine, ADK agents
   scoring/      hard rules, expected loss, model calls
   agents/       ADK orchestration
   voice/        Gemini Live session handling
+    prompts/    AI call system instruction and the record_call_outcome tool
   tests/
+docs/           Technical notes (Gemini Live integration)
 frontend/       Shop web app + buyer confirmation page (Firebase Hosting)
 ml/             Data prep, synthetic data generator, BigQuery ML SQL, backtest
 data/seed/      Pseudonymised demo data only
@@ -43,8 +45,9 @@ scripts/        Demo reset, abuse simulation, call test runner
 - Frontend: Node.js 20+
 - AI: Gemini (signal extraction and reasons), Gemini Live API (voice), Agent Development Kit (orchestration)
 - Data: BigQuery ML boosted trees (risk model), BigQuery (training data, analytics), Firestore (app state)
-- Secrets in Secret Manager; region `asia-southeast1`
+- Secrets in Secret Manager; region `asia-southeast1`. Exception: Gemini Live API sessions run in `GEMINI_LIVE_LOCATION` (`us-central1`), because the Live API is not served from Asia regions.
 - Model IDs come from environment variables (`GEMINI_MODEL`, `GEMINI_LIVE_MODEL`). Never hard-code them.
+- Before changing voice code or the call prompt, read `docs/gemini-live.md`. Live models changed in September 2026 (`gemini-3.8-live`), and older tutorials use config that 3.8 rejects.
 
 ## Commands (planned)
 
@@ -105,6 +108,8 @@ These rules come from the README and the epics. Code and tests must enforce them
 ### AI call and confirmation page
 
 - The AI call discloses that it is an automated assistant and names the shop. It reads the order summary, reads any changes back before ending, and records exactly one of 7 outcomes: Xác nhận, Đã sửa, Hủy, Không đặt, Không nghe máy, Nhầm người, Không rõ.
+- The call's system instruction and its one tool, `record_call_outcome`, live in `backend/voice/prompts/`. The model reports the outcome through the tool. The backend validates it, sets *Không nghe máy* itself, and commits *Không rõ* when a call that the buyer spoke on ends without a valid outcome.
+- During a call, the assistant gives no order details until the person confirms they are the buyer. It never mentions risk, scores or tiers, and never asks for money, OTP codes or bank details.
 - The confirmation page needs no login and offers Xác nhận / Sửa địa chỉ / Hủy / *"Tôi không đặt"*. Personal data is partially masked. The link expires after 48 hours.
 
 ## Privacy and secrets
