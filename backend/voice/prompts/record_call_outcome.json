@@ -1,0 +1,59 @@
+{
+  "name": "record_call_outcome",
+  "behavior": "BLOCKING",
+  "description": "Records the final result of this confirmation call. Call it once the buyer has given a final answer and, for EDITED or CANCELLED, after you read the change or the cancellation back and the buyer said yes. Call it before your closing line. If the buyer changes their mind afterwards, call it again with the new final result; the last call counts.",
+  "parameters": {
+    "type": "OBJECT",
+    "properties": {
+      "outcome": {
+        "type": "STRING",
+        "enum": ["CONFIRMED", "EDITED", "CANCELLED", "NOT_ORDERED", "WRONG_PERSON", "UNCLEAR"],
+        "description": "CONFIRMED: the buyer confirmed every order as it is. EDITED: the buyer confirmed after changing at least one detail. CANCELLED: the buyer cancelled every order. NOT_ORDERED: the person who answered says nobody there placed the order. WRONG_PERSON: the person who answered is not the buyer. UNCLEAR: no clear final answer (asked for a person, asked to be called later, could not be understood, or ran out of time)."
+      },
+      "changes": {
+        "type": "ARRAY",
+        "description": "Every change the buyer confirmed in the read-back. Required when outcome is EDITED; leave empty otherwise.",
+        "items": {
+          "type": "OBJECT",
+          "properties": {
+            "order_ref": {
+              "type": "STRING",
+              "description": "The ref of the changed order, from ORDER CONTEXT."
+            },
+            "field": {
+              "type": "STRING",
+              "enum": ["delivery_address", "recipient_name", "item_variant", "item_quantity", "delivery_note", "cancel_order"],
+              "description": "What changed. cancel_order cancels this one order in a call about several orders."
+            },
+            "item_name": {
+              "type": "STRING",
+              "description": "The item's name from ORDER CONTEXT. Required for item_variant and item_quantity."
+            },
+            "new_value": {
+              "type": "STRING",
+              "description": "The new value as read back and confirmed by the buyer. For cancel_order, write \"hủy\"."
+            }
+          },
+          "required": ["order_ref", "field", "new_value"]
+        }
+      },
+      "cancel_reason": {
+        "type": "STRING",
+        "description": "The buyer's reason for cancelling, in their words, if they gave one."
+      },
+      "human_callback_requested": {
+        "type": "BOOLEAN",
+        "description": "True if the buyer asked to talk to a person from the shop."
+      },
+      "buyer_requests": {
+        "type": "STRING",
+        "description": "Questions or requests you could not handle on the call, in Vietnamese, for the shop to follow up."
+      },
+      "summary": {
+        "type": "STRING",
+        "description": "One or two short Vietnamese sentences for the shop: who answered, what they said and what they decided. Only facts from this call."
+      }
+    },
+    "required": ["outcome", "summary"]
+  }
+}
