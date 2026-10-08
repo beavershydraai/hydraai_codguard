@@ -1,0 +1,103 @@
+name: CI
+
+# Every PR must pass the "CI result" check before review is requested.
+# review-gate.yml removes review requests made while this check is not green.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (lint, tests, API contract)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - name: Install dependencies
+        run: uv sync --locked
+      - name: Lint
+        run: uv run ruff check --output-format=github .
+      - name: Format
+        run: uv run ruff format --check .
+      - name: Tests (includes API contract checks)
+        run: uv run pytest -q
+
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GITLEAKS_VERSION: 8.30.1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP" gitleaks
+      - name: Scan new commits
+        env:
+          RANGE: ${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || format('{0}..{1}', github.event.before, github.sha) }}
+        run: |
+          # A new branch pushed to main has no "before" commit; scan everything then.
+          case "$RANGE" in 0000000000000000000000000000000000000000..*) RANGE="" ;; esac
+          "$RUNNER_TEMP/gitleaks" git --redact --verbose --no-banner ${RANGE:+--log-opts="$RANGE"} .
+
+  privacy:
+    name: No real phone numbers
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check tracked files
+        run: python3 .github/scripts/check_phone_numbers.py
+
+  ci-result:
+    name: CI result
+    if: always()
+    needs: [backend, secrets, privacy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Withdraw review requests while CI is red
+        if: github.event_name == 'pull_request' && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const { owner, repo } = context.repo;
+            const { data } = await github.rest.pulls.listRequestedReviewers({ owner, repo, pull_number: pr.number });
+            const reviewers = data.users.map((u) => u.login);
+            const team_reviewers = data.teams.map((t) => t.slug);
+            if (reviewers.length + team_reviewers.length === 0) return;
+            await github.rest.pulls.removeRequestedReviewers({ owner, repo, pull_number: pr.number, reviewers, team_reviewers });
+            await github.rest.issues.createComment({
+              owner, repo, issue_number: pr.number,
+              body: `CI failed on ${pr.head.sha.slice(0, 7)}, so the review request was withdrawn. Fix CI, then request review again.`,
+            });
+      - name: Verdict
+        run: |
+          echo 'Job results: ${{ toJSON(needs.*.result) }}'
+          if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "::error::One or more CI jobs failed."
+            exit 1
+          fi

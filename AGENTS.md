@@ -152,3 +152,19 @@ These rules come from the README and the epics. Code and tests must enforce them
 - Commit messages: English, imperative summary of at most 72 characters.
 - Every change goes through a PR into `main`. Title it with the sub-epic ID when there is one, e.g. `[E4.3] Contact protection limits`. The body says what changed, how it was tested, and which "Done khi" criteria it meets.
 - Keep PRs small: one sub-epic per PR where possible.
+- Request review only after the **CI result** check is green on the PR's latest commit (see "CI").
+
+## CI
+
+GitHub Actions runs `.github/workflows/ci.yml` on every PR and on every push to `main`.
+
+| Job | What it checks |
+|---|---|
+| Backend (lint, tests, API contract) | `uv sync --locked`, `ruff check`, `ruff format --check`, `pytest`. The tests also fail when `api/openapi.yaml` is out of date, is not valid OpenAPI, or has an example that does not match its schema. |
+| Secret scan (gitleaks) | No keys or tokens in the PR's new commits. |
+| No real phone numbers | `.github/scripts/check_phone_numbers.py` on all tracked files. Use `+84000…` in examples; add `pii-allow` on a line only for a false positive. |
+| CI result | Passes only when every job above passed. This is the check to require for merging. |
+
+- A review request made while **CI result** is not green is withdrawn with a comment (`.github/workflows/review-gate.yml`). A push that turns CI red also withdraws pending review requests.
+- Run the same checks locally before pushing (see "Commands").
+- A PR that adds a new area (for example `frontend/`) adds that area's lint, test and build job to `ci.yml` and to the `needs` list of **CI result**.
