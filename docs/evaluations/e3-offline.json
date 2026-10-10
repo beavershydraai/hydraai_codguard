@@ -1,0 +1,1265 @@
+{
+  "mode": "offline",
+  "status": "checks_passed",
+  "case_count": 30,
+  "review_required": true,
+  "acceptance_status": "pending_live_and_human_review",
+  "note": "Recorded responses test parsing, deterministic features and reason checks. A successful live run and independent human review of all final reasons are required for E3.3 acceptance.",
+  "gemini_calls": 0,
+  "recorded_responses": 61,
+  "gateway_events": {
+    "success": 61
+  },
+  "address": {
+    "flags_checked": 120,
+    "flag_accuracy": 1.0,
+    "completeness_cases_passed": 30
+  },
+  "conversation": {
+    "flags_checked": 30,
+    "flag_accuracy": 1.0
+  },
+  "reasons": {
+    "written_count": 21,
+    "dropped": {
+      "unsupported_number": 1,
+      "duplicate_signals": 1,
+      "decision_language": 1,
+      "unknown_signal": 1
+    },
+    "dropped_count": 4,
+    "machine_check_failures": 0,
+    "disallowed_signal_keys": 0
+  },
+  "cases": [
+    {
+      "id": "e3-001",
+      "type": "address_complete",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": true,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [
+          {
+            "text_vi": "SĐT này đã hoàn 2 trên 4 đơn trước đây.",
+            "signal_keys": [
+              "phone_return_rate"
+            ]
+          }
+        ],
+        "allowed_signal_keys": [
+          "phone_return_rate"
+        ],
+        "disallowed_signal_keys": [],
+        "dropped": {
+          "unsupported_number": 1
+        },
+        "rejection_notes": [
+          "unsupported_number"
+        ],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-002",
+      "type": "address_complete",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": true,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [
+          {
+            "text_vi": "Giá trị COD của đơn là 1.500.000đ.",
+            "signal_keys": [
+              "order_cod_amount_vnd"
+            ]
+          }
+        ],
+        "allowed_signal_keys": [
+          "order_cod_amount_vnd"
+        ],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-003",
+      "type": "address_complete",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": true,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [
+          {
+            "text_vi": "SĐT có 3 đơn trong 24 giờ.",
+            "signal_keys": [
+              "phone_order_count_24h"
+            ]
+          }
+        ],
+        "allowed_signal_keys": [
+          "phone_order_count_24h"
+        ],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-004",
+      "type": "address_complete",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": true,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [
+          {
+            "text_vi": "Tỷ lệ giao thất bại của khu vực là 20%.",
+            "signal_keys": [
+              "province_failure_rate"
+            ]
+          },
+          {
+            "text_vi": "Đơn hàng chưa có tiền trả trước.",
+            "signal_keys": [
+              "payment_no_deposit"
+            ]
+          }
+        ],
+        "allowed_signal_keys": [
+          "payment_no_deposit",
+          "province_failure_rate"
+        ],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-005",
+      "type": "address_legacy_names",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": true
+        },
+        "flag_mismatches": [],
+        "normalized_passed": true,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [],
+        "allowed_signal_keys": [],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-006",
+      "type": "address_legacy_names",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": true
+        },
+        "flag_mismatches": [],
+        "normalized_passed": true,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [],
+        "allowed_signal_keys": [],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-007",
+      "type": "address_legacy_names",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": true
+        },
+        "flag_mismatches": [],
+        "normalized_passed": true,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [],
+        "allowed_signal_keys": [],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-008",
+      "type": "address_missing_house_number",
+      "address": {
+        "available": true,
+        "completeness": 0.65,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": true,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [
+          {
+            "text_vi": "Địa chỉ thiếu số nhà.",
+            "signal_keys": [
+              "address_missing_house_number"
+            ]
+          }
+        ],
+        "allowed_signal_keys": [
+          "address_missing_house_number"
+        ],
+        "disallowed_signal_keys": [],
+        "dropped": {
+          "duplicate_signals": 1
+        },
+        "rejection_notes": [
+          "duplicate_signals"
+        ],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-009",
+      "type": "address_missing_house_number",
+      "address": {
+        "available": true,
+        "completeness": 0.65,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": true,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [
+          {
+            "text_vi": "Địa chỉ thiếu số nhà.",
+            "signal_keys": [
+              "address_missing_house_number"
+            ]
+          }
+        ],
+        "allowed_signal_keys": [
+          "address_missing_house_number"
+        ],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-010",
+      "type": "address_missing_house_number",
+      "address": {
+        "available": true,
+        "completeness": 0.65,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": true,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [
+          {
+            "text_vi": "Địa chỉ thiếu số nhà.",
+            "signal_keys": [
+              "address_missing_house_number"
+            ]
+          }
+        ],
+        "allowed_signal_keys": [
+          "address_missing_house_number"
+        ],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-011",
+      "type": "address_missing_ward_or_province",
+      "address": {
+        "available": true,
+        "completeness": 0.75,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": true,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": true,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [
+          {
+            "text_vi": "Địa chỉ thiếu phường/xã.",
+            "signal_keys": [
+              "address_missing_ward"
+            ]
+          }
+        ],
+        "allowed_signal_keys": [
+          "address_missing_ward"
+        ],
+        "disallowed_signal_keys": [],
+        "dropped": {
+          "decision_language": 1
+        },
+        "rejection_notes": [
+          "decision_language"
+        ],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-012",
+      "type": "address_missing_ward_or_province",
+      "address": {
+        "available": true,
+        "completeness": 0.85,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": true,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [],
+        "allowed_signal_keys": [],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-013",
+      "type": "address_missing_ward_or_province",
+      "address": {
+        "available": true,
+        "completeness": 0.6,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": true,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": true,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [
+          {
+            "text_vi": "Địa chỉ thiếu phường/xã.",
+            "signal_keys": [
+              "address_missing_ward"
+            ]
+          }
+        ],
+        "allowed_signal_keys": [
+          "address_missing_ward"
+        ],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-014",
+      "type": "address_vague",
+      "address": {
+        "available": true,
+        "completeness": 0.15,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": true,
+          "address_missing_ward": true,
+          "address_vague": true,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": true,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [
+          {
+            "text_vi": "Địa chỉ mơ hồ.",
+            "signal_keys": [
+              "address_vague"
+            ]
+          }
+        ],
+        "allowed_signal_keys": [
+          "address_missing_house_number",
+          "address_missing_ward",
+          "address_vague"
+        ],
+        "disallowed_signal_keys": [],
+        "dropped": {
+          "unknown_signal": 1
+        },
+        "rejection_notes": [
+          "unknown_signal"
+        ],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-015",
+      "type": "address_vague",
+      "address": {
+        "available": true,
+        "completeness": 0.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": true,
+          "address_missing_ward": true,
+          "address_vague": true,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": true,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [
+          {
+            "text_vi": "Địa chỉ thiếu số nhà.",
+            "signal_keys": [
+              "address_missing_house_number"
+            ]
+          },
+          {
+            "text_vi": "Địa chỉ thiếu phường/xã.",
+            "signal_keys": [
+              "address_missing_ward"
+            ]
+          },
+          {
+            "text_vi": "Địa chỉ mơ hồ.",
+            "signal_keys": [
+              "address_vague"
+            ]
+          }
+        ],
+        "allowed_signal_keys": [
+          "address_missing_house_number",
+          "address_missing_ward",
+          "address_vague"
+        ],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-016",
+      "type": "address_vague",
+      "address": {
+        "available": true,
+        "completeness": 0.3,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": true,
+          "address_missing_ward": false,
+          "address_vague": true,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [
+          {
+            "text_vi": "Địa chỉ thiếu số nhà.",
+            "signal_keys": [
+              "address_missing_house_number"
+            ]
+          },
+          {
+            "text_vi": "Địa chỉ mơ hồ.",
+            "signal_keys": [
+              "address_vague"
+            ]
+          }
+        ],
+        "allowed_signal_keys": [
+          "address_missing_house_number",
+          "address_vague"
+        ],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-017",
+      "type": "address_messy_text",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [],
+        "allowed_signal_keys": [],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-018",
+      "type": "address_messy_text",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [],
+        "allowed_signal_keys": [],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-019",
+      "type": "address_messy_text",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": true,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [],
+        "allowed_signal_keys": [],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-020",
+      "type": "chat_asked_details",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": true,
+        "actual_present": true,
+        "flags": {
+          "conversation_asked_details": true,
+          "conversation_rushed_close": false,
+          "conversation_name_mismatch": false
+        },
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [],
+        "allowed_signal_keys": [],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-021",
+      "type": "chat_asked_details",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": true,
+        "actual_present": true,
+        "flags": {
+          "conversation_asked_details": true,
+          "conversation_rushed_close": false,
+          "conversation_name_mismatch": false
+        },
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [],
+        "allowed_signal_keys": [],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-022",
+      "type": "chat_asked_details",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": true,
+        "actual_present": true,
+        "flags": {
+          "conversation_asked_details": true,
+          "conversation_rushed_close": false,
+          "conversation_name_mismatch": false
+        },
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [],
+        "allowed_signal_keys": [],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-023",
+      "type": "chat_rushed",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": true,
+        "actual_present": true,
+        "flags": {
+          "conversation_asked_details": false,
+          "conversation_rushed_close": true,
+          "conversation_name_mismatch": false
+        },
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [
+          {
+            "text_vi": "Khách chốt đơn vội.",
+            "signal_keys": [
+              "conversation_rushed_close"
+            ]
+          }
+        ],
+        "allowed_signal_keys": [
+          "conversation_rushed_close"
+        ],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-024",
+      "type": "chat_rushed",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": true,
+        "actual_present": true,
+        "flags": {
+          "conversation_asked_details": false,
+          "conversation_rushed_close": true,
+          "conversation_name_mismatch": false
+        },
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [
+          {
+            "text_vi": "Khách chốt đơn vội.",
+            "signal_keys": [
+              "conversation_rushed_close"
+            ]
+          }
+        ],
+        "allowed_signal_keys": [
+          "conversation_rushed_close"
+        ],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-025",
+      "type": "chat_rushed",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": true,
+        "actual_present": true,
+        "flags": {
+          "conversation_asked_details": false,
+          "conversation_rushed_close": true,
+          "conversation_name_mismatch": false
+        },
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [
+          {
+            "text_vi": "Khách chốt đơn vội.",
+            "signal_keys": [
+              "conversation_rushed_close"
+            ]
+          }
+        ],
+        "allowed_signal_keys": [
+          "conversation_rushed_close"
+        ],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-026",
+      "type": "chat_name_mismatch",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": true,
+        "actual_present": true,
+        "flags": {
+          "conversation_asked_details": false,
+          "conversation_rushed_close": false,
+          "conversation_name_mismatch": true
+        },
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [
+          {
+            "text_vi": "Tên trong hội thoại khác tên người đặt.",
+            "signal_keys": [
+              "conversation_name_mismatch"
+            ]
+          }
+        ],
+        "allowed_signal_keys": [
+          "conversation_name_mismatch"
+        ],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-027",
+      "type": "chat_name_mismatch",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": true,
+        "actual_present": true,
+        "flags": {
+          "conversation_asked_details": false,
+          "conversation_rushed_close": false,
+          "conversation_name_mismatch": true
+        },
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [
+          {
+            "text_vi": "Tên trong hội thoại khác tên người đặt.",
+            "signal_keys": [
+              "conversation_name_mismatch"
+            ]
+          }
+        ],
+        "allowed_signal_keys": [
+          "conversation_name_mismatch"
+        ],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-028",
+      "type": "gift_order",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": true,
+        "actual_present": true,
+        "flags": {
+          "conversation_asked_details": true,
+          "conversation_rushed_close": false,
+          "conversation_name_mismatch": false
+        },
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [],
+        "allowed_signal_keys": [],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-029",
+      "type": "gift_order",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": true,
+        "actual_present": true,
+        "flags": {
+          "conversation_asked_details": true,
+          "conversation_rushed_close": false,
+          "conversation_name_mismatch": false
+        },
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [],
+        "allowed_signal_keys": [],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    },
+    {
+      "id": "e3-030",
+      "type": "no_risk_signal",
+      "address": {
+        "available": true,
+        "completeness": 1.0,
+        "completeness_passed": true,
+        "flags": {
+          "address_missing_house_number": false,
+          "address_missing_ward": false,
+          "address_vague": false,
+          "address_legacy_admin_names": false
+        },
+        "flag_mismatches": [],
+        "normalized_passed": null,
+        "admin_unresolved": false,
+        "admin_resolution_passed": true
+      },
+      "conversation": {
+        "expected_present": false,
+        "actual_present": false,
+        "flags": null,
+        "flag_mismatches": []
+      },
+      "reasons": {
+        "written": [],
+        "allowed_signal_keys": [],
+        "disallowed_signal_keys": [],
+        "dropped": {},
+        "rejection_notes": [],
+        "check_passed": true
+      }
+    }
+  ]
+}

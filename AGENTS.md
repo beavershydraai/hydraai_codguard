@@ -19,7 +19,7 @@ It is a prototype for the Google Cloud AI Builder Cup 2026 (Retail & Commerce tr
 
 ## Status
 
-The backend API contract exists; the rest of the application code does not yet. The layout and stack below are the plan from `README.md`, and commands marked "Planned" have not been run. When you add the first real code for an area, replace the planned command with the real one, here and in the README, in the same PR. Never document a command you have not run.
+The backend API contract and E3 AI scoring modules exist. API routes still return contract stubs; E2 must connect the reusable E3 service to its scoring flow. The remaining layout and commands marked "Planned" describe future work. When you add the first real code for an area, replace the planned command with the real one, here and in the README, in the same PR. Never document a command you have not run.
 
 ## Planned layout
 
@@ -28,6 +28,9 @@ api/            OpenAPI contract (generated from backend/, used by frontend/)
 backend/        Python service on Cloud Run: API, decision engine, ADK agents
   app/          FastAPI app: routes (api/v1/) and request/response schemas (schemas/)
   scoring/      hard rules, expected loss, model calls
+    ai/         E3 address/chat signals, checked reasons, Gemini wrapper and eval runner
+      data/     conservative official-source administrative lookup
+      prompts/  versioned text extraction and reason prompts
   agents/       ADK orchestration
   voice/        Gemini Live session handling
     prompts/    AI call system instruction and the record_call_outcome tool
@@ -62,6 +65,7 @@ Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 | Backend tests | `uv run pytest` |
 | Backend lint and format | `uv run ruff check . && uv run ruff format --check .` |
 | Export the API contract | `uv run python -m app.openapi_export` (writes `api/openapi.yaml`) |
+| E3 offline evaluation | `uv run python -m scoring.ai.eval --offline --output ../docs/evaluations/e3-offline.json` |
 | Mock API for the frontend | `npx @stoplight/prism-cli mock api/openapi.yaml` (from the repo root) |
 | Frontend dev server | Planned: `cd frontend && npm run dev` |
 | Reset demo data | Planned: `python scripts/reset_demo.py` |

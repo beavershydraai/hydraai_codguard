@@ -1,0 +1,122 @@
+{
+  "snapshot": "2025-07-01",
+  "coverage": "All 34 provinces; selected fully sourced wards in Hanoi and Ho Chi Minh City. Other wards intentionally remain unresolved.",
+  "sources": {
+    "province_names": "https://xaydungchinhsach.chinhphu.vn/chi-tiet-34-don-vi-hanh-chinh-cap-tinh-tu-12-6-2025-119250612141845533.htm",
+    "province_mergers": "https://baochinhphu.vn/nghi-quyet-cua-quoc-hoi-ve-sap-xep-don-vi-hanh-chinh-cap-tinh-102250612191145158.htm",
+    "hcm": "https://xaydungchinhsach.chinhphu.vn/toan-van-nghi-quyet-so-1685-nq-ubtvqh15-sap-xep-cac-dvhc-cap-xa-cua-thanh-pho-ho-chi-minh-nam-2025-119250616211341304.htm",
+    "hanoi": "https://xaydungchinhsach.chinhphu.vn/toan-van-nghi-quyet-so-1656-nq-ubtvqh15-sap-xep-cac-dvhc-cap-xa-cua-thanh-pho-ha-noi-nam-2025-119250616192433872.htm"
+  },
+  "provinces": [
+    {"name": "Hà Nội", "aliases": [], "legacy_names": [], "article": "202/2025/QH15:1.24"},
+    {"name": "Huế", "aliases": [], "legacy_names": [], "article": "202/2025/QH15:1.24"},
+    {"name": "Lai Châu", "aliases": [], "legacy_names": [], "article": "202/2025/QH15:1.24"},
+    {"name": "Điện Biên", "aliases": [], "legacy_names": [], "article": "202/2025/QH15:1.24"},
+    {"name": "Sơn La", "aliases": [], "legacy_names": [], "article": "202/2025/QH15:1.24"},
+    {"name": "Lạng Sơn", "aliases": [], "legacy_names": [], "article": "202/2025/QH15:1.24"},
+    {"name": "Quảng Ninh", "aliases": [], "legacy_names": [], "article": "202/2025/QH15:1.24"},
+    {"name": "Thanh Hóa", "aliases": [], "legacy_names": [], "article": "202/2025/QH15:1.24"},
+    {"name": "Nghệ An", "aliases": [], "legacy_names": [], "article": "202/2025/QH15:1.24"},
+    {"name": "Hà Tĩnh", "aliases": [], "legacy_names": [], "article": "202/2025/QH15:1.24"},
+    {"name": "Cao Bằng", "aliases": [], "legacy_names": [], "article": "202/2025/QH15:1.24"},
+    {"name": "Tuyên Quang", "aliases": [], "legacy_names": ["Hà Giang"], "article": "202/2025/QH15:1.1"},
+    {"name": "Lào Cai", "aliases": [], "legacy_names": ["Yên Bái"], "article": "202/2025/QH15:1.2"},
+    {"name": "Thái Nguyên", "aliases": [], "legacy_names": ["Bắc Kạn"], "article": "202/2025/QH15:1.3"},
+    {"name": "Phú Thọ", "aliases": [], "legacy_names": ["Vĩnh Phúc", "Hòa Bình"], "article": "202/2025/QH15:1.4"},
+    {"name": "Bắc Ninh", "aliases": [], "legacy_names": ["Bắc Giang"], "article": "202/2025/QH15:1.5"},
+    {"name": "Hưng Yên", "aliases": [], "legacy_names": ["Thái Bình"], "article": "202/2025/QH15:1.6"},
+    {"name": "Hải Phòng", "aliases": [], "legacy_names": ["Hải Dương"], "article": "202/2025/QH15:1.7"},
+    {"name": "Ninh Bình", "aliases": [], "legacy_names": ["Hà Nam", "Nam Định"], "article": "202/2025/QH15:1.8"},
+    {"name": "Quảng Trị", "aliases": [], "legacy_names": ["Quảng Bình"], "article": "202/2025/QH15:1.9"},
+    {"name": "Đà Nẵng", "aliases": [], "legacy_names": ["Quảng Nam"], "article": "202/2025/QH15:1.10"},
+    {"name": "Quảng Ngãi", "aliases": [], "legacy_names": ["Kon Tum"], "article": "202/2025/QH15:1.11"},
+    {"name": "Gia Lai", "aliases": [], "legacy_names": ["Bình Định"], "article": "202/2025/QH15:1.12"},
+    {"name": "Khánh Hòa", "aliases": [], "legacy_names": ["Ninh Thuận"], "article": "202/2025/QH15:1.13"},
+    {"name": "Lâm Đồng", "aliases": [], "legacy_names": ["Đắk Nông", "Bình Thuận"], "article": "202/2025/QH15:1.14"},
+    {"name": "Đắk Lắk", "aliases": [], "legacy_names": ["Phú Yên"], "article": "202/2025/QH15:1.15"},
+    {"name": "Hồ Chí Minh", "aliases": ["HCM"], "legacy_names": ["Bình Dương", "Bà Rịa - Vũng Tàu"], "article": "202/2025/QH15:1.16"},
+    {"name": "Đồng Nai", "aliases": [], "legacy_names": ["Bình Phước"], "article": "202/2025/QH15:1.17"},
+    {"name": "Tây Ninh", "aliases": [], "legacy_names": ["Long An"], "article": "202/2025/QH15:1.18"},
+    {"name": "Cần Thơ", "aliases": [], "legacy_names": ["Sóc Trăng", "Hậu Giang"], "article": "202/2025/QH15:1.19"},
+    {"name": "Vĩnh Long", "aliases": [], "legacy_names": ["Bến Tre", "Trà Vinh"], "article": "202/2025/QH15:1.20"},
+    {"name": "Đồng Tháp", "aliases": [], "legacy_names": ["Tiền Giang"], "article": "202/2025/QH15:1.21"},
+    {"name": "Cà Mau", "aliases": [], "legacy_names": ["Bạc Liêu"], "article": "202/2025/QH15:1.22"},
+    {"name": "An Giang", "aliases": [], "legacy_names": ["Kiên Giang"], "article": "202/2025/QH15:1.23"}
+  ],
+  "wards": [
+    {
+      "name": "Phường Sài Gòn", "province": "Hồ Chí Minh", "source": "hcm", "article": "1.1", "old_districts": ["Quận 1"],
+      "legacy_names": [
+        {"name": "Bến Nghé", "district": "Quận 1", "province": "Hồ Chí Minh", "whole_unit": true},
+        {"name": "Đa Kao", "district": "Quận 1", "province": "Hồ Chí Minh", "whole_unit": false},
+        {"name": "Nguyễn Thái Bình", "district": "Quận 1", "province": "Hồ Chí Minh", "whole_unit": false}
+      ]
+    },
+    {
+      "name": "Phường Tân Định", "province": "Hồ Chí Minh", "source": "hcm", "article": "1.2", "old_districts": ["Quận 1"],
+      "legacy_names": [
+        {"name": "Tân Định", "district": "Quận 1", "province": "Hồ Chí Minh", "whole_unit": true},
+        {"name": "Đa Kao", "district": "Quận 1", "province": "Hồ Chí Minh", "whole_unit": false}
+      ]
+    },
+    {
+      "name": "Phường Bến Thành", "province": "Hồ Chí Minh", "source": "hcm", "article": "1.3", "old_districts": ["Quận 1"],
+      "legacy_names": [
+        {"name": "Bến Thành", "district": "Quận 1", "province": "Hồ Chí Minh", "whole_unit": true},
+        {"name": "Phạm Ngũ Lão", "district": "Quận 1", "province": "Hồ Chí Minh", "whole_unit": true},
+        {"name": "Nguyễn Thái Bình", "district": "Quận 1", "province": "Hồ Chí Minh", "whole_unit": false}
+      ]
+    },
+    {
+      "name": "Phường Bàn Cờ", "province": "Hồ Chí Minh", "source": "hcm", "article": "1.5", "old_districts": ["Quận 3"],
+      "legacy_names": [
+        {"name": "Phường 1", "district": "Quận 3", "province": "Hồ Chí Minh", "whole_unit": true},
+        {"name": "Phường 2", "district": "Quận 3", "province": "Hồ Chí Minh", "whole_unit": true},
+        {"name": "Phường 3", "district": "Quận 3", "province": "Hồ Chí Minh", "whole_unit": true},
+        {"name": "Phường 5", "district": "Quận 3", "province": "Hồ Chí Minh", "whole_unit": true},
+        {"name": "Phường 4", "district": "Quận 3", "province": "Hồ Chí Minh", "whole_unit": false}
+      ]
+    },
+    {
+      "name": "Phường Xuân Hòa", "province": "Hồ Chí Minh", "source": "hcm", "article": "1.6", "old_districts": ["Quận 3"],
+      "legacy_names": [{"name": "Võ Thị Sáu", "district": "Quận 3", "province": "Hồ Chí Minh", "whole_unit": true}]
+    },
+    {
+      "name": "Phường Vĩnh Hội", "province": "Hồ Chí Minh", "source": "hcm", "article": "1.10", "old_districts": ["Quận 4"],
+      "legacy_names": [{"name": "Phường 1", "district": "Quận 4", "province": "Hồ Chí Minh", "whole_unit": true}]
+    },
+    {
+      "name": "Phường Chợ Quán", "province": "Hồ Chí Minh", "source": "hcm", "article": "1.11", "old_districts": ["Quận 5"],
+      "legacy_names": [{"name": "Phường 1", "district": "Quận 5", "province": "Hồ Chí Minh", "whole_unit": true}]
+    },
+    {
+      "name": "Phường Thủ Dầu Một", "province": "Hồ Chí Minh", "source": "hcm", "article": "1.87", "old_districts": ["Thủ Dầu Một"],
+      "legacy_names": [{"name": "Phú Cường", "district": "Thủ Dầu Một", "province": "Bình Dương", "whole_unit": true}]
+    },
+    {
+      "name": "Phường Hoàn Kiếm", "province": "Hà Nội", "source": "hanoi", "article": "1.1", "old_districts": ["Hoàn Kiếm"],
+      "legacy_names": [
+        {"name": "Hàng Bạc", "district": "Hoàn Kiếm", "province": "Hà Nội", "whole_unit": true},
+        {"name": "Hàng Bồ", "district": "Hoàn Kiếm", "province": "Hà Nội", "whole_unit": true},
+        {"name": "Hàng Buồm", "district": "Hoàn Kiếm", "province": "Hà Nội", "whole_unit": true},
+        {"name": "Đồng Xuân", "district": "Hoàn Kiếm", "province": "Hà Nội", "whole_unit": false},
+        {"name": "Cửa Nam", "district": "Hoàn Kiếm", "province": "Hà Nội", "whole_unit": false}
+      ]
+    },
+    {
+      "name": "Phường Cửa Nam", "province": "Hà Nội", "source": "hanoi", "article": "1.2", "old_districts": ["Hoàn Kiếm"],
+      "legacy_names": [{"name": "Hàng Bài", "district": "Hoàn Kiếm", "province": "Hà Nội", "whole_unit": true}]
+    },
+    {
+      "name": "Phường Ba Đình", "province": "Hà Nội", "source": "hanoi", "article": "1.3", "old_districts": ["Ba Đình"],
+      "legacy_names": [
+        {"name": "Trúc Bạch", "district": "Ba Đình", "province": "Hà Nội", "whole_unit": true},
+        {"name": "Cửa Nam", "district": "Hoàn Kiếm", "province": "Hà Nội", "whole_unit": false}
+      ]
+    },
+    {
+      "name": "Phường Láng", "province": "Hà Nội", "source": "hanoi", "article": "1.12", "old_districts": ["Đống Đa", "Ba Đình"],
+      "legacy_names": []
+    }
+  ]
+}

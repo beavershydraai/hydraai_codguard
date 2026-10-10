@@ -204,6 +204,9 @@ cod-guard/
 ├── backend/            # Cloud Run service: API, decision engine, ADK agents
 │   ├── app/            # FastAPI app: routes and request/response schemas
 │   ├── scoring/        # hard rules, expected loss, model calls
+│   │   └── ai/         # E3 address/chat signals, checked reasons and eval runner
+│   │       ├── data/   # official-source administrative lookup
+│   │       └── prompts/ # versioned Gemini text prompts
 │   ├── agents/         # ADK orchestration
 │   ├── voice/          # Gemini Live session handling
 │   │   └── prompts/    # AI call system instruction + outcome tool
@@ -268,6 +271,21 @@ uv run pytest
 ```
 
 Endpoints are defined but return `501 not_implemented` until each one is built. To work on the frontend before that, run the mock server described in [`api/README.md`](api/README.md).
+
+E3's reusable scoring modules are implemented in [`backend/scoring/ai/`](backend/scoring/ai/).
+[`AIService`](backend/scoring/ai/service.py) extracts address and chat features after
+hard rules, then checks explanations for a score supplied by E2. It does not set
+scores, model contributions, tiers or actions. See [`docs/e3-ai.md`](docs/e3-ai.md)
+for configuration, integration and evaluation limits.
+
+Run the recorded E3 evaluation from `backend/`:
+
+```bash
+uv run python -m scoring.ai.eval --offline --output ../docs/evaluations/e3-offline.json
+```
+
+The offline report verifies 30 synthetic cases. Live prompt accuracy and the
+second-reader check of all final reasons remain separate acceptance steps.
 
 ### 3. Run the frontend locally
 
