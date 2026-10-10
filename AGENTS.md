@@ -38,6 +38,7 @@ ml/             Data prep, synthetic data generator, BigQuery ML SQL, backtest
 data/seed/      Pseudonymised demo data only
 infra/          Deployment and Firebase config
 scripts/        Demo reset, abuse simulation, call test runner
+tasks/          Task brief per epic: interfaces, proposed design, open questions
 ```
 
 ## Stack

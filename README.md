@@ -215,6 +215,7 @@ cod-guard/
 │   └── seed/           # pseudonymised demo data
 ├── infra/              # deployment config, Firebase config
 ├── scripts/            # demo reset, abuse simulation, call test runner
+├── tasks/              # task brief per epic
 ├── .env.example
 └── README.md
 ```
