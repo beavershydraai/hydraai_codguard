@@ -61,6 +61,7 @@ Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 | Backend tests | `uv run pytest` |
 | Backend lint and format | `uv run ruff check . && uv run ruff format --check .` |
 | Export the API contract | `uv run python -m app.openapi_export` (writes `api/openapi.yaml`) |
+| Set up Google Cloud (once, in Cloud Shell) | `bash infra/gcp/bootstrap.sh`; see `infra/gcp/README.md` |
 | Mock API for the frontend | `npx @stoplight/prism-cli mock api/openapi.yaml` (from the repo root) |
 | Frontend dev server | Planned: `cd frontend && npm run dev` |
 | Reset demo data | Planned: `python scripts/reset_demo.py` |
