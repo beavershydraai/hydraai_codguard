@@ -61,6 +61,7 @@ Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 | Backend tests | `uv run pytest` |
 | Backend lint and format | `uv run ruff check . && uv run ruff format --check .` |
 | Export the API contract | `uv run python -m app.openapi_export` (writes `api/openapi.yaml`) |
+| Build and run the backend image | `docker build -t codguard-backend backend` then `docker run -p 8080:8080 codguard-backend` (from the repo root) |
 | Mock API for the frontend | `npx @stoplight/prism-cli mock api/openapi.yaml` (from the repo root) |
 | Frontend dev server | Planned: `cd frontend && npm run dev` |
 | Reset demo data | Planned: `python scripts/reset_demo.py` |
@@ -161,6 +162,7 @@ GitHub Actions runs `.github/workflows/ci.yml` on every PR and on every push to 
 | Job | What it checks |
 |---|---|
 | Backend (lint, tests, API contract) | `uv sync --locked`, `ruff check`, `ruff format --check`, `pytest`. The tests also fail when `api/openapi.yaml` is out of date, is not valid OpenAPI, or has an example that does not match its schema. |
+| Backend image | Builds `backend/Dockerfile` and smoke-tests the container: `/healthz`, `/openapi.json`, a 501 stub, non-root user, `PORT` override. On pushes to `main` it also publishes `ghcr.io/beavershydraai/hydraai_codguard/backend` with tags `sha-<commit>` and `main`. |
 | Secret scan (gitleaks) | No keys or tokens in the PR's new commits. |
 | No real phone numbers | `.github/scripts/check_phone_numbers.py` on all tracked files. Use `+84000…` in examples; add `pii-allow` on a line only for a false positive. |
 | CI result | Passes only when every job above passed. This is the check to require for merging. |
