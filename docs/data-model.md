@@ -1,0 +1,109 @@
+# Order data model (E2.1)
+
+![Order data flow](diagrams/order-data-flow.png)
+
+## Stack
+
+| Part | Technology |
+|---|---|
+| Order database | Firestore (Firebase), collection `orders` |
+| Training data and model files | Cloud Storage: Parquet snapshots, model versions |
+| Scoring | Backend on Cloud Run |
+| Training | Cloud Run job, run on demand |
+| Model | Python: CatBoost or LightGBM, scikit-learn calibration |
+| Phone hash key | Secret Manager |
+
+## Where the data lives
+
+| Store | Holds | Read by |
+|---|---|---|
+| Firestore, collection `orders` | Every order: what came in, its status, its latest score and its delivery result | The backend on every request; the training job |
+| Cloud Storage, `snapshots/v{n}/orders.parquet` | A frozen copy of the labelled orders used for one training run | Training, backtest (E9) |
+| Cloud Storage, `models/v{n}/`, `models/latest` | Model file, metrics, feature list | The backend at startup |
+
+The training job reads Firestore directly. Each model version keeps the snapshot it was trained on.
+
+## Firestore: `orders/{order_id}`
+
+One document per order. It is a top-level collection with a `shop_id` field rather than
+`shops/{id}/orders`, so one query finds a phone's orders across all shops (phone history, E1.5).
+
+| Field | Type | Source | Rule |
+|---|---|---|---|
+| `order_id` | string | system | Same as the document ID |
+| `shop_id` | string | system | |
+| `external_id` | string \| null | `OrderCreate.external_id` | Unique per shop; a repeat is ignored |
+| `channel` | string | `OrderCreate.channel` | One of `SalesChannel` |
+| `placed_at` | timestamp | `OrderCreate.placed_at` | Stored in UTC. A time without a zone is Vietnam time (UTC+7) |
+| `buyer_name` | string | `OrderCreate.buyer_name` | Shown in the app; never copied into snapshots |
+| `buyer_phone` | string | `OrderCreate.buyer_phone` | E.164 (`+84…`). Kept as received if it cannot be normalised |
+| `buyer_phone_hash` | string \| null | derived | HMAC-SHA256 of the E.164 number with a secret key. Null means the phone is invalid |
+| `is_gift` | bool | `OrderCreate.is_gift` | |
+| `recipient_name` | string \| null | `OrderCreate.recipient_name` | |
+| `recipient_phone` | string \| null | `OrderCreate.recipient_phone` | E.164 |
+| `recipient_phone_hash` | string \| null | derived | Same hashing as the buyer phone |
+| `address` | map | `OrderCreate.address` | `raw`, `street`, `ward`, `province` (2025 two-level units) |
+| `items` | array of map | `OrderCreate.items` | `sku`, `name`, `variant`, `quantity`, `unit_price_vnd` |
+| `shipping_fee_vnd` | int | `OrderCreate.shipping_fee_vnd` | |
+| `discount_vnd` | int | `OrderCreate.discount_vnd` | |
+| `prepaid_vnd` | int | `OrderCreate.prepaid_vnd` | Deposit or prepayment |
+| `conversation_text` | string \| null | `OrderCreate.conversation_text` | |
+| `note` | string \| null | `OrderCreate.note` | |
+| `status` | string | system | One of `OrderStatus`; `new` on creation |
+| `scoring` | map \| null | scoring (E2.4, E2.5) | Latest run: `probability`, `risk_score`, `tier`, `expected_loss_vnd`, `hard_rules`, `top_signals`, `model_version`, `scored_at`, and `features`, the exact inputs the model saw |
+| `delivery` | map \| null | `DeliveryOutcome` | `result`, `carrier`, `tracking_code`, `occurred_at` (UTC) |
+| `created_at`, `updated_at` | timestamp | system | |
+
+- Totals are not stored. `total_vnd` = items − discount + shipping fee; `cod_amount_vnd` = total − prepaid.
+- Phone history query: `buyer_phone_hash == h and placed_at < t`. It needs a composite index on
+  (`buyer_phone_hash`, `placed_at`).
+- The phone key lives in Secret Manager and is the same for every shop, otherwise a phone would not match
+  across shops. A plain SHA-256 of a phone number can be reversed by trying every number, so the key is
+  required.
+
+## Training snapshot: `orders.parquet`
+
+One row per order whose delivery result gives a label. It is built by the training job from Firestore:
+
+- copy every field except `buyer_name`, `recipient_name`, `buyer_phone`, `recipient_phone` and `scoring`;
+- flatten `address.*` to `address_*` and `delivery.*` to `delivery_*`; keep `items` as a list column;
+- add the label `is_failed`.
+
+`scoring` is left out because it is the output of an earlier model; training on it would leak that output
+into the new model.
+
+### Label
+
+Only buyer-caused failures count (`COD_Guard_Epics.md`, E2.1).
+
+| `delivery.result` | `is_failed` |
+|---|---|
+| `delivered` | 0 |
+| `refused` | 1 |
+| `unreachable` | 1 |
+| `carrier_issue`, `shop_issue` | row dropped |
+| not set yet | row dropped |
+
+A carrier export is mapped to `DeliveryResult` first. For GHN, for example: receiver unreachable or not
+answering (`GHN-DFC1A2`, `GHN-DFC1A4`), says they did not order (`GHN-DFC1A9`, `GHN-DCD1A1`), changed their
+mind (`GHN-DCD0A8`), no money (`GHN-DCD1A5`) → `refused` / `unreachable`; wrong product or wrong COD amount
+(`GHN-DCD0A6`, `GHN-DCD0A7`) → `shop_issue`; damaged, lost, weather (`GHN-DCD0A5`, `GHN-DFC2A0`) →
+`carrier_issue`.
+
+## Rules for everyone using this data
+
+- **Point in time:** a feature for an order may only use other orders whose delivery result was known
+  before this order's `placed_at`.
+- **Same code:** training and scoring compute features with the same function (step 4 and step 9 in the
+  diagram).
+- **Time split:** split train and test by `placed_at`, never at random.
+
+## Open questions for the team
+
+1. The "invalid phone → hold for review" rule versus test data: CI only allows `+84000…` numbers, which are
+   not real Vietnamese numbers. Normalisation therefore checks the shape of the number (9 or 10 national
+   digits), not whether the prefix exists.
+2. `README.md` lists category, carrier and expected delivery time as context signals, but `OrderCreate` has
+   no field for them.
+3. Where earlier scoring runs live (`OrderDetail.score_history`): an array on the order or a subcollection
+   (E4.1).
