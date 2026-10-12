@@ -14,16 +14,16 @@ fail() {
 
 wait_healthy() {
   for _ in $(seq 1 30); do
-    curl -fsS "http://127.0.0.1:$1/healthz" >/dev/null 2>&1 && return 0
+    curl -fsS "http://127.0.0.1:$1/health" >/dev/null 2>&1 && return 0
     sleep 1
   done
   return 1
 }
 
 docker run -d --name api -p 8080:8080 "$IMAGE" >/dev/null
-wait_healthy 8080 || fail "Container did not answer /healthz on port 8080 within 30s"
+wait_healthy 8080 || fail "Container did not answer /health on port 8080 within 30s"
 
-curl -fsS http://127.0.0.1:8080/healthz | grep -q '"ok"' || fail "/healthz did not return ok"
+curl -fsS http://127.0.0.1:8080/health | grep -q '"ok"' || fail "/health did not return ok"
 curl -fsS http://127.0.0.1:8080/openapi.json \
   | python3 -c 'import json, sys; assert json.load(sys.stdin)["info"]["title"] == "COD Guard API"' \
   || fail "/openapi.json is missing or wrong"

@@ -135,12 +135,14 @@ jobs:
           echo "URL=$URL" >> "$GITHUB_ENV"
       - name: Check the deployed service
         run: |
+          echo "Deployed \`$TAG\` to $URL ([API docs]($URL/docs))" >> "$GITHUB_STEP_SUMMARY"
           for _ in $(seq 1 10); do
-            curl -fsS "$URL/healthz" | grep -q '"ok"' && break
+            curl -fsS "$URL/health" | grep -q '"ok"' && exit 0
             sleep 3
           done
-          curl -fsS "$URL/healthz" | grep -q '"ok"'
-          echo "Deployed \`$TAG\` to $URL ([API docs]($URL/docs))" >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::$URL/health did not return ok"
+          curl -sS -i "$URL/health" | head -20
+          exit 1
 
   secrets:
     name: Secret scan (gitleaks)
