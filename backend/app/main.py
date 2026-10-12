@@ -79,8 +79,9 @@ def create_app() -> FastAPI:
     install_error_handlers(app)
     app.include_router(v1_router)
 
-    @app.get("/healthz", include_in_schema=False)
-    async def healthz() -> dict[str, str]:
+    # Not /healthz: Cloud Run reserves some paths ending in "z" and answers them itself.
+    @app.get("/health", include_in_schema=False)
+    async def health() -> dict[str, str]:
         return {"status": "ok"}
 
     def openapi() -> dict[str, Any]:

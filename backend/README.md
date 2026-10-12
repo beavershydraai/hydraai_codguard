@@ -15,7 +15,7 @@ Container image (same as CI and Cloud Run):
 
 ```bash
 docker build -t codguard-backend .
-docker run -p 8080:8080 codguard-backend            # http://localhost:8080/healthz
+docker run -p 8080:8080 codguard-backend            # http://localhost:8080/health
 ```
 
 Every push to `main` publishes the image to `ghcr.io/beavershydraai/hydraai_codguard/backend`
