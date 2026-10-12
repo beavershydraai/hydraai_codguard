@@ -129,7 +129,9 @@ jobs:
           gcloud run deploy "$SERVICE" --image "$TARGET_IMAGE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --service-account "$GCP_RUNTIME_SA" --allow-unauthenticated \
-            --port 8080 --cpu 1 --memory 512Mi --min-instances 0 --max-instances 2 --quiet
+            --port 8080 --cpu 1 --memory 512Mi --min-instances 0 --max-instances 2 \
+            --update-env-vars "FIRESTORE_DATABASE=vn-synthetic,MODEL_URI=gs://ai-codguard-ml/synthetic/models/v2/model1.pkl" \
+            --update-secrets "PHONE_HASH_KEY=phone-hash-key-synthetic:latest,INTAKE_API_KEYS=intake-api-keys:latest" --quiet
           URL=$(gcloud run services describe "$SERVICE" --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" --format 'value(status.url)')
           echo "URL=$URL" >> "$GITHUB_ENV"
