@@ -284,10 +284,9 @@ python scripts/reset_demo.py      # loads pseudonymised seed orders
 
 ### 5. Deploy
 
-```bash
-gcloud run deploy cod-guard-api --source backend --region asia-southeast1
-firebase deploy --only hosting
-```
+The backend deploys automatically: every push to `main` that passes CI is deployed to the Cloud Run service `codguard-api` in project `ai-codguard` (`asia-southeast1`). The service URL is in the summary of the CI run. Do not deploy by hand.
+
+The frontend will deploy to Firebase Hosting once it exists (`firebase deploy --only hosting`, planned).
 
 ---
 

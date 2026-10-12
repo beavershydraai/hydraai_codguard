@@ -11,6 +11,16 @@ uv run ruff check . && uv run ruff format --check .
 uv run python -m app.openapi_export                # regenerate ../api/openapi.yaml
 ```
 
+Container image (same as CI and Cloud Run):
+
+```bash
+docker build -t codguard-backend .
+docker run -p 8080:8080 codguard-backend            # http://localhost:8080/healthz
+```
+
+Every push to `main` publishes the image to `ghcr.io/beavershydraai/hydraai_codguard/backend`
+with tags `sha-<commit>` and `main`.
+
 | Path | Contents |
 |---|---|
 | `app/main.py` | App factory, OpenAPI settings |
@@ -18,5 +28,6 @@ uv run python -m app.openapi_export                # regenerate ../api/openapi.y
 | `app/api/errors.py` | Problem-details errors and the shared error responses |
 | `app/schemas/` | Request and response models with examples |
 | `tests/` | Contract and app tests |
+| `Dockerfile` | Production image: uv-built virtualenv, non-root user, listens on `$PORT` |
 
 See `../api/README.md` for how the frontend uses the contract.
