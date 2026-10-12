@@ -65,7 +65,7 @@ Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 | Mock API for the frontend | `npx @stoplight/prism-cli mock api/openapi.yaml` (from the repo root) |
 | Frontend dev server | Planned: `cd frontend && npm run dev` |
 | Reset demo data | Planned: `python scripts/reset_demo.py` |
-| Deploy | Automatic on merge to `main` (E1.2). Do not deploy by hand unless asked. |
+| Deploy | Automatic: every push to `main` that passes CI deploys the backend to Cloud Run (`codguard-api`, project `ai-codguard`, `asia-southeast1`). Do not deploy by hand unless asked. |
 
 ## API contract
 
@@ -163,6 +163,7 @@ GitHub Actions runs `.github/workflows/ci.yml` on every PR and on every push to 
 |---|---|
 | Backend (lint, tests, API contract) | `uv sync --locked`, `ruff check`, `ruff format --check`, `pytest`. The tests also fail when `api/openapi.yaml` is out of date, is not valid OpenAPI, or has an example that does not match its schema. |
 | Backend image | Builds `backend/Dockerfile` and smoke-tests the container: `/healthz`, `/openapi.json`, a 501 stub, non-root user, `PORT` override. On pushes to `main` it also publishes `ghcr.io/beavershydraai/hydraai_codguard/backend` with tags `sha-<commit>` and `main`. |
+| Deploy (main only) | Copies the tested image from GHCR to Artifact Registry, deploys it to Cloud Run as `codguard-runtime`, then checks `/healthz` on the live URL. Authenticates with Workload Identity Federation; no GCP key is stored in GitHub. |
 | Secret scan (gitleaks) | No keys or tokens in the PR's new commits. |
 | No real phone numbers | `.github/scripts/check_phone_numbers.py` on all tracked files. Use `+84000…` in examples; add `pii-allow` on a line only for a false positive. |
 | CI result | Passes only when every job above passed. This is the check to require for merging. |
