@@ -1,0 +1,45 @@
+name: Review gate
+
+# Review may only be requested once the "CI result" check is green on the PR's latest commit.
+# A request made earlier is withdrawn with a comment.
+
+on:
+  pull_request:
+    types: [review_requested]
+
+permissions:
+  checks: read
+  pull-requests: write
+
+jobs:
+  require-green-ci:
+    name: Require green CI before review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const { owner, repo } = context.repo;
+            const { data } = await github.rest.checks.listForRef({
+              owner, repo, ref: pr.head.sha, check_name: 'CI result', filter: 'latest',
+            });
+            const run = data.check_runs[0];
+            if (run && run.status === 'completed' && run.conclusion === 'success') {
+              core.info(`CI result is green on ${pr.head.sha}.`);
+              return;
+            }
+            const state = run ? `${run.status}${run.conclusion ? `/${run.conclusion}` : ''}` : 'not started';
+            const reviewer = context.payload.requested_reviewer?.login;
+            const team = context.payload.requested_team?.slug;
+            await github.rest.pulls.removeRequestedReviewers({
+              owner, repo, pull_number: pr.number,
+              reviewers: reviewer ? [reviewer] : [],
+              team_reviewers: team ? [team] : [],
+            });
+            await github.rest.issues.createComment({
+              owner, repo, issue_number: pr.number,
+              body: `@${context.actor} CI is not green yet on ${pr.head.sha.slice(0, 7)} (CI result: ${state}), so the review request was withdrawn. Request review again once CI passes.`,
+            });
+            core.notice(`Withdrew review request: CI result is ${state}.`);

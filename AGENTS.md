@@ -65,11 +65,12 @@ Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 | Backend tests | `uv run pytest` |
 | Backend lint and format | `uv run ruff check . && uv run ruff format --check .` |
 | Export the API contract | `uv run python -m app.openapi_export` (writes `api/openapi.yaml`) |
+| Build and run the backend image | `docker build -t codguard-backend backend` then `docker run -p 8080:8080 codguard-backend` (from the repo root) |
 | E3 offline evaluation | `uv run python -m scoring.ai.eval --offline --output ../docs/evaluations/e3-offline.json` |
 | Mock API for the frontend | `npx @stoplight/prism-cli mock api/openapi.yaml` (from the repo root) |
 | Frontend dev server | Planned: `cd frontend && npm run dev` |
 | Reset demo data | Planned: `python scripts/reset_demo.py` |
-| Deploy | Automatic on merge to `main` (E1.2). Do not deploy by hand unless asked. |
+| Deploy | Automatic: every push to `main` that passes CI deploys the backend to Cloud Run (`codguard-api`, project `ai-codguard`, `asia-southeast1`). Do not deploy by hand unless asked. |
 
 ## API contract
 
@@ -157,3 +158,21 @@ These rules come from the README and the epics. Code and tests must enforce them
 - Commit messages: English, imperative summary of at most 72 characters.
 - Every change goes through a PR into `main`. Title it with the sub-epic ID when there is one, e.g. `[E4.3] Contact protection limits`. The body says what changed, how it was tested, and which "Done khi" criteria it meets.
 - Keep PRs small: one sub-epic per PR where possible.
+- Request review only after the **CI result** check is green on the PR's latest commit (see "CI").
+
+## CI
+
+GitHub Actions runs `.github/workflows/ci.yml` on every PR and on every push to `main`.
+
+| Job | What it checks |
+|---|---|
+| Backend (lint, tests, API contract) | `uv sync --locked`, `ruff check`, `ruff format --check`, `pytest`. The tests also fail when `api/openapi.yaml` is out of date, is not valid OpenAPI, or has an example that does not match its schema. |
+| Backend image | Builds `backend/Dockerfile` and smoke-tests the container: `/health`, `/openapi.json`, a 501 stub, non-root user, `PORT` override. On pushes to `main` it also publishes `ghcr.io/beavershydraai/hydraai_codguard/backend` with tags `sha-<commit>` and `main`. |
+| Deploy (main only) | Copies the tested image from GHCR to Artifact Registry, deploys it to Cloud Run as `codguard-runtime`, then checks `/health` on the live URL (not `/healthz`: Cloud Run reserves it). Authenticates with Workload Identity Federation; no GCP key is stored in GitHub. |
+| Secret scan (gitleaks) | No keys or tokens in the PR's new commits. |
+| No real phone numbers | `.github/scripts/check_phone_numbers.py` on all tracked files. Use `+84000…` in examples; add `pii-allow` on a line only for a false positive. |
+| CI result | Passes only when every job above passed. This is the check to require for merging. |
+
+- A review request made while **CI result** is not green is withdrawn with a comment (`.github/workflows/review-gate.yml`). A push that turns CI red also withdraws pending review requests.
+- Run the same checks locally before pushing (see "Commands").
+- A PR that adds a new area (for example `frontend/`) adds that area's lint, test and build job to `ci.yml` and to the `needs` list of **CI result**.

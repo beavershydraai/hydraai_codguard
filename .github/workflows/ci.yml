@@ -1,0 +1,209 @@
+name: CI
+
+# Every PR must pass the "CI result" check before review is requested.
+# review-gate.yml removes review requests made while this check is not green.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  # Cancel superseded PR runs, but never cancel a deploy on main halfway.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (lint, tests, API contract)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0  # this action publishes no major tag
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - name: Install dependencies
+        run: uv sync --locked
+      - name: Lint
+        run: uv run ruff check --output-format=github .
+      - name: Format
+        run: uv run ruff format --check .
+      - name: Tests (includes API contract checks)
+        run: uv run pytest -q
+
+  image:
+    name: Backend image (build, smoke test, publish on main)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}/backend
+      PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha,format=short
+            type=raw,value=main,enable=${{ env.PUBLISH }}
+      - name: Build
+        uses: docker/build-push-action@v7
+        with:
+          context: backend
+          load: true
+          push: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=backend-image
+          cache-to: type=gha,scope=backend-image,mode=max
+      - name: Smoke test
+        run: bash .github/scripts/smoke_test_image.sh "${{ env.IMAGE }}:sha-${GITHUB_SHA::7}"
+      - name: Log in to GHCR
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish
+        if: env.PUBLISH == 'true'
+        run: |
+          docker push --all-tags "$IMAGE"
+          echo "Published $IMAGE:sha-${GITHUB_SHA::7} and $IMAGE:main" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy backend to Cloud Run (main only)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [backend, image, secrets, privacy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+      id-token: write # Workload Identity Federation: no GCP key is stored in GitHub
+    env:
+      GCP_PROJECT_ID: ai-codguard
+      GCP_REGION: asia-southeast1
+      GCP_WIF_PROVIDER: projects/186430269525/locations/global/workloadIdentityPools/github/providers/github-oidc
+      GCP_DEPLOYER_SA: codguard-deployer@ai-codguard.iam.gserviceaccount.com
+      GCP_RUNTIME_SA: codguard-runtime@ai-codguard.iam.gserviceaccount.com
+      SERVICE: codguard-api
+      SOURCE_IMAGE: ghcr.io/${{ github.repository }}/backend
+    steps:
+      - name: Image names
+        run: |
+          echo "TAG=sha-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          echo "TARGET_IMAGE=$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/codguard/backend:sha-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: ${{ env.GCP_DEPLOYER_SA }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Copy the tested image to Artifact Registry
+        run: |
+          gcloud auth configure-docker "$GCP_REGION-docker.pkg.dev" --quiet
+          docker pull "$SOURCE_IMAGE:$TAG"
+          docker tag "$SOURCE_IMAGE:$TAG" "$TARGET_IMAGE"
+          docker push "$TARGET_IMAGE"
+      - name: Deploy
+        run: |
+          gcloud run deploy "$SERVICE" --image "$TARGET_IMAGE" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --service-account "$GCP_RUNTIME_SA" --allow-unauthenticated \
+            --port 8080 --cpu 1 --memory 512Mi --min-instances 0 --max-instances 2 --quiet
+          URL=$(gcloud run services describe "$SERVICE" --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" --format 'value(status.url)')
+          echo "URL=$URL" >> "$GITHUB_ENV"
+      - name: Check the deployed service
+        run: |
+          echo "Deployed \`$TAG\` to $URL ([API docs]($URL/docs))" >> "$GITHUB_STEP_SUMMARY"
+          for _ in $(seq 1 10); do
+            curl -fsS "$URL/health" | grep -q '"ok"' && exit 0
+            sleep 3
+          done
+          echo "::error::$URL/health did not return ok"
+          curl -sS -i "$URL/health" | head -20
+          exit 1
+
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GITLEAKS_VERSION: 8.30.1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP" gitleaks
+      - name: Scan new commits
+        env:
+          RANGE: ${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || format('{0}..{1}', github.event.before, github.sha) }}
+        run: |
+          # A new branch pushed to main has no "before" commit; scan everything then.
+          case "$RANGE" in 0000000000000000000000000000000000000000..*) RANGE="" ;; esac
+          "$RUNNER_TEMP/gitleaks" git --redact --verbose --no-banner ${RANGE:+--log-opts="$RANGE"} .
+
+  privacy:
+    name: No real phone numbers
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check tracked files
+        run: python3 .github/scripts/check_phone_numbers.py
+
+  ci-result:
+    name: CI result
+    if: always()
+    needs: [backend, image, deploy, secrets, privacy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Withdraw review requests while CI is red
+        if: github.event_name == 'pull_request' && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const { owner, repo } = context.repo;
+            const { data } = await github.rest.pulls.listRequestedReviewers({ owner, repo, pull_number: pr.number });
+            const reviewers = data.users.map((u) => u.login);
+            const team_reviewers = data.teams.map((t) => t.slug);
+            if (reviewers.length + team_reviewers.length === 0) return;
+            await github.rest.pulls.removeRequestedReviewers({ owner, repo, pull_number: pr.number, reviewers, team_reviewers });
+            await github.rest.issues.createComment({
+              owner, repo, issue_number: pr.number,
+              body: `CI failed on ${pr.head.sha.slice(0, 7)}, so the review request was withdrawn. Fix CI, then request review again.`,
+            });
+      - name: Verdict
+        run: |
+          echo 'Job results: ${{ toJSON(needs.*.result) }}'
+          if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "::error::One or more CI jobs failed."
+            exit 1
+          fi

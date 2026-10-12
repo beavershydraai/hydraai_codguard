@@ -13,6 +13,16 @@ uv run python -m app.openapi_export                # regenerate ../api/openapi.y
 uv run python -m scoring.ai.eval --offline --output ../docs/evaluations/e3-offline.json
 ```
 
+Container image (same as CI and Cloud Run):
+
+```bash
+docker build -t codguard-backend .
+docker run -p 8080:8080 codguard-backend            # http://localhost:8080/health
+```
+
+Every push to `main` publishes the image to `ghcr.io/beavershydraai/hydraai_codguard/backend`
+with tags `sha-<commit>` and `main`.
+
 | Path | Contents |
 |---|---|
 | `app/main.py` | App factory, OpenAPI settings |
@@ -22,6 +32,7 @@ uv run python -m scoring.ai.eval --offline --output ../docs/evaluations/e3-offli
 | `scoring/ai/` | E3 Gemini gateway, address/chat extraction, reason checks and evaluation |
 | `scoring/ai/service.py` | E2 integration boundary; never sets scores or decisions |
 | `tests/` | Contract and app tests |
+| `Dockerfile` | Production image: uv-built virtualenv, non-root user, listens on `$PORT` |
 
 See `../api/README.md` for how the frontend uses the contract.
 See [`../docs/e3-ai.md`](../docs/e3-ai.md) for E3 integration and configuration.

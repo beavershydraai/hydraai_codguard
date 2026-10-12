@@ -112,7 +112,7 @@ flowchart LR
 | Risk model | BigQuery ML (boosted trees, with explanations per prediction) |
 | Backend | Python service on Cloud Run |
 | Frontend | Web app on Firebase Hosting |
-| Data | Firestore (app state), BigQuery (training data, analytics) |
+| Data | Firestore (orders and app state, see [data model](docs/data-model.md)), Cloud Storage (training snapshots, models) |
 | Secrets | Secret Manager |
 | Delivery outcomes | GHN staging API, CSV import |
 | Region | `asia-southeast1`; Gemini Live API sessions in `us-central1`, because the Live API is not served from Asia regions ([details](docs/gemini-live.md)) |
@@ -157,10 +157,11 @@ The buyer is contacted only if `expected_loss` is higher than the cost of the co
 | High | AI call | Hold for review after the last attempt |
 | Very High | Require deposit | Hold for review if unpaid |
 
-### Example: BigQuery ML
+### ~~Example: BigQuery ML~~ → Firestore
 
-```sql
-CREATE OR REPLACE MODEL cod_guard.risk_model
+Replaced: orders are stored in Firestore, collection `orders`. See [data model](docs/data-model.md).
+
+<pre><del>CREATE OR REPLACE MODEL cod_guard.risk_model
 OPTIONS (
   model_type = 'BOOSTED_TREE_CLASSIFIER',
   input_label_cols = ['is_failed'],
@@ -174,8 +175,7 @@ FROM ML.EXPLAIN_PREDICT(
   MODEL cod_guard.risk_model,
   TABLE cod_guard.new_orders,
   STRUCT(3 AS top_k_features)
-);
-```
+);</del></pre>
 
 ---
 
@@ -303,10 +303,9 @@ python scripts/reset_demo.py      # loads pseudonymised seed orders
 
 ### 5. Deploy
 
-```bash
-gcloud run deploy cod-guard-api --source backend --region asia-southeast1
-firebase deploy --only hosting
-```
+The backend deploys automatically: every push to `main` that passes CI is deployed to the Cloud Run service `codguard-api` in project `ai-codguard` (`asia-southeast1`). The service URL is in the summary of the CI run. Do not deploy by hand.
+
+The frontend will deploy to Firebase Hosting once it exists (`firebase deploy --only hosting`, planned).
 
 ---
 
