@@ -5,6 +5,7 @@ description = "COD Guard API: COD order risk scoring, decisions and buyer verifi
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
+    "google-cloud-firestore>=2.34.1",
     "pydantic>=2.9",
     "python-multipart>=0.0.9",
     "pyyaml>=6.0",

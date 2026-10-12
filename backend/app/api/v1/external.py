@@ -1,14 +1,17 @@
 """Endpoints outside the shop app: intake API, buyer confirmation page, demo controls."""
 
+from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Security, status
+from fastapi import APIRouter, Depends, Path, Security, status
 
-from app.api.errors import NotImplementedYet, problem_example, problem_responses
+from app.api.errors import ApiError, NotImplementedYet, problem_example, problem_responses
 from app.api.security import firebase_auth, intake_api_key
+from app.data.orders import order_document
+from app.data.store import OrderStore, get_store, order_id_for, phone_key, shop_for_key
 from app.schemas.confirm import BuyerOrderView, BuyerResponse, BuyerResponseResult
 from app.schemas.demo import DemoResetResult, SpamSimulationResult
-from app.schemas.enums import ErrorCode
+from app.schemas.enums import ErrorCode, OrderStatus
 from app.schemas.orders import IntakeAccepted, OrderCreate
 
 intake_router = APIRouter(
@@ -25,8 +28,22 @@ intake_router = APIRouter(
     description="Idempotent on `external_id`: a repeat returns the existing order "
     "with `duplicate: true`.",
 )
-async def intake_order(body: OrderCreate) -> IntakeAccepted:
-    raise NotImplementedYet("intake_order")
+def intake_order(
+    body: OrderCreate,
+    api_key: Annotated[str | None, Security(intake_api_key)],
+    store: Annotated[OrderStore, Depends(get_store)],
+) -> IntakeAccepted:
+    shop_id = shop_for_key(api_key)
+    if shop_id is None:
+        raise ApiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized", "Missing or unknown X-Api-Key.")
+    order_id = order_id_for(shop_id, body.external_id)
+    doc = order_document(
+        body, order_id=order_id, shop_id=shop_id, phone_key=phone_key(), now=datetime.now(UTC)
+    )
+    existing = store.create(doc)
+    if existing:
+        return IntakeAccepted(order_id=order_id, status=existing["status"], duplicate=True)
+    return IntakeAccepted(order_id=order_id, status=OrderStatus.NEW, duplicate=False)
 
 
 public_router = APIRouter(prefix="/public", tags=["public"])
