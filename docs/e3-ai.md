@@ -11,7 +11,8 @@ and persistence connect the scoring pipeline.
 Set `GOOGLE_CLOUD_PROJECT` and `GEMINI_MODEL` in the process environment.
 The SDK uses Application Default Credentials / the Cloud Run service account,
 not an API key. `.env.example` documents the variables; copying it alone does
-not load environment variables into Python.
+not load environment variables into Python. Step-by-step setup and live checks
+are in [gemini-test-guide.md](gemini-test-guide.md) (Vietnamese).
 
 Text calls use a separate client in `asia-southeast1`. E3 never reads
 `GEMINI_LIVE_MODEL` or `GEMINI_LIVE_LOCATION`. The SDK configuration follows

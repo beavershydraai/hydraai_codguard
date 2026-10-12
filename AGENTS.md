@@ -53,6 +53,7 @@ tasks/          Task brief per epic: interfaces, proposed design, open questions
 - Secrets in Secret Manager; region `asia-southeast1`. Exception: Gemini Live API sessions run in `GEMINI_LIVE_LOCATION` (`us-central1`), because the Live API is not served from Asia regions.
 - Model IDs come from environment variables (`GEMINI_MODEL`, `GEMINI_LIVE_MODEL`). Never hard-code them.
 - Before changing voice code or the call prompt, read `docs/gemini-live.md`. Live models changed in September 2026 (`gemini-3.8-live`), and older tutorials use config that 3.8 rejects.
+- E3 authenticates to Gemini with Application Default Credentials and ignores API keys. Setup and live checks: `docs/gemini-test-guide.md` (Vietnamese).
 
 ## Commands
 

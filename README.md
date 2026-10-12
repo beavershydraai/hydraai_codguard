@@ -276,7 +276,9 @@ E3's reusable scoring modules are implemented in [`backend/scoring/ai/`](backend
 [`AIService`](backend/scoring/ai/service.py) extracts address and chat features after
 hard rules, then checks explanations for a score supplied by E2. It does not set
 scores, model contributions, tiers or actions. See [`docs/e3-ai.md`](docs/e3-ai.md)
-for configuration, integration and evaluation limits.
+for configuration, integration and evaluation limits. To set up Gemini access
+(ADC, no API key) and test E3 against the live model, follow
+[`docs/gemini-test-guide.md`](docs/gemini-test-guide.md) (Vietnamese).
 
 Run the recorded E3 evaluation from `backend/`:
 
