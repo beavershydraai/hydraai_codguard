@@ -68,10 +68,22 @@ def training_label(result: str | None) -> int | None:
     return 1 if result in BUYER_FAILURES else None
 
 
+BUYER_CANCELS = {"not_ordered", "cancelled"}  # tasks/E2.3: a buyer cancellation is a failure
+
+
+def final_state(doc: dict) -> tuple[int | None, datetime | None]:
+    """(label, when it became known): a buyer cancellation before shipping, else the delivery."""
+    cancel = doc.get("cancel")
+    if cancel and cancel["reason"] in BUYER_CANCELS:
+        return 1, cancel["at"]
+    delivery = doc.get("delivery") or {}
+    return training_label(delivery.get("result")), delivery.get("occurred_at")
+
+
 def snapshot_row(doc: dict) -> dict | None:
     """One flat training row without names, raw phones or the old score; None if unlabelled."""
     delivery = doc.get("delivery") or {}
-    label = training_label(delivery.get("result"))
+    label, _ = final_state(doc)
     if label is None:
         return None
     row = {k: v for k, v in doc.items() if k not in NOT_IN_SNAPSHOT | {"address", "delivery"}}

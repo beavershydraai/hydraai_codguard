@@ -1,5 +1,6 @@
 """Endpoints outside the shop app: intake API, buyer confirmation page, demo controls."""
 
+import logging
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -9,11 +10,13 @@ from app.api.errors import ApiError, NotImplementedYet, problem_example, problem
 from app.api.security import firebase_auth, intake_api_key
 from app.data.orders import order_document
 from app.data.store import OrderStore, get_store, order_id_for, phone_key, shop_for_key
+from app.risk.engine import score
 from app.schemas.confirm import BuyerOrderView, BuyerResponse, BuyerResponseResult
 from app.schemas.demo import DemoResetResult, SpamSimulationResult
 from app.schemas.enums import ErrorCode, OrderStatus
 from app.schemas.orders import IntakeAccepted, OrderCreate
 
+log = logging.getLogger(__name__)
 intake_router = APIRouter(
     prefix="/intake", tags=["intake"], dependencies=[Security(intake_api_key)]
 )
@@ -43,6 +46,17 @@ def intake_order(
     existing = store.create(doc)
     if existing:
         return IntakeAccepted(order_id=order_id, status=existing["status"], duplicate=True)
+    try:  # a scoring problem must never lose the order: it stays stored, unscored
+        history = (
+            store.history(doc["buyer_phone_hash"], doc["placed_at"])
+            if doc["buyer_phone_hash"]
+            else []
+        )
+        fields = score(doc, history)
+        if fields:
+            store.update(order_id, fields)
+    except Exception:
+        log.exception("Scoring failed for %s", order_id)
     return IntakeAccepted(order_id=order_id, status=OrderStatus.NEW, duplicate=False)
 
 
