@@ -15,27 +15,35 @@
 #     DEFAULT      không tìm thấy quy định; dùng mặc định thận trọng của COD Guard
 # - Ngày trong slot: MON..SUN và HOLIDAY. "ALL" = cả 7 ngày và ngày lễ.
 #   Hôm nay là ngày lễ thì chỉ xét các slot có HOLIDAY; không slot nào có HOLIDAY nghĩa là ngày lễ đóng.
+# - TRẠNG THÁI: backend mới đọc mục tier_policy (app/decision/policy.py); các mục khác là đặc tả, chưa có
+#   evaluator. tests/test_rules_file.py kiểm cú pháp biểu thức và giữ các quy tắc chính khớp AGENTS.md,
+#   ShopSettings và policy engine.
 
 metadata:
-  schema_version: "2.0"
-  rule_set_version: "2026.10.13-apac.1"
-  supersedes: "2026.10.13-cand.2"
+  schema_version: "2.1"
+  rule_set_version: "2026.10.13-apac.2"
+  supersedes: "2026.10.13-apac.1"
   status: candidate                          # candidate | approved | deprecated
   date: "2026-10-13"
   owner: "COD Guard Policy Engine – người duyệt: TBD"   # ASSUMPTION
-  phase: 1                                   # 0..3 theo Baseline A mục 7; pha 0 = chế độ bóng
+  phase: 1                                   # 0..3 theo Baseline A mục 7; pha 0 = chế độ bóng; từ apac.2 pha 1 có đủ hành động của tier_policy
   default_country: VN
   hosting_region: "asia-southeast1 (Singapore)"   # theo task E1.1; dữ liệu người mua ngoài SG là chuyển ra nước ngoài
   demo:
     enabled: true
     countries: [VN]
-    demo_enable_call: true                   # NGOẠI LỆ so với pha 1: bật CALL để trình diễn
-    demo_enable_deposit: true                # NGOẠI LỆ: DEPOSIT (mock); production chỉ pha 3
     demo_phone_allowlist_only: true          # demo chỉ gọi/nhắn số nội bộ team
     demo_bypass_go_live_prerequisites: true  # chỉ áp cho số trong allowlist
-    demo_call_retry_gap_minutes: 30
     log_flag: DEMO_EXCEPTION
   changelog:
+    apac.2:
+      - "Policy theo tier (E4.2): L3 lấy hành động từ tier_policy (Low ALLOW, Medium CONFIRM, High CALL, Very High DEPOSIT), bỏ bảng nguyên nhân × pha; nguyên nhân chính chỉ còn chọn biến thể tin và cảnh báo người bán. D08 là hard rule đặt tier very_high"
+      - "Pha 1 có đủ ALLOW, CONFIRM, CALL, DEPOSIT, REVIEW. agent_quality_gate_passed (mặc định false) thay bằng công tắc ai_call_enabled (mặc định true); bỏ ngoại lệ demo cho CALL và DEPOSIT"
+      - "Leo thang khi không phản hồi (state_machine.no_response): Medium sau 120 phút không phản hồi link thì AI gọi, không xét nguyên nhân; bỏ tin nhắc lại 120 phút. AI gọi tối đa 2 lần cách 30 phút, hết lượt thì chờ duyệt; cọc chưa trả thì chờ duyệt"
+      - "Theo AGENTS.md: VN gọi 08:00-21:00; AI gọi tối đa 1 lần/SĐT/24 giờ và chặn 30 ngày sau 'Tôi không đặt' tính trên MỌI shop; lịch sử SĐT dùng chung giữa các shop; tin tưởng 7 ngày vẫn chỉ trong shop"
+      - "SĐT băm bằng MỘT khóa chung PHONE_HASH_KEY cho mọi shop, thay cho khóa riêng từng shop"
+      - "Chi phí VN = ShopSettings (giao thất bại 60.000, link 300, AI gọi 1.500, yêu cầu cọc 5.000). Cổng chi phí là expected_loss > action_cost; bỏ friction_good_customer"
+      - "Regex SĐT VN = app/data/phone.py; test case dùng số +84000…"
     apac.1:
       - "Đổi tên theo Baseline A: SHIP_NOW→ALLOW, REFUSED→RTO_REFUSAL, UNREACHABLE→RTO_UNREACHABLE, WRONG_ADDRESS→RTO_BAD_ADDRESS, PARTIAL_COD→NUDGE_PREPAID, PREPAID_ONLY→REQUIRE_PREPAID"
       - "Pha 0..3 theo Baseline A; pha 0 thay cho mode: shadow"
@@ -57,6 +65,7 @@ baseline_alignment:   # tên cũ (cand.2) → tên Baseline A; dùng để migra
   causes: {INTENT: RTO_REFUSAL, REACHABILITY: RTO_UNREACHABLE, ADDRESS: RTO_BAD_ADDRESS, LOGISTICS: LOGISTICS_FAILURE}
   events: {DECIDED_SHIP: DECIDED_ALLOW}
   phases: {"mode: shadow": "phase: 0"}
+  api_actions: {ship_now: ALLOW, send_confirmation_link: CONFIRM, ai_call: CALL, require_deposit: DEPOSIT, hold_for_review: REVIEW}   # tên API (DecisionAction) → tên Baseline A; tier_policy dùng tên API
 
 # ---------------------------------------------------------------------------
 # Context evaluator phải dựng trước khi chạy biểu thức
@@ -64,19 +73,23 @@ baseline_alignment:   # tên cũ (cand.2) → tên Baseline A; dùng để migra
 expression_context:
   names:
     order: "total, cod_amount, is_gift, packed, sales_channel (INDEPENDENT|MARKETPLACE), marketplace, ship_country, ship_region, external_id_seen_in_tenant, seller_hold_flag, seller_priority_customer, buyer_phone_hash, recipient_phone_hash, created_at"
-    phone: "e164, country (suy từ mã nước), valid (khớp country.phone.mobile_regex), in_demo_allowlist"
+    phone: "e164, country (suy từ mã nước), valid (khớp mobile_regex của pack theo mã nước của SĐT; VN = app/data/phone.py), in_demo_allowlist"
     address: "quality_score, missing_fields, changed_since_trust, fix_attempts, raw"
-    tenant_history: "CHỈ trong tenant: orders_n, buyer_fail_rate, trusted_until, not_ordered_block_active, same_phone_same_sku_24h"
+    phone_history: "MỌI shop, theo buyer_phone_hash (khóa băm chung): orders_n, buyer_fail_rate, not_ordered_block_active (30 ngày), calls_24h (số cuộc AI gọi tới SĐT trong 24 giờ)"
+    tenant_history: "CHỈ trong shop này: trusted_until (7 ngày sau xác nhận), same_phone_same_sku_24h"
     country: "country pack đã chọn ở country_resolution, truy cập bằng dấu chấm"
     contact_packs: "các pack áp cho việc LIÊN HỆ: nước giao hàng, cộng nước của SĐT nếu khác và được hỗ trợ"
     tenant: "core_parameters ← country pack ← cấu hình shop"
     c: "alias của tenant.costs, đơn vị tiền theo country.currency"
     features: "alias của data_isolation.features"
     phase: "pha hiệu lực sau phase_resolution"
+    tier: "low|medium|high|very_high: l2.tier nếu hard rule đặt, ngược lại tier_of(p_failed) ở L3"
+    tier_rule: "mục của tier trong tier_policy.tiers; action và if_no_response đã đổi sang tên Baseline A (baseline_alignment.api_actions)"
+    unanswered: "hành động người mua chưa phản hồi (CONFIRM, CALL, DEPOSIT), dùng ở state_machine.no_response"
     effective_actions: "xem derived.effective_actions_expr"
     probs: "7 kết quả → xác suất đã hiệu chỉnh, tổng = 1"
     l1: "kết quả gộp tầng L1: removed_channels, deferred_channels, defer_until, confirm_variant, flags"
-    l2: "kết quả tầng L2: rule_id, action, cause, floor_action_by_phase, dominant_cause_override, exploration_allowed"
+    l2: "kết quả tầng L2: rule_id, action, cause, tier và hard_rule (D08), exploration_allowed"
     event: "type, source, verified (đến từ kênh trong country.verified_channels), amount, event_time"
     out: "đầu ra Agent Hội thoại đã validate theo agent_output_contract"
     state: "trạng thái hiện tại của đơn"
@@ -86,23 +99,23 @@ expression_context:
     days_since_order: "số ngày từ order.created_at tới bây giờ"
   derived:   # tính theo đúng thứ tự
     demo_active_expr: "metadata.demo.enabled and country.code in metadata.demo.countries and phone.in_demo_allowlist"
-    demo_call_expr: "demo_active and metadata.demo.demo_enable_call"
-    demo_deposit_expr: "demo_active and metadata.demo.demo_enable_deposit"
-    demo_added_actions_expr: "(['CALL'] if demo_call else []) + (['DEPOSIT'] if demo_deposit else [])"
-    effective_actions_expr: "sorted(set([a for a in (phase_capabilities[phase]['actions'] + demo_added_actions) if a in sales_gate.allowed_actions and (a != 'CALL' or tenant.agent_quality_gate_passed or demo_call) and (a != 'DEPOSIT' or order.sales_channel == 'INDEPENDENT')]))"
-    FAIL_expr: "c.shipping_out + c.return_fee + c.packaging + c.handling_per_return"
+    effective_actions_expr: "sorted(set([a for a in phase_capabilities[phase]['actions'] if a in sales_gate.allowed_actions and (a != 'CALL' or tenant.ai_call_enabled) and (a != 'DEPOSIT' or order.sales_channel == 'INDEPENDENT')]))"
+    FAIL_expr: "c.shipping_out + c.return_fee + c.packaging + c.handling_per_return"   # VN: 60000 = ShopSettings.failed_delivery_cost_vnd
     loss_outcomes_expr: "[o for o in OUTCOMES if OUTCOME_META[o]['in_loss_gate']]"
+    CONTACT_ACTIONS_expr: "['CONFIRM', 'CALL', 'DEPOSIT']"
   helpers:   # cài trong evaluator Python, đăng ký vào simpleeval.functions
     in_window: "in_window(kind) → True nếu giờ người mua nằm trong slot của khung `kind` (message|call|call_extension) ở MỌI pack trong contact_packs; pack không có khung `kind` → False"
     next_window_start: "next_window_start(kind) → thời điểm sớm nhất (giờ người mua) mà in_window(kind) đúng"
     sender_registered: "sender_registered(ch) → True nếu country.channels[ch].registration_required là false, hoặc tenant.compliance[country.code][ch + '_registered'] là true"
     prerequisites_met: "prerequisites_met(group) → all(tenant.compliance[country.code][k] for k in country.go_live[group])"
     pick_confirm_channel: "kênh đầu tiên trong country.channels.confirm_priority không nằm trong l1.removed_channels; None nếu không còn"
-    contact_cost: "contact_cost(ch) → c.contact[ch] (chi phí một lần liên hệ, đơn vị tiền của nước)"
+    contact_cost: "contact_cost(ch) → c.contact[ch] (chi phí thật của một lần liên hệ qua kênh, đơn vị tiền của nước); dùng cho trần chi phí C15"
+    action_cost: "action_cost(a) → c.action_cost[a]: chi phí so với expected_loss ở cổng chi phí (VN = ShopSettings: CONFIRM = confirmation_link_cost_vnd, CALL = ai_call_cost_vnd, DEPOSIT = deposit_request_cost_vnd)"
     dnc_listed: "dnc_listed(ch) → kết quả tra registry của country.dnc; chỉ gọi khi country.dnc.check_for_transactional"
     harm: "harm(a) → enums.actions[a].harm"
     argmax: "argmax(d) → khóa có giá trị lớn nhất"
-    pick_floor_action: "pick_floor_action(floor, actions) → floor nếu có trong actions; nếu không, hành động có harm ≥ harm(floor) và harm nhỏ nhất (hòa thì REVIEW đứng sau); không có thì 'REVIEW'"
+    tier_of: "tier_of(p) → low|medium|high|very_high theo core_parameters.thresholds.tier_cut_offs (= app/risk/engine.tier_of)"
+    tier_rule_of: "tier_rule_of(tier) → xem names.tier_rule"
     ev_argmax: "ev_argmax(A) → argmax EV theo hiệu ứng can thiệp đã ước lượng (chỉ pha 3; chưa cài cho hackathon)"
     hours_until: "hours_until(dt)"
     minutes_since: "minutes_since(dt); None → 10**9"
@@ -130,10 +143,10 @@ phase_resolution:
   effective_phase_expr: "0 if (country.status == 'UNSUPPORTED' or not (prerequisites_met('for_live') or (demo_active and metadata.demo.demo_bypass_go_live_prerequisites))) else min(metadata.phase, country.max_phase)"
   phase_0_behavior: {contact_buyer: false, change_order_state: false, show_recommendation_to_seller: true, decision_log_executed: false}
 
-phase_capabilities:
+phase_capabilities:   # apac.2: mọi pha ≥ 1 có đủ hành động của tier_policy (E4.2); pha sau chỉ thêm thăm dò và mô hình uplift
   0: {actions: [], recommend_only: true}
-  1: {actions: [ALLOW, CONFIRM, REVIEW], exploration: false, ev_mode: rank_and_gate}
-  2: {actions: [ALLOW, CONFIRM, CALL, REVIEW], exploration: true, exploration_pairs: [[ALLOW, CONFIRM], [CONFIRM, CALL]], ev_mode: rank_and_gate}
+  1: {actions: [ALLOW, CONFIRM, CALL, DEPOSIT, REVIEW], exploration: false, ev_mode: tier_policy}
+  2: {actions: [ALLOW, CONFIRM, CALL, DEPOSIT, REVIEW], exploration: true, exploration_pairs: [[ALLOW, CONFIRM], [CONFIRM, CALL]], ev_mode: tier_policy}
   3: {actions: [ALLOW, CONFIRM, CALL, DEPOSIT, REVIEW], exploration: true, exploration_pairs: [[ALLOW, CONFIRM], [CONFIRM, CALL]], ev_mode: uplift_ev}   # không bao giờ thăm dò DEPOSIT
 
 sales_channel_gate:   # Baseline A: DEPOSIT và Checkout Admission chỉ cho kênh độc lập
@@ -162,8 +175,8 @@ enums:
   actions:   # Pre-Shipment Guard, Baseline A
     ALLOW:   {vi: "Giao ngay", harm: 0, explorable: true, channel_kind: none}
     CONFIRM: {vi: "Tin nhắn kèm nút xác nhận", harm: 1, explorable: true, uses_agent: false, channel_kind: message, variants: [ORDER_CONFIRM, ADDRESS_FIX, DUPLICATE_CHECK, REPLY_KEYWORD], requires: "SĐT thật, trong khung giờ cho phép"}
-    CALL:    {vi: "Agent giọng nói gọi xác nhận", harm: 2, explorable: true, uses_agent: true, channel_kind: voice, min_phase: 2, requires: "SĐT thật, chưa vượt trần liên hệ, số gọi ra đã đăng ký định danh, agent qua cổng chất lượng"}
-    DEPOSIT: {vi: "Đặt cọc qua QR nội địa của nước (mock khi demo)", harm: 3, explorable: false, channel_kind: message, min_phase: 3, requires: "chỉ kênh độc lập; pha 3 khi có bằng chứng hiệu quả"}
+    CALL:    {vi: "Agent giọng nói gọi xác nhận", harm: 2, explorable: true, uses_agent: true, channel_kind: voice, min_phase: 1, requires: "SĐT thật, chưa vượt trần liên hệ, số gọi ra đã đăng ký định danh, ai_call_enabled"}
+    DEPOSIT: {vi: "Đặt cọc qua QR nội địa của nước (mock khi demo)", harm: 3, explorable: false, channel_kind: message, min_phase: 1, requires: "chỉ kênh độc lập; prototype chỉ mock, không thu tiền thật"}
     REVIEW:  {vi: "Chuyển người bán duyệt", harm: 1, explorable: false, channel_kind: none}
   checkout_admission_actions:   # Baseline A: chỉ kênh độc lập có tích hợp bước thanh toán
     ALLOW_COD: {vi: "Cho chọn COD"}
@@ -196,18 +209,18 @@ core_parameters:
     dominant_cause_min: 0.10          # ASSUMPTION
     agent_confidence_min: 0.8         # ASSUMPTION
     deposit_rate: 0.2                 # ASSUMPTION
+    tier_cut_offs: {medium: 0.08, high: 0.20, very_high: 0.40}   # P(thất bại) nhỏ nhất của mỗi tier; = app/risk/engine.tier_of cho tới khi E2.5 tính theo chi phí của shop
   timeouts:
     confirm_link_ttl_hours: 48
-    confirm_reminder_after_minutes: 120
-    confirm_decision_deadline_hours: 6     # ASSUMPTION
+    confirm_decision_deadline_hours: 6     # ASSUMPTION; chỉ cho CONFIRM từ L2 (sửa địa chỉ, đơn trùng); CONFIRM theo tier leo thang theo tier_policy
     cancel_confirm_ttl_hours: 12           # ASSUMPTION
-    call_retry_gap_minutes: 120
+    call_retry_gap_minutes: 30             # AGENTS.md: 2 lần gọi cách nhau ít nhất 30 phút
     call_max_attempts_per_order: 2
-    deposit_deadline_hours: 24             # ASSUMPTION
+    deposit_deadline_hours: 24             # ASSUMPTION; cọc ngoài tier (P07). Cọc theo tier dùng tier_policy very_high (1440 phút)
     review_sla_hours: 12                   # ASSUMPTION; quá SLA nhắc lại, không tự hủy
     defer_max_hours: 72
-    trust_after_confirm_days: 7            # trong tenant
-    not_ordered_block_days: 30             # trong tenant
+    trust_after_confirm_days: 7            # chỉ trong shop đã xác nhận (AGENTS.md)
+    not_ordered_block_days: 30             # mọi shop (AGENTS.md)
     order_merge_window_minutes: 15
     model_timeout_ms: 500
     outcome_wait_days: 30
@@ -220,14 +233,15 @@ core_parameters:
     DUPLICATE: PENDING_REVIEW
     LOGISTICS_FAILURE: CLEARED_TO_SHIP
     NONE: CLEARED_TO_SHIP
-  agent_quality_gate_passed: false         # bật khi Agent Hội thoại qua cổng chất lượng (Baseline A 7.1)
+  ai_call_enabled: true                    # công tắc AI gọi (E5). Tắt khi agent lỗi hoặc chưa qua cổng chất lượng (Baseline A 7.1); CALL khi đó chuyển sang CONFIRM, rồi REVIEW
   exploration: {epsilon: 0.05, segments: ALL}   # ASSUMPTION; người bán quyết định tỷ lệ và phân khúc (Baseline A 7.2)
   checkout: {payment_step_integrated: false, require_prepaid_enabled: false, require_prepaid_min_loss: null}
 
 # ---------------------------------------------------------------------------
-# Policy mặc định theo tier (E4.2). Đây là mục backend ĐANG CHẠY: app/decision/policy.py đọc mục này,
-# validate bằng schema Policy của API (app/schemas/shops.py). Các tầng L1-L4 ở dưới chưa được cài.
-# - Chỉ liên hệ khi expected_loss > chi phí của hành động (ShopSettings); không thì gửi ngay.
+# Policy mặc định theo tier (E4.2). Backend ĐANG CHẠY mục này: app/decision/policy.py đọc và validate bằng
+# schema Policy của API (app/schemas/shops.py). L3 và state_machine.no_response bên dưới cũng lấy hành động
+# từ đây (tên API đổi sang tên Baseline A qua baseline_alignment.api_actions).
+# - Chỉ liên hệ khi expected_loss > action_cost của hành động (VN = ShopSettings); không thì giao ngay.
 # - AI gọi tối đa 2 lần mỗi đơn, cách nhau ít nhất 30 phút; hết lượt mà không nghe máy thì chờ duyệt.
 # - Bước leo thang không có phản hồi (ví dụ Medium: AI gọi sau link) cũng hết thì chờ duyệt.
 # Shop đổi policy thì tạo version mới, chỉ áp cho quyết định sau effective_from (E7.6).
@@ -248,7 +262,7 @@ permissions:   # Baseline A, ma trận quyền; "deny" luôn thắng
     deny: [cancel_order, ship_order, collect_deposit, promise_promotion, introduce_other_products, request_money, request_otp, block_phone, mark_label]
   policy_engine:
     allow: [choose_action_from_allowed_list, apply_post_interaction_table, apply_default, log_decision]
-    deny: [exceed_contact_cost_cap, exceed_contact_window, exceed_contact_count, use_generative_ai, read_cross_tenant_data_unless_approved]
+    deny: [exceed_contact_cost_cap, exceed_contact_window, exceed_contact_count, use_generative_ai, read_other_shops_order_details]   # giữa các shop chỉ dùng chung tín hiệu theo SĐT đã băm (data_isolation.shared_across_shops)
   workflow:
     allow: [manage_state, deadlines, retries, dedupe_events]
     deny: [change_business_decision]
@@ -286,14 +300,13 @@ layers:
       - {id: C03a_opt_out_calls, when: "channel == 'AI_CALL' and buyer_opted_out_calls_tenant", then: {remove_channel: true}}
       - {id: C03b_opt_out_all, when: "buyer_opted_out_all_tenant", then: {remove_channel: true}}
       - {id: C03c_dnc, when: "country.contact.dnc.check_for_transactional and dnc_listed(channel)", then: {remove_channel: true}}
-      - {id: C04_call_frequency, when: "channel == 'AI_CALL' and (calls_to_phone_24h_tenant >= country.contact.max_calls_per_phone_24h or call_attempts_order >= tenant.timeouts.call_max_attempts_per_order)", then: {remove_channel: true}}
-      - {id: C05_call_retry_gap, when: "channel == 'AI_CALL' and minutes_since(last_call_at_order) < (metadata.demo.demo_call_retry_gap_minutes if demo_active else tenant.timeouts.call_retry_gap_minutes)", then: {defer_channel: true, defer_until_expr: "last_call_at_order_plus_gap"}}
+      - {id: C04_call_frequency, when: "channel == 'AI_CALL' and (phone_history.calls_24h >= country.contact.max_calls_per_phone_24h or call_attempts_order >= tenant.timeouts.call_max_attempts_per_order)", then: {remove_channel: true}}   # AGENTS.md: đếm cuộc gọi tới SĐT trên MỌI shop
+      - {id: C05_call_retry_gap, when: "channel == 'AI_CALL' and minutes_since(last_call_at_order) < tenant.timeouts.call_retry_gap_minutes", then: {defer_channel: true, defer_until_expr: "last_call_at_order_plus_gap"}}
       - {id: C06_message_frequency, when: "channel != 'AI_CALL' and messages_to_phone_24h_tenant >= country.contact.max_messages_per_phone_24h", then: {remove_channel: true}}
       - {id: C07_merge_same_phone, when: "open_orders_same_phone_tenant_within(tenant.timeouts.order_merge_window_minutes) > 1", then: {merge_contact: true}}
       - {id: C08_gift_order, when: "order.is_gift or order.recipient_phone_hash != order.buyer_phone_hash", then: {contact_target: buyer, never_contact: recipient}}
       - {id: C09_content_guard, when: "True", then: {content: transactional_template_only, forbid: [promotion, upsell, other_products, promise_promotion, request_money_in_call, request_otp], deposit_only_via_expr: "country.payments.deposit_rail", on_promotional_template: REMOVE_CHANNEL}}
       - {id: C10_identity_ai_disclosure, when: "channel == 'AI_CALL'", then: {must_announce: [shop_name, automated_assistant, purpose], script_expr: "country.ai_disclosure.script_draft"}}
-      - {id: C11_global_cap, when: "features.global_contact_cap.enabled and channel == 'AI_CALL' and calls_to_phone_24h_all_tenants >= 1", then: {remove_channel: true}}   # mặc định TẮT; short-circuit nên biến xuyên tenant không bị đọc
       - {id: C12_sender_registration, when: "not sender_registered(channel)", then: {remove_channel: true, ops_alert: "kênh chưa đăng ký sender hoặc mẫu tin ở nước này"}}
       - {id: C13_recording_consent, when: "channel == 'AI_CALL' and country.call_recording.consent == 'ALL_PARTIES'", then: {ask_recording_consent_first: true, on_decline: END_CALL_DISCARD_RECORDING}}
       - {id: C14_sms_links, when: "channel == 'SMS' and country.channels.SMS.links == 'AVOID'", then: {confirm_variant: REPLY_KEYWORD, no_links: true}}
@@ -302,7 +315,7 @@ layers:
       - {id: C17_call_prerequisites, when: "channel == 'AI_CALL' and not (prerequisites_met('for_call') or demo_active)", then: {remove_channel: true}}
       - {id: C18_inferred_consent_window, when: "country.contact.inferred_consent_days is not None and days_since_order > country.contact.inferred_consent_days", then: {remove_channel: true}}
     output_mapping:   # đầu ra L1 tác động lên hành động đã chọn ở L3
-      - {when: "chosen_channel is not None and chosen_channel in l1.removed_channels", then: {fallback_action_expr: "'CONFIRM' if (chosen_action == 'CALL' and confirm_channel is not None) else 'REVIEW'"}}
+      - {when: "chosen_channel is not None and chosen_channel in l1.removed_channels", then: {fallback_action_expr: "'CONFIRM' if (chosen_action == 'CALL' and confirm_channel is not None and not confirm_sent_for_order) else 'REVIEW'"}}   # link đã gửi mà không phản hồi thì chờ duyệt, không gửi lại
       - {when: "chosen_channel is not None and chosen_channel in l1.deferred_channels", then: {state: DEFERRED, deferred_reason: CONTACT_WINDOW, resume_action_expr: "chosen_action", earliest_contact_at_expr: "l1.defer_until[chosen_channel]"}}
 
   - id: L2_deterministic_checks
@@ -315,56 +328,60 @@ layers:
       - {id: D01_prepaid, when: "order.cod_amount == 0", then: {action: ALLOW, skip_scoring: true}, terminal: true}
       - {id: D02_seller_flag, when: "order.seller_hold_flag", then: {action: REVIEW}, terminal: true}
       - {id: D03_invalid_phone, when: "not phone.valid", then: {action: REVIEW}, terminal: true}
-      - {id: D04_tenant_not_ordered_block, when: "tenant_history.not_ordered_block_active", then: {action: REVIEW}, terminal: true}
+      - {id: D04_not_ordered_block, when: "phone_history.not_ordered_block_active", then: {action: REVIEW}, terminal: true}   # chặn 30 ngày trên MỌI shop (AGENTS.md)
       - {id: D05_address, when: "address.quality_score < tenant.thresholds.address_quality_min or len(address.missing_fields) > 0", then: {action: CONFIRM, variant: ADDRESS_FIX, cause: RTO_BAD_ADDRESS}, terminal: true}
       - {id: D06_possible_duplicate, when: "tenant_history.same_phone_same_sku_24h", then: {action: CONFIRM, variant: DUPLICATE_CHECK, cause: DUPLICATE, buttons: [KEEP_BOTH, KEEP_ONE]}, terminal: true}   # Baseline A: luật cứng, gộp hoặc hỏi lại
-      - {id: D07_tenant_trusted, when: "tenant_history.trusted_until is not None and now < tenant_history.trusted_until and not address.changed_since_trust", then: {action: ALLOW, skip_scoring: true}, terminal: true}
-      - id: D08_tenant_history_high_risk     # chỉ lịch sử trong tenant
-        when: "tenant_history.orders_n >= tenant.thresholds.history_min_orders and tenant_history.buyer_fail_rate >= tenant.thresholds.history_fail_rate"
-        then: {cause: RTO_REFUSAL, dominant_cause_override: RTO_REFUSAL, floor_action_by_phase: {1: CONFIRM, 2: CALL, 3: DEPOSIT}, exploration_allowed: false}
-        terminal: false
+      - {id: D07_tenant_trusted, when: "tenant_history.trusted_until is not None and now < tenant_history.trusted_until and not address.changed_since_trust", then: {action: ALLOW, skip_scoring: true}, terminal: true}   # tin tưởng 7 ngày chỉ trong shop đã xác nhận (AGENTS.md)
+      - id: D08_phone_history_high_risk      # hard rule AGENTS.md: SĐT hoàn ≥75% trên ít nhất 3 đơn (lịch sử MỌI shop) → Very High
+        when: "phone_history.orders_n >= tenant.thresholds.history_min_orders and phone_history.buyer_fail_rate >= tenant.thresholds.history_fail_rate"
+        then: {tier: very_high, hard_rule: high_return_phone, cause: RTO_REFUSAL, action_expr: "tier_rule_of('very_high').action", exploration_allowed: false}
+        terminal: true                       # như app/risk/engine.py: hard rule không qua cổng chi phí
       - {id: D09_fallthrough, when: "True", then: {}, terminal: false}
 
   - id: L3_initial_action
     order: 3
     hit_policy: PRIORITY                     # số nhỏ = ưu tiên cao
-    doc: "Baseline A mục 3 và 7.1: ở pha 0-2 mô hình chỉ xếp hạng và xác định nguyên nhân chính; hành động lấy từ bảng nguyên nhân. P(o|x,a) với a khác ALLOW là hiệu ứng can thiệp, chỉ dùng ở pha 3"
+    doc: "apac.2 (E4.2, = app/decision/policy.decide): hành động lấy từ tier_policy theo tier; nguyên nhân chính chỉ chọn biến thể tin và cảnh báo người bán. P(o|x,a) với a khác ALLOW là hiệu ứng can thiệp, chỉ dùng ở pha 3"
     derived:   # tính theo thứ tự
+      p_failed_expr: "sum([probs[o] for o in loss_outcomes])"   # chỉ thất bại do người mua (AGENTS.md)
+      tier_expr: "tier_of(p_failed)"
+      tier_rule_expr: "tier_rule_of(tier)"
       cause_scores_expr: "{'RTO_REFUSAL': probs['RTO_REFUSAL'] + probs['CANCELLED_BEFORE_SHIP'], 'RTO_UNREACHABLE': probs['RTO_UNREACHABLE'], 'RTO_BAD_ADDRESS': probs['RTO_BAD_ADDRESS'], 'LOGISTICS_FAILURE': probs['LOGISTICS_FAILURE'] + probs['MISSED_CUTOFF']}"
-      dominant_cause_expr: "l2.dominant_cause_override if l2.dominant_cause_override else (argmax(cause_scores) if max(cause_scores.values()) >= tenant.thresholds.dominant_cause_min else 'NONE')"
+      dominant_cause_expr: "argmax(cause_scores) if max(cause_scores.values()) >= tenant.thresholds.dominant_cause_min else 'NONE'"
       U_expr: "{'DELIVERED': order.total * c.gross_margin_rate, 'RTO_REFUSAL': -FAIL, 'RTO_UNREACHABLE': -FAIL, 'RTO_BAD_ADDRESS': -FAIL, 'CANCELLED_BEFORE_SHIP': -(c.packaging if order.packed else 0), 'MISSED_CUTOFF': -(c.packaging + c.handling_per_return), 'LOGISTICS_FAILURE': -(c.shipping_out + c.return_fee) * (1 - c.logistics_failure_recovery_rate)}"
       loss_gate_expr: "sum([probs[o] * abs(U[o]) for o in loss_outcomes])"
+      expected_loss_expr: "loss_gate"   # = p_failed × FAIL vì U = -FAIL với mọi kết quả trong loss_outcomes (AGENTS.md)
       confirm_channel_expr: "pick_confirm_channel()"
-      cost_CONFIRM_expr: "(contact_cost(confirm_channel) if confirm_channel is not None else 1e12) + c.friction_good_customer.CONFIRM * probs['DELIVERED']"
-      cost_CALL_expr: "contact_cost('AI_CALL') + c.friction_good_customer.CALL * probs['DELIVERED']"
-      cost_REVIEW_expr: "c.contact.SELLER_REVIEW"
     ev_doc: |
-      EV(a|x) = Σ_o P(o|x,a)·U(o,a,x), U đã trừ chi phí của chính hành động (Baseline A mục 3).
-      Pha 1-2 (rank_and_gate): lấy hành động từ bảng nguyên nhân; chỉ liên hệ khi loss_gate ≥ cost của hành động.
-      loss_gate coi như can thiệp xóa hết tổn thất, nên là cận trên: nếu cận trên còn không bù được chi phí thì không liên hệ.
-      Pha 3 (uplift_ev): ev_argmax dùng hiệu ứng can thiệp ước lượng doubly robust từ log thăm dò.
+      Pha 1-2 (tier_policy): hành động của tier; chỉ liên hệ khi expected_loss > action_cost, không thì ALLOW.
+      Pha 3 (uplift_ev): trong tier mà mô hình uplift đã tốt hơn luật (app/risk/engine.py: switched tiers),
+      ev_argmax chọn trong các lựa chọn của tier, EV(a|x) = Σ_o P(o|x,a)·U(o,a,x) − action_cost(a).
     uncertainty:
       entropy_norm_doc: "-Σ p·ln p / ln 7"
       margin_top2_doc: "p_(1) - p_(2)"
       epistemic_std_doc: "độ lệch chuẩn giữa các mô hình ensemble của tổng xác suất trong loss_outcomes"
       decision_uncertain_expr: "margin_top2 < 0.15 or epistemic_std > 0.08 or tenant_labeled_orders < 200"   # ASSUMPTION
       note: "Khoảng cách tới 0,5 KHÔNG phải độ bất định"
-    rules:   # Baseline A 7.1, bảng ánh xạ nguyên nhân sang hành động
-      - {id: A01_floor_from_L2, priority: 1, when: "l2.rule_id == 'D08_tenant_history_high_risk'", then: {action_expr: "pick_floor_action(l2.floor_action_by_phase[phase], effective_actions)", explore: false}}
-      - {id: A02_logistics, priority: 2, when: "dominant_cause == 'LOGISTICS_FAILURE'", then: {candidates: {1: [ALLOW], 2: [ALLOW], 3: [ALLOW]}, greedy_by_phase: {1: ALLOW, 2: ALLOW, 3: ALLOW}, contact_buyer: false, seller_alert: "rủi ro phía hãng hoặc khu vực, cân nhắc đổi hãng"}}
-      - {id: A03_bad_address, priority: 3, when: "dominant_cause == 'RTO_BAD_ADDRESS'", then: {candidates: {1: [ALLOW, CONFIRM], 2: [ALLOW, CONFIRM], 3: [ALLOW, CONFIRM]}, greedy_by_phase: {1: CONFIRM, 2: CONFIRM, 3: CONFIRM}, variant: ADDRESS_FIX}}
-      - {id: A04_unreachable, priority: 4, when: "dominant_cause == 'RTO_UNREACHABLE'", then: {candidates: {1: [ALLOW, CONFIRM], 2: [ALLOW, CONFIRM, CALL], 3: [ALLOW, CONFIRM, CALL]}, greedy_by_phase: {1: CONFIRM, 2: CALL, 3: EV}, call_no_answer_fallback: CONFIRM}}
-      - {id: A05_refusal, priority: 5, when: "dominant_cause == 'RTO_REFUSAL'", then: {candidates: {1: [ALLOW, CONFIRM], 2: [ALLOW, CONFIRM, CALL], 3: [CONFIRM, CALL, DEPOSIT]}, greedy_by_phase: {1: CONFIRM, 2: CONFIRM, 3: EV}}}
-      - {id: A06_none, priority: 6, when: "dominant_cause == 'NONE'", then: {candidates: {1: [ALLOW], 2: [ALLOW, CONFIRM], 3: [ALLOW, CONFIRM]}, greedy_by_phase: {1: ALLOW, 2: ALLOW, 3: EV}}}   # CONFIRM chỉ qua thăm dò
-    selection:   # chạy theo thứ tự; A01 có action_expr thì bỏ qua greedy
-      - {step: candidate_set, expr: "[a for a in candidates[phase] if a in effective_actions]"}
-      - {step: target, expr: "ev_argmax(A) if greedy_by_phase[phase] == 'EV' else greedy_by_phase[phase]"}
-      - step: greedy_with_cost_gate
-        expr: "'CALL' if (t == 'CALL' and 'CALL' in A and loss_gate >= cost_CALL) else ('CONFIRM' if (t in ['CALL', 'CONFIRM'] and 'CONFIRM' in A and loss_gate >= cost_CONFIRM) else ('REVIEW' if (t in ['CALL', 'CONFIRM'] and 'CONFIRM' not in A and 'REVIEW' in effective_actions and loss_gate >= cost_REVIEW) else ('DEPOSIT' if (t == 'DEPOSIT' and 'DEPOSIT' in A) else 'ALLOW')))"
-        doc: "t là kết quả bước target; đơn từ sàn không có CONFIRM nên rủi ro cao sẽ thành REVIEW"
-      - {step: uncertain_high_value, when: "decision_uncertain and order.total >= c.high_value_order and a_greedy == 'ALLOW' and 'REVIEW' in effective_actions", then: {a_greedy: REVIEW, explore: false}}
+    rules:   # biến thể tin và cảnh báo cho người bán; KHÔNG đổi hành động
+      - {id: A01_logistics_alert, priority: 1, when: "dominant_cause == 'LOGISTICS_FAILURE'", then: {seller_alert: "rủi ro phía hãng hoặc khu vực, cân nhắc đổi hãng"}}
+      - {id: A02_bad_address_variant, priority: 2, when: "dominant_cause == 'RTO_BAD_ADDRESS'", then: {variant: ADDRESS_FIX}}
+      - {id: A03_default_variant, priority: 3, when: "True", then: {variant: ORDER_CONFIRM}}
+    selection:   # chạy theo thứ tự (= app/decision/policy.decide)
+      - {step: tier_action, out: t, expr: "tier_rule.action"}
+      - {step: fit_to_effective, out: a, expr: "t if t in effective_actions else ([f for f in unavailable_fallback[t] if f in effective_actions] + ['ALLOW'])[0]"}
+      - step: cost_gate
+        out: a_greedy
+        expr: "a if (a == 'ALLOW' or expected_loss > action_cost(a)) else 'ALLOW'"
+        block_reason_expr: "None if a_greedy == a else 'EXPECTED_LOSS_BELOW_COST'"
+        doc: "AGENTS.md: chỉ liên hệ khi expected_loss lớn hơn chi phí; bằng nhau cũng không liên hệ. REVIEW chỉ đến từ fit_to_effective (ví dụ đơn từ sàn) và so với action_cost('REVIEW')"
+      - {step: uncertain_high_value, when: "decision_uncertain and order.total >= c.high_value_order and a_greedy == 'ALLOW'", then: {seller_alert: "đơn giá trị cao, mô hình chưa chắc chắn"}}   # chỉ cảnh báo: Low vẫn giao ngay (E4.2)
       - {step: exploration, ref: exploration}
       - {step: l1_mapping, ref: L1_compliance_contact_protection.output_mapping}
+    unavailable_fallback:   # hành động của tier không có trong effective_actions (đơn từ sàn, AI gọi tắt)
+      CALL: [CONFIRM, REVIEW]
+      CONFIRM: [REVIEW]
+      DEPOSIT: [REVIEW]
+      REVIEW: [ALLOW]
     phase_limits:   # ASSUMPTION; vượt thì nâng ngưỡng cổng chi phí
       1: {max_contact_share_daily: 0.5, review_queue_max_daily: 20}
       2: {max_call_share_daily: 0.15}
@@ -398,7 +415,7 @@ layers:
       confirm_intent: [P09, P10]
       no_response: [P11, P12]
     rules:
-      - {id: P01_verified_cancel, when: "event.verified and event.type in ['CANCEL_CONFIRMED', 'NOT_ORDERED'] and state in PRE_PICKUP_STATES", then: {state: CANCELLED, cancelled_by: BUYER, tenant_block_days_expr: "tenant.timeouts.not_ordered_block_days if event.type == 'NOT_ORDERED' else 0"}}
+      - {id: P01_verified_cancel, when: "event.verified and event.type in ['CANCEL_CONFIRMED', 'NOT_ORDERED'] and state in PRE_PICKUP_STATES", then: {state: CANCELLED, cancelled_by: BUYER, phone_block_days_expr: "tenant.timeouts.not_ordered_block_days if event.type == 'NOT_ORDERED' else 0", phone_block_scope: ALL_SHOPS}}
       - {id: P13_recording_declined, when: "event.source == 'AGENT' and out.recording_consent == 'DECLINED'", then: {end_call: true, discard_recording: true, state_expr: "'AWAIT_CONFIRM' if ('CONFIRM' in effective_actions and not confirm_sent_for_order) else 'PENDING_REVIEW'"}}
       - {id: P02_agent_cancel, when: "event.source == 'AGENT' and out.intent in ['CANCEL', 'NOT_ORDERED']", then: {state: AWAIT_CANCEL_CONFIRM, send: CANCEL_CONFIRM_BUTTON}}   # agent không được hủy
       - {id: P03_identity, when: "event.source == 'AGENT' and out.identity in ['WRONG_PERSON', 'UNKNOWN']", then: {state: PENDING_REVIEW}}
@@ -415,9 +432,9 @@ layers:
       - {id: P08_deposit_paid, when: "event.type == 'PAYMENT_CONFIRMED' and event.source == 'PAYMENT_GATEWAY'", then: {state: CLEARED_TO_SHIP, update_cod_amount_expr: "max(order.cod_amount - event.amount, 0)"}}
       - {id: P09_confirm, when: "(event.verified and event.type == 'CONFIRMED') or (event.source == 'AGENT' and out.intent == 'CONFIRM' and out.confidence >= tenant.thresholds.agent_confidence_min)", then: {state: CLEARED_TO_SHIP, tenant_trust_days_expr: "tenant.timeouts.trust_after_confirm_days"}}
       - {id: P10_undecided, when: "event.source == 'AGENT' and (out.intent in ['UNDECIDED', 'UNKNOWN'] or out.confidence < tenant.thresholds.agent_confidence_min)", then: {state: PENDING_REVIEW}}
-      - id: P11_call_no_answer                # Baseline A 7.1: không nghe máy thì CONFIRM
+      - id: P11_call_no_answer                # = app/decision/policy: gọi lại sau 30 phút; hết lượt thì chờ duyệt
         when: "event.type == 'CALL_NO_ANSWER' or (event.source == 'AGENT' and out.intent == 'NO_ANSWER')"
-        then: {state_expr: "'AWAIT_CALL' if call_attempts_order < tenant.timeouts.call_max_attempts_per_order else ('AWAIT_CONFIRM' if ('CONFIRM' in effective_actions and not confirm_sent_for_order) else 'DEFAULT_APPLIED')"}
+        then: {unanswered: CALL, state_expr: "no_response.state_by_action.get(no_response_action, 'PENDING_REVIEW')"}
       - {id: P12_deadline, when: "event.type == 'DEADLINE_REACHED'", then: {state: DEFAULT_APPLIED, target_state_expr: "tenant.default_on_no_response_state[dominant_cause]"}}
 
   - id: S01_ship_cutoff
@@ -434,20 +451,27 @@ checkout_admission:   # Baseline A 1.4 và bảng hành động; chỉ khi đơn
   hit_policy: FIRST
   rules:
     - {id: K01_require_prepaid, when: "tenant.checkout.require_prepaid_enabled and tenant.checkout.require_prepaid_min_loss is not None and loss_gate >= tenant.checkout.require_prepaid_min_loss", then: {action: REQUIRE_PREPAID, rail_expr: "country.payments.deposit_rail"}}
-    - {id: K02_nudge_prepaid, when: "loss_gate >= cost_CONFIRM", then: {action: NUDGE_PREPAID, rail_expr: "country.payments.deposit_rail"}}
+    - {id: K02_nudge_prepaid, when: "loss_gate > action_cost('CONFIRM')", then: {action: NUDGE_PREPAID, rail_expr: "country.payments.deposit_rail"}}
     - {id: K03_allow_cod, when: "True", then: {action: ALLOW_COD}}
 
 state_machine:
   hit_policy: FIRST                        # transitions cùng from+event: dòng đầu tiên có guard đúng sẽ thắng
   idempotency: {key: "sha256(tenant_id+order_id+event_type+event_source_id)", dedupe_window_hours: 72, on_duplicate: ignore_and_log}
   on_enter:
-    AWAIT_CONFIRM: [send_confirm_via_confirm_channel, start_timer_reminder, start_timer_deadline]
+    AWAIT_CONFIRM: [send_confirm_via_confirm_channel, start_timer_no_response_or_deadline]
     AWAIT_CALL: [schedule_call_via_L1]
-    AWAIT_DEPOSIT: [send_payment_link_country_rail, start_timer_deposit_deadline]
+    AWAIT_DEPOSIT: [send_payment_link_country_rail, start_timer_no_response_or_deadline]
     AWAIT_CANCEL_CONFIRM: [send_cancel_confirm_button, start_timer_cancel_ttl]
     PENDING_REVIEW: [start_timer_review_sla, notify_seller]
     CLEARED_TO_SHIP: [run_S01_ship_cutoff]
     DEFAULT_APPLIED: [resolve_default]
+  no_response:   # E4.2, = app/decision/policy.follow_up và escalate
+    doc: "Vào AWAIT_CONFIRM hoặc AWAIT_DEPOSIT theo tier thì hẹn TIMER_NO_RESPONSE sau no_response_wait_minutes; cuộc gọi không nghe máy đi qua P11. CONFIRM từ L2 hẹn TIMER_DEADLINE; cọc ngoài tier (P07) hẹn TIMER_DEPOSIT_DEADLINE. Không xét nguyên nhân chính"
+    no_response_next_expr: "'CALL' if (unanswered == 'CALL' and call_attempts_order < tenant.timeouts.call_max_attempts_per_order) else (tier_rule.if_no_response if unanswered == tier_rule.action else ('REVIEW' if unanswered in CONTACT_ACTIONS else None))"
+    no_response_action_expr: "'REVIEW' if (no_response_next == 'CALL' and call_attempts_order >= tenant.timeouts.call_max_attempts_per_order) else ('ALLOW' if (no_response_next in CONTACT_ACTIONS and not expected_loss > action_cost(no_response_next)) else no_response_next)"
+    no_response_wait_minutes_expr: "tenant.timeouts.call_retry_gap_minutes if (unanswered == 'CALL' and (call_attempts_order < tenant.timeouts.call_max_attempts_per_order or unanswered != tier_rule.action)) else tier_rule.no_response_after_minutes"
+    state_by_action: {CALL: AWAIT_CALL, CONFIRM: AWAIT_CONFIRM, DEPOSIT: AWAIT_DEPOSIT, REVIEW: PENDING_REVIEW, ALLOW: CLEARED_TO_SHIP}
+    note: "Không bao giờ gọi quá call_max_attempts_per_order lần. CALL mà kênh AI_CALL bị L1 loại thì theo L1 output_mapping (đã gửi link thì chờ duyệt)"
   default_resolution:
     doc: "DEFAULT_APPLIED không đứng yên. Nguồn đích theo thứ tự: target_state từ P12; hành động từ fallbacks; còn lại PENDING_REVIEW"
     rules:
@@ -465,13 +489,12 @@ state_machine:
     - {from: SCORING, event: DECIDED_REVIEW, to: PENDING_REVIEW}
     - {from: SCORING, event: CONTACT_DEFERRED, to: DEFERRED}
     - {from: SCORING, event: MODEL_ERROR, to: DEFAULT_APPLIED}
-    - {from: AWAIT_CONFIRM, event: TIMER_REMINDER, to: AWAIT_CONFIRM, side_effects: [one_reminder_if_window_open]}
-    - {from: AWAIT_CONFIRM, event: TIMER_DEADLINE, to: AWAIT_CALL, guard: "'CALL' in effective_actions and dominant_cause == 'RTO_UNREACHABLE'", demo_transition_if: "phase == 1"}
-    - {from: AWAIT_CONFIRM, event: TIMER_DEADLINE, to: DEFAULT_APPLIED, side_effects: [emit_DEADLINE_REACHED_to_L4]}
+    - {from: [AWAIT_CONFIRM, AWAIT_DEPOSIT], event: TIMER_NO_RESPONSE, to_expr: "no_response.state_by_action[no_response_action]", guard: "no_response_action is not None", doc: "Medium: link không phản hồi sau 120 phút thì AI gọi; Very High: cọc chưa trả sau 1440 phút thì chờ duyệt"}
+    - {from: AWAIT_CONFIRM, event: TIMER_DEADLINE, to: DEFAULT_APPLIED, side_effects: [emit_DEADLINE_REACHED_to_L4]}   # chỉ CONFIRM từ L2; CONFIRM theo tier đi qua TIMER_NO_RESPONSE
     - {from: AWAIT_CALL, event: CALL_ATTEMPTS_EXHAUSTED, to: L4_post_interaction_table}
     - {from: [AWAIT_CONFIRM, AWAIT_CALL, AWAIT_DEPOSIT, AWAIT_CANCEL_CONFIRM, DEFERRED, PENDING_REVIEW, CLEARED_TO_SHIP], event: BUYER_EVENT, to: L4_post_interaction_table, guard: "state != 'CLEARED_TO_SHIP' or not carrier_picked_up"}
     - {from: AWAIT_CANCEL_CONFIRM, event: TIMER_CANCEL_TTL, to: PENDING_REVIEW}   # không tự hủy
-    - {from: AWAIT_DEPOSIT, event: TIMER_DEPOSIT_DEADLINE, to: PENDING_REVIEW}
+    - {from: AWAIT_DEPOSIT, event: TIMER_DEPOSIT_DEADLINE, to: PENDING_REVIEW}   # cọc ngoài tier (P07)
     - {from: DEFERRED, event: SLOT_REACHED, to: CLEARED_TO_SHIP, guard: "deferred_reason == 'BUYER_SLOT'"}
     - {from: DEFERRED, event: WINDOW_OPEN, to_expr: "'AWAIT_' + resume_action if resume_action in ['CONFIRM', 'CALL', 'DEPOSIT'] else 'PENDING_REVIEW'", guard: "deferred_reason == 'CONTACT_WINDOW'", doc: "thực thi lại hành động đã chọn, KHÔNG chấm lại"}
     - {from: DEFERRED, event: DEFER_EXPIRED, to: PENDING_REVIEW}
@@ -559,8 +582,8 @@ agent_output_contract:   # Agent Hội thoại chỉ trả JSON đúng schema; P
     on_contact_opt_out: {CALLS: "set buyer_opted_out_calls_tenant", ALL: "set buyer_opted_out_all_tenant"}
 
 logging:
-  common_fields: [log_id, tenant_id, order_id, phone_hash_tenant_salted, ts, rule_set_version, model_version, effective_phase, country, contact_packs, buyer_timezone, sales_channel, idempotency_key, demo_exception]
-  decision_log: [workflow, decision_step, go_live_missing, l1_constraints, l2_rule_id, l2_cause, dominant_cause, probs, loss_gate, cost_by_action, uncertainty, candidates, a_greedy, a_final, executed, propensity, explore, excluded, experiment_id, fallback_reason, reason_codes, rendered_reasons]
+  common_fields: [log_id, tenant_id, order_id, buyer_phone_hash, ts, rule_set_version, model_version, effective_phase, country, contact_packs, buyer_timezone, sales_channel, idempotency_key, demo_exception]
+  decision_log: [workflow, decision_step, go_live_missing, l1_constraints, l2_rule_id, l2_cause, tier, policy_version, dominant_cause, probs, expected_loss, action_cost, block_reason, uncertainty, a_greedy, a_final, executed, propensity, explore, excluded, experiment_id, fallback_reason, reason_codes, rendered_reasons]
   human_decision_log: {fields: [actor_id, actor_role, from_state, to_state, action, written_reason, decision_log_ref], is_label: false}
   outcome_log: {fields: [carrier, awb, outcome, carrier_reason_raw, buyer_caused, cancelled_by, event_time, source], is_label: true}
   interaction_log: {fields: [interaction_id, channel, template_id, language, sent_at, button_event, agent_output_json, recording_consent, transcript_ref, call_duration_s, cost_local, currency, compliance_checks_passed], retention_days: 180}   # ASSUMPTION; mỗi nước có thể yêu cầu khác
@@ -582,12 +605,16 @@ measurement:   # Baseline A mục 9
   cross_country_note: "so sánh giữa các nước bằng tỷ lệ trên giá trị đơn; không cộng tiền khác đơn vị"
 
 data_isolation:
-  default: tenant_isolated
-  phone_hash: "HMAC-SHA256(tenant_secret, E.164); SĐT đã băm vẫn coi là dữ liệu cá nhân ở mọi nước"
-  features:   # tất cả cần pháp chế của từng nước duyệt
-    cross_tenant_phone_history: {enabled: false, requires_legal_approval: true}
-    cross_tenant_not_ordered_block: {enabled: false, requires_legal_approval: true}
-    global_contact_cap: {enabled: false, requires_legal_approval: true}
+  default: tenant_isolated                 # đơn và dữ liệu cá nhân của shop nào chỉ shop đó xem
+  phone_hash: "HMAC-SHA256(PHONE_HASH_KEY, E.164): MỘT khóa bí mật chung cho mọi shop (Secret Manager), để cùng một SĐT khớp giữa các shop (AGENTS.md, docs/data-model.md, E1.5). SĐT đã băm vẫn coi là dữ liệu cá nhân ở mọi nước"
+  shared_across_shops:   # chỉ tín hiệu theo buyer_phone_hash (AGENTS.md)
+    - "lịch sử giao của SĐT (hard rule D08)"
+    - "số cuộc AI gọi tới SĐT trong 24 giờ (C04, tối đa 1)"
+    - "chặn 30 ngày sau 'Tôi không đặt' (D04, P01)"
+  same_shop_only: ["tin tưởng 7 ngày sau khi xác nhận (D07, P09)", "opt-out liên hệ (C03a, C03b)", "đơn trùng trong 24 giờ (D06)"]
+  features:   # pháp chế từng nước cần duyệt trước khi chạy thật
+    cross_tenant_phone_history: {enabled: true, requires_legal_approval: true}       # AGENTS.md; VERIFY
+    cross_tenant_not_ordered_block: {enabled: true, requires_legal_approval: true}   # AGENTS.md; VERIFY
     pooled_model_training: {enabled: false, requires_legal_approval: true}
     cross_country_pooling: {enabled: false, requires_legal_approval: true, note: "gộp dữ liệu nhiều nước để train cần căn cứ chuyển dữ liệu của từng nước"}
     aggregated_priors_small_tenants: {enabled: false, requires_legal_approval: true, if_denied: "tenant nhỏ dừng ở pha 1"}
@@ -605,7 +632,7 @@ country_packs:
     currency: VND
     timezone_default: Asia/Ho_Chi_Minh
     timezone_by_region: {}
-    phone: {e164_prefix: "+84", mobile_regex: '^\+84(3|5|7|8|9)\d{8}$'}
+    phone: {e164_prefix: "+84", mobile_regex: '^\+84\d{9,10}$'}   # = app/data/phone.py to_e164: chỉ kiểm hình dạng (9-10 số), nhận số test +84000…
     languages: [vi]
     holiday_calendar: VN_NATIONAL
     channels:
@@ -616,11 +643,10 @@ country_packs:
       AI_CALL: {registration_required: true, registration: "số gọi ra đã đăng ký định danh (Baseline A); tên định danh thoại nếu dự thảo thay NĐ 91/2020 được ban hành"}
     verified_channels: [ZNS_BUTTON, SIGNED_WEB_LINK]
     contact:
-      message_window: {slots: [{days: ALL, start: "08:00", end: "21:00"}], basis_type: LAW_DERIVED, basis: "NĐ 91/2020/NĐ-CP Đ13 k6: tin nhắn quảng cáo 07:00-22:00"}
-      call_window: {slots: [{days: ALL, start: "08:00", end: "17:00"}], basis_type: LAW_DERIVED, basis: "NĐ 91/2020/NĐ-CP Đ13 k6: gọi quảng cáo 08:00-17:00, trừ khi đã có thỏa thuận khác với người dùng"}
-      call_extension_window: {slots: [{days: ALL, start: "17:00", end: "20:00"}], requires: buyer_opted_in_extended_call, basis: "thỏa thuận khác với người dùng (Đ13)"}   # ASSUMPTION giờ kết thúc
+      message_window: {slots: [{days: ALL, start: "08:00", end: "21:00"}], basis_type: DEFAULT, basis: "AGENTS.md: giờ liên hệ 08:00-21:00 giờ Việt Nam (= ShopSettings.contact_hours); nằm trong khung tin quảng cáo 07:00-22:00 của NĐ 91/2020/NĐ-CP Đ13 k6"}
+      call_window: {slots: [{days: ALL, start: "08:00", end: "21:00"}], basis_type: DEFAULT, basis: "AGENTS.md: giờ liên hệ 08:00-21:00 giờ Việt Nam cho cuộc gọi xác nhận đơn (giao dịch). Khung 08:00-17:00 của NĐ 91/2020/NĐ-CP Đ13 k6 là cho gọi quảng cáo"}   # VERIFY: dự thảo thay NĐ 91/2020 có thể mở rộng sang cuộc gọi phục vụ kinh doanh
       max_messages_per_phone_24h: 3    # NĐ 91/2020 Đ13 k5 cho quảng cáo
-      max_calls_per_phone_24h: 1       # NĐ 91/2020 Đ13 k5 cho quảng cáo
+      max_calls_per_phone_24h: 1       # AI gọi, đếm trên MỌI shop (AGENTS.md, C04); NĐ 91/2020 Đ13 k5 cho quảng cáo
       inferred_consent_days: null
       message_must_include: [shop_name]
       dnc: {registry: "danh sách không quảng cáo theo NĐ 91/2020", applies_to: ADVERTISING, check_for_transactional: false}
@@ -642,13 +668,13 @@ country_packs:
     payments: {deposit_rail: VietQR}
     logistics: {ship_cutoff_local: "16:00", max_delivery_attempts_default: 3, carriers_examples: [GHN, GHTK, "Viettel Post", "J&T Express", "SPX Express"], ndr_reason_map_ref: "ndr_maps/VN_{carrier}.yaml"}   # ASSUMPTION
     marketplaces_examples: [Shopee, Lazada, "TikTok Shop", Tiki]
-    costs:   # ASSUMPTION, VND
+    costs:   # VND. Mặc định = ShopSettings (app/schemas/shops.py), shop đổi được; cách chia nhỏ là ASSUMPTION
       shipping_out: 30000
       return_fee: 15000
       packaging: 5000
-      handling_per_return: 5000
-      contact: {ZNS: 300, SMS: 800, AI_CALL: 2250, SELLER_REVIEW: 3000}
-      friction_good_customer: {CONFIRM: 1000, CALL: 3000, DEPOSIT: 15000}
+      handling_per_return: 10000      # FAIL = 60000 = failed_delivery_cost_vnd
+      action_cost: {CONFIRM: 300, CALL: 1500, DEPOSIT: 5000, REVIEW: 3000}   # = confirmation_link / ai_call / deposit_request _cost_vnd; REVIEW = công người bán duyệt (ASSUMPTION)
+      contact: {ZNS: 300, SMS: 800, AI_CALL: 1500}   # chi phí thật theo kênh, cho trần chi phí C15
       gross_margin_rate: 0.35
       logistics_failure_recovery_rate: 0.5
       high_value_order: 2000000
@@ -729,8 +755,8 @@ country_packs:
       return_fee: 15000
       packaging: 2000
       handling_per_return: 2000
-      contact: {WHATSAPP: 400, SMS: 500, AI_CALL: 1500, SELLER_REVIEW: 3000}
-      friction_good_customer: {CONFIRM: 1000, CALL: 2500, DEPOSIT: 10000}
+      action_cost: {CONFIRM: 400, CALL: 1500, DEPOSIT: 10000, REVIEW: 3000}
+      contact: {WHATSAPP: 400, SMS: 500, AI_CALL: 1500}
       gross_margin_rate: 0.3
       logistics_failure_recovery_rate: 0.5
       high_value_order: 1000000
@@ -788,8 +814,8 @@ country_packs:
       return_fee: 100
       packaging: 10
       handling_per_return: 10
-      contact: {VIBER: 0.6, MESSENGER: 0, SMS: 0.5, AI_CALL: 4, SELLER_REVIEW: 10}
-      friction_good_customer: {CONFIRM: 2, CALL: 6, DEPOSIT: 25}
+      action_cost: {CONFIRM: 0.6, CALL: 4, DEPOSIT: 25, REVIEW: 10}
+      contact: {VIBER: 0.6, MESSENGER: 0, SMS: 0.5, AI_CALL: 4}
       gross_margin_rate: 0.3
       logistics_failure_recovery_rate: 0.5
       high_value_order: 3000
@@ -847,8 +873,8 @@ country_packs:
       return_fee: 35
       packaging: 5
       handling_per_return: 5
-      contact: {LINE: 0.1, SMS: 0.6, AI_CALL: 3, SELLER_REVIEW: 5}
-      friction_good_customer: {CONFIRM: 1, CALL: 3, DEPOSIT: 15}
+      action_cost: {CONFIRM: 0.1, CALL: 3, DEPOSIT: 15, REVIEW: 5}
+      contact: {LINE: 0.1, SMS: 0.6, AI_CALL: 3}
       gross_margin_rate: 0.3
       logistics_failure_recovery_rate: 0.5
       high_value_order: 1500
@@ -905,8 +931,8 @@ country_packs:
       return_fee: 7
       packaging: 1
       handling_per_return: 1
-      contact: {WHATSAPP: 0.07, SMS: 0.12, AI_CALL: 0.5, SELLER_REVIEW: 1}
-      friction_good_customer: {CONFIRM: 0.2, CALL: 0.6, DEPOSIT: 3}
+      action_cost: {CONFIRM: 0.07, CALL: 0.5, DEPOSIT: 3, REVIEW: 1}
+      contact: {WHATSAPP: 0.07, SMS: 0.12, AI_CALL: 0.5}
       gross_margin_rate: 0.3
       logistics_failure_recovery_rate: 0.5
       high_value_order: 300
@@ -961,8 +987,8 @@ country_packs:
       return_fee: 5
       packaging: 0.5
       handling_per_return: 1
-      contact: {WHATSAPP: 0.03, SMS: 0.05, AI_CALL: 0.15, SELLER_REVIEW: 1}
-      friction_good_customer: {CONFIRM: 0.3, CALL: 1, DEPOSIT: 3}
+      action_cost: {CONFIRM: 0.03, CALL: 0.15, DEPOSIT: 3, REVIEW: 1}
+      contact: {WHATSAPP: 0.03, SMS: 0.05, AI_CALL: 0.15}
       gross_margin_rate: 0.3
       logistics_failure_recovery_rate: 0.5
       high_value_order: 150
@@ -1017,8 +1043,8 @@ country_packs:
       return_fee: 60
       packaging: 10
       handling_per_return: 10
-      contact: {WHATSAPP: 0.15, SMS: 0.2, AI_CALL: 1.5, SELLER_REVIEW: 5}
-      friction_good_customer: {CONFIRM: 0.5, CALL: 2, DEPOSIT: 10}
+      action_cost: {CONFIRM: 0.15, CALL: 1.5, DEPOSIT: 10, REVIEW: 5}
+      contact: {WHATSAPP: 0.15, SMS: 0.2, AI_CALL: 1.5}
       gross_margin_rate: 0.3
       logistics_failure_recovery_rate: 0.5
       high_value_order: 3000
@@ -1043,10 +1069,13 @@ cross_cutting_sources:
 
 # ---------------------------------------------------------------------------
 # Test cases. Mặc định: country VN, phase 1, kênh độc lập, đủ điều kiện go-live, đủ đăng ký sender,
-# demo tắt, agent chưa qua cổng chất lượng, giờ người mua thứ Tư 2026-10-14 10:00.
-# VN: FAIL = 30000 + 15000 + 5000 + 5000 = 55000
+# demo tắt, AI gọi bật, SĐT +84000000001, giờ người mua thứ Tư 2026-10-14 10:00.
+# VN: FAIL = 30000 + 15000 + 5000 + 10000 = 60000; expected_loss = p_failed × 60000.
+# Tier: low < 0.08 ≤ medium < 0.20 ≤ high < 0.40 ≤ very_high. action_cost: CONFIRM 300, CALL 1500, DEPOSIT 5000.
+# tests/test_rules_file.py chạy các ca có `probs` hoặc `unanswered` qua app/decision/policy.py.
+# SĐT mẫu chỉ dùng dãy +84000… (AGENTS.md: không có SĐT thật trong repo).
 # ---------------------------------------------------------------------------
-test_defaults: {country: VN, phase: 1, sales_channel: INDEPENDENT, compliance: ALL_TRUE, demo_enabled: false, agent_quality_gate_passed: false, buyer_local_time: "2026-10-14T10:00"}
+test_defaults: {country: VN, phase: 1, sales_channel: INDEPENDENT, compliance: ALL_TRUE, demo_enabled: false, ai_call_enabled: true, phone_e164: "+84000000001", buyer_local_time: "2026-10-14T10:00"}
 
 test_cases:
   # --- L2 ---
@@ -1054,35 +1083,52 @@ test_cases:
   - {id: T02_dup_external_id, input: {external_id_seen_in_tenant: true}, expect: {rule: D00, result: IGNORE}}
   - {id: T03_invalid_phone, input: {phone_e164: "+8412345"}, expect: {rule: D03, state: PENDING_REVIEW}}
   - {id: T04_address_incomplete, input: {address_quality: 0.3}, expect: {rule: D05, state: AWAIT_CONFIRM, variant: ADDRESS_FIX}}
-  - {id: T09_cross_shop_ignored, input: {tenant_orders_n: 0, other_tenants_fail_rate: 0.9}, expect: {D08_fired: false}}
-  - {id: T10_tenant_history_risk, input: {tenant_orders_n: 4, buyer_fail_rate: 0.75}, expect: {rule: D08, then_rule: A01, action: CONFIRM, explore: false}}
-  # --- L3 ---
-  - id: T05_low_risk
+  - {id: T09_other_shop_history_counts, input: {tenant_orders_n: 0, phone_orders_n: 4, phone_buyer_fail_rate: 0.9}, expect: {rule: D08, tier: very_high, action: DEPOSIT, note: "lịch sử ở shop khác vẫn tính (AGENTS.md)"}}
+  - {id: T10_phone_history_risk, input: {phone_orders_n: 4, phone_buyer_fail_rate: 0.75}, expect: {rule: D08, hard_rule: high_return_phone, tier: very_high, action: DEPOSIT, state: AWAIT_DEPOSIT, rail: VietQR, explore: false}}
+  - {id: T15_not_ordered_other_shop, input: {phone_not_ordered_block_active: true, blocked_by_other_shop: true}, expect: {rule: D04, action: REVIEW, state: PENDING_REVIEW}}
+  # --- L3: hành động theo tier (E4.2) ---
+  - id: T05_low_ship_now
     input: {probs: {DELIVERED: 0.95, RTO_REFUSAL: 0.02, RTO_UNREACHABLE: 0.01, RTO_BAD_ADDRESS: 0.01, CANCELLED_BEFORE_SHIP: 0.005, MISSED_CUTOFF: 0.0025, LOGISTICS_FAILURE: 0.0025}, total: 400000}
-    expect: {dominant_cause: NONE, rule: A06, loss_gate: 2200, action: ALLOW}
-  - id: T06_refusal_phase1
+    expect: {p_failed: 0.04, tier: low, expected_loss: 2400, action: ALLOW, state: CLEARED_TO_SHIP}
+  - id: T37_medium_confirm_link
+    input: {probs: {DELIVERED: 0.85, RTO_REFUSAL: 0.08, RTO_UNREACHABLE: 0.03, RTO_BAD_ADDRESS: 0.01, CANCELLED_BEFORE_SHIP: 0.02, MISSED_CUTOFF: 0.005, LOGISTICS_FAILURE: 0.005}, total: 400000}
+    expect: {p_failed: 0.12, tier: medium, expected_loss: 7200, action_cost: 300, action: CONFIRM, confirm_channel: ZNS, state: AWAIT_CONFIRM, no_response_after_minutes: 120}
+  - id: T06_high_call
     input: {probs: {DELIVERED: 0.6, RTO_REFUSAL: 0.3, RTO_UNREACHABLE: 0.05, RTO_BAD_ADDRESS: 0.02, CANCELLED_BEFORE_SHIP: 0.02, MISSED_CUTOFF: 0.005, LOGISTICS_FAILURE: 0.005}, total: 400000}
-    expect: {dominant_cause: RTO_REFUSAL, rule: A05, loss_gate: 20350, cost_CONFIRM: 900, action: CONFIRM, confirm_channel: ZNS}
+    expect: {p_failed: 0.37, tier: high, dominant_cause: RTO_REFUSAL, expected_loss: 22200, action_cost: 1500, action: CALL, state: AWAIT_CALL}
+  - id: T39_very_high_deposit
+    input: {probs: {DELIVERED: 0.45, RTO_REFUSAL: 0.35, RTO_UNREACHABLE: 0.1, RTO_BAD_ADDRESS: 0.05, CANCELLED_BEFORE_SHIP: 0.03, MISSED_CUTOFF: 0.01, LOGISTICS_FAILURE: 0.01}, total: 400000}
+    expect: {p_failed: 0.5, tier: very_high, expected_loss: 30000, action_cost: 5000, action: DEPOSIT, state: AWAIT_DEPOSIT, rail: VietQR}
+  - id: T40_cost_gate
+    input: {probs: {DELIVERED: 0.6, RTO_REFUSAL: 0.3, RTO_UNREACHABLE: 0.05, RTO_BAD_ADDRESS: 0.02, CANCELLED_BEFORE_SHIP: 0.02, MISSED_CUTOFF: 0.005, LOGISTICS_FAILURE: 0.005}, total: 400000, tenant_costs: {action_cost: {CALL: 30000}}}
+    expect: {p_failed: 0.37, tier: high, expected_loss: 22200, action: ALLOW, block_reason: EXPECTED_LOSS_BELOW_COST, state: CLEARED_TO_SHIP, note: "22200 ≤ 30000 nên không gọi"}
   - id: T36_logistics_no_contact
     input: {probs: {DELIVERED: 0.7, RTO_REFUSAL: 0.03, RTO_UNREACHABLE: 0.02, RTO_BAD_ADDRESS: 0.02, CANCELLED_BEFORE_SHIP: 0.01, MISSED_CUTOFF: 0.02, LOGISTICS_FAILURE: 0.2}, total: 400000}
-    expect: {dominant_cause: LOGISTICS_FAILURE, rule: A02, action: ALLOW, seller_alert: true, contact_buyer: false}
-  - {id: T18_floor_phase2, input: {phase: 2, agent_quality_gate_passed: true, tenant_orders_n: 4, buyer_fail_rate: 0.8}, expect: {rule: A01, action: CALL, explore: false, propensity: 1.0}}
-  - {id: T19_floor_deposit_unavailable, input: {phase: 3, sales_channel: MARKETPLACE, tenant_orders_n: 4, buyer_fail_rate: 0.8}, expect: {rule: A01, action: REVIEW}}
+    expect: {p_failed: 0.07, tier: low, expected_loss: 4200, dominant_cause: LOGISTICS_FAILURE, rule: A01, action: ALLOW, state: CLEARED_TO_SHIP, seller_alert: true, contact_buyer: false}
+  - id: T18_ai_call_disabled
+    input: {ai_call_enabled: false, probs: {DELIVERED: 0.6, RTO_REFUSAL: 0.3, RTO_UNREACHABLE: 0.05, RTO_BAD_ADDRESS: 0.02, CANCELLED_BEFORE_SHIP: 0.02, MISSED_CUTOFF: 0.005, LOGISTICS_FAILURE: 0.005}, total: 400000}
+    expect: {tier: high, action: CONFIRM, state: AWAIT_CONFIRM, note: "CALL không có trong effective_actions nên dùng unavailable_fallback"}
+  - {id: T19_history_marketplace, input: {sales_channel: MARKETPLACE, phone_orders_n: 4, phone_buyer_fail_rate: 0.8}, expect: {rule: D08, tier: very_high, action: REVIEW}}
   - {id: T20_exploration_propensity, input: {phase: 2, a_greedy: ALLOW, A_explore: [ALLOW, CONFIRM], epsilon: 0.05}, expect: {propensity_ALLOW: 0.975, propensity_CONFIRM: 0.025, sum: 1.0}}
   - {id: T21_exploration_excluded_deposit, input: {phase: 3, a_greedy: DEPOSIT}, expect: {excluded: true, explore: false, propensity: 1.0}}
+  # --- Leo thang khi không phản hồi (E4.2) ---
+  - {id: T38_medium_no_response_2h, input: {tier: medium, state: AWAIT_CONFIRM, unanswered: CONFIRM, event: TIMER_NO_RESPONSE, minutes_since_contact: 120, expected_loss: 7200}, expect: {no_response_action: CALL, state: AWAIT_CALL}}
+  - {id: T41_medium_call_not_worth_it, input: {tier: medium, state: AWAIT_CONFIRM, unanswered: CONFIRM, event: TIMER_NO_RESPONSE, minutes_since_contact: 120, expected_loss: 7200, tenant_costs: {action_cost: {CALL: 8000}}}, expect: {no_response_action: ALLOW, block_reason: EXPECTED_LOSS_BELOW_COST, state: CLEARED_TO_SHIP}}
+  - {id: T35_no_answer_retry, input: {tier: high, state: AWAIT_CALL, unanswered: CALL, event: CALL_NO_ANSWER, call_attempts_order: 1, expected_loss: 22200}, expect: {rule: P11, no_response_action: CALL, state: AWAIT_CALL, retry_after_minutes: 30}}
+  - {id: T42_no_answer_last_attempt, input: {tier: high, state: AWAIT_CALL, unanswered: CALL, event: CALL_NO_ANSWER, call_attempts_order: 2, expected_loss: 22200}, expect: {rule: P11, no_response_action: REVIEW, state: PENDING_REVIEW}}
+  - {id: T43_escalation_call_no_answer, input: {tier: medium, state: AWAIT_CALL, unanswered: CALL, event: CALL_NO_ANSWER, call_attempts_order: 2, expected_loss: 7200}, expect: {rule: P11, no_response_action: REVIEW, state: PENDING_REVIEW}}
+  - {id: T44_deposit_unpaid, input: {tier: very_high, state: AWAIT_DEPOSIT, unanswered: DEPOSIT, event: TIMER_NO_RESPONSE, minutes_since_contact: 1440, expected_loss: 30000}, expect: {no_response_action: REVIEW, state: PENDING_REVIEW}}
   # --- L4 và state machine ---
   - {id: T07_address_no_rescore, input: {state: AWAIT_CONFIRM, event: ADDRESS_EDITED, verified: true, address_check: valid}, expect: {rule: P04, state: CLEARED_TO_SHIP, model_called: false}}
   - {id: T22_address_invalid_twice, input: {state: AWAIT_CONFIRM, event: ADDRESS_EDITED, verified: true, address_check: invalid, address_fix_attempts: 1}, expect: {rule: P04, state: PENDING_REVIEW}}
-  - {id: T08_deposit_no_rescore, input: {phase: 3, state: AWAIT_DEPOSIT, event: PAYMENT_CONFIRMED, source: PAYMENT_GATEWAY}, expect: {rule: P08, state: CLEARED_TO_SHIP, model_called: false}}
-  - {id: T11_agent_cancel, input: {phase: 2, source: AGENT, out: {intent: CANCEL, confidence: 0.95}}, expect: {rule: P02, state: AWAIT_CANCEL_CONFIRM, cancelled: false}}
+  - {id: T08_deposit_no_rescore, input: {state: AWAIT_DEPOSIT, event: PAYMENT_CONFIRMED, source: PAYMENT_GATEWAY}, expect: {rule: P08, state: CLEARED_TO_SHIP, model_called: false}}
+  - {id: T11_agent_cancel, input: {source: AGENT, out: {intent: CANCEL, confidence: 0.95}}, expect: {rule: P02, state: AWAIT_CANCEL_CONFIRM, cancelled: false}}
   - {id: T23_cancel_ttl_expired, input: {state: AWAIT_CANCEL_CONFIRM, event: TIMER_CANCEL_TTL}, expect: {state: PENDING_REVIEW, cancelled: false}}
-  - {id: T12_verified_not_ordered, input: {state: AWAIT_CONFIRM, event: NOT_ORDERED, verified: true}, expect: {rule: P01, state: CANCELLED, tenant_block_days: 30, cross_tenant_block: false}}
+  - {id: T12_verified_not_ordered, input: {state: AWAIT_CONFIRM, event: NOT_ORDERED, verified: true}, expect: {rule: P01, state: CANCELLED, phone_block_days: 30, phone_block_scope: ALL_SHOPS}}
   - {id: T24_cancel_while_pending_review, input: {state: PENDING_REVIEW, event: CANCEL_CONFIRMED, verified: true}, expect: {rule: P01, state: CANCELLED}}
-  - {id: T13_deadline_phase1, input: {state: AWAIT_CONFIRM, event: TIMER_DEADLINE, dominant_cause: RTO_REFUSAL}, expect: {via: DEFAULT_APPLIED, rule: P12, state: PENDING_REVIEW, call_made: false}}
-  - {id: T14_demo_call, input: {demo_enabled: true, phone_in_demo_allowlist: true, state: AWAIT_CONFIRM, event: TIMER_DEADLINE, dominant_cause: RTO_UNREACHABLE}, expect: {state: AWAIT_CALL, log_flag: DEMO_EXCEPTION}}
+  - {id: T13_l2_confirm_deadline, input: {l2_rule: D05, state: AWAIT_CONFIRM, event: TIMER_DEADLINE, dominant_cause: RTO_BAD_ADDRESS}, expect: {via: DEFAULT_APPLIED, rule: P12, state: PENDING_REVIEW, call_made: false, note: "CONFIRM từ L2 không leo thang theo tier"}}
   - {id: T16_multi_dim, input: {source: AGENT, out: {intent: CONFIRM, confidence: 0.9, address_change: PROVIDED, delivery_time: NEW_SLOT}, address_check: valid}, expect: {rule: P04, state: CLEARED_TO_SHIP, delivery_time_carried: true}}
   - {id: T25_reschedule_too_far, input: {source: AGENT, out: {intent: CONFIRM, confidence: 0.9, delivery_time: NEW_SLOT}, hours_until_slot: 100}, expect: {rule: P06, state: PENDING_REVIEW}}
-  - {id: T35_unreachable_no_answer_then_confirm, input: {phase: 2, agent_quality_gate_passed: true, state: AWAIT_CALL, event: CALL_NO_ANSWER, call_attempts_order: 2, confirm_sent_for_order: false}, expect: {rule: P11, state: AWAIT_CONFIRM}}
   # --- fallback ---
   - {id: T17_model_timeout, input: {model_latency_ms: 900, total: 3000000}, expect: {via: DEFAULT_APPLIED, default_action: CONFIRM, state: AWAIT_CONFIRM}}
   - {id: T26_agent_error, input: {gemini_live_error: true, confirm_sent_for_order: false}, expect: {default_action: CONFIRM, state: AWAIT_CONFIRM}}
@@ -1092,49 +1138,50 @@ test_cases:
   - {id: T29_ndr_carrier_issue, input: {state: NDR, ndr_group: CARRIER_ISSUE}, expect: {rule: N01, action: REATTEMPT, contact_buyer: false}}
   - {id: T30_ndr_verified_cancel, input: {state: NDR, event: CANCEL_CONFIRMED, verified: true}, expect: {rule: N02, action: REQUEST_RTO, auto_rto: true}}
   - {id: T31_ndr_agent_cancel, input: {state: NDR, source: AGENT, out: {intent: CANCEL}}, expect: {rule: N03, state: AWAIT_CANCEL_CONFIRM}}
-  - {id: T32_ndr_call_phase2, input: {phase: 2, agent_quality_gate_passed: true, state: NDR, minutes_since_ndr_contact: 95, ndr_call_attempts: 0}, expect: {rule: N05, action: NDR_CALL}}
+  - {id: T32_ndr_call, input: {state: NDR, minutes_since_ndr_contact: 95, ndr_call_attempts: 0}, expect: {rule: N05, action: NDR_CALL}}
   - {id: T33_ndr_deadline, input: {state: NDR, carrier_deadline_reached: true}, expect: {rule: N06, action: RECOMMEND_RTO, auto_rto: false}}
   - {id: T34_after_cutoff, input: {state: CLEARED_TO_SHIP, warehouse_local_hm: "16:30"}, expect: {rule: S01_after_cutoff, planned_pickup: NEXT_BUSINESS_DAY}}
   # --- cổng kênh bán, chi phí, ưu tiên ---
   - id: TC_MKT_01_marketplace_high_risk
     input: {sales_channel: MARKETPLACE, probs: {DELIVERED: 0.6, RTO_REFUSAL: 0.3, RTO_UNREACHABLE: 0.05, RTO_BAD_ADDRESS: 0.02, CANCELLED_BEFORE_SHIP: 0.02, MISSED_CUTOFF: 0.005, LOGISTICS_FAILURE: 0.005}, total: 400000}
-    expect: {rule: G01, loss_gate: 20350, cost_REVIEW: 3000, action: REVIEW, contact_buyer: false}
+    expect: {rule: G01, tier: high, expected_loss: 22200, action_cost_REVIEW: 3000, action: REVIEW, contact_buyer: false}
   - id: TC_MKT_02_marketplace_low_risk
     input: {sales_channel: MARKETPLACE, probs: {DELIVERED: 0.95, RTO_REFUSAL: 0.02, RTO_UNREACHABLE: 0.01, RTO_BAD_ADDRESS: 0.01, CANCELLED_BEFORE_SHIP: 0.005, MISSED_CUTOFF: 0.0025, LOGISTICS_FAILURE: 0.0025}, total: 400000}
     expect: {rule: G01, action: ALLOW}
-  - {id: TC_COST_01_cap, input: {phase: 2, agent_quality_gate_passed: true, chosen_action: CALL, contact_cost_spent_order: 5000}, expect: {rule: C15, removed_channels: [AI_CALL], action: CONFIRM, confirm_channel: ZNS, note: "5000 + 2250 > 6000; 5000 + 300 ≤ 6000"}}
+  - {id: TC_COST_01_cap, input: {chosen_action: CALL, contact_cost_spent_order: 5000}, expect: {rule: C15, removed_channels: [AI_CALL], action: CONFIRM, confirm_channel: ZNS, note: "5000 + 1500 > 6000; 5000 + 300 ≤ 6000"}}
   - {id: TC_PRIO_01_priority_customer, input: {phase: 2, seller_priority_customer: true, a_greedy: ALLOW}, expect: {excluded: true, propensity: 1.0}}
   # --- VN ---
-  - {id: TC_VN_01_call_after_17h, input: {phase: 2, agent_quality_gate_passed: true, chosen_action: CALL, buyer_local_time: "2026-10-14T17:30"}, expect: {rule: C02, state: DEFERRED, earliest_contact_at: "2026-10-15T08:00+07:00"}}
-  - {id: TC_VN_02_call_after_17h_opt_in, input: {phase: 2, agent_quality_gate_passed: true, chosen_action: CALL, buyer_local_time: "2026-10-14T17:30", buyer_opted_in_extended_call: true}, expect: {C02_fired: false, state: AWAIT_CALL}}
+  - {id: TC_VN_01_call_at_17h30, input: {chosen_action: CALL, buyer_local_time: "2026-10-14T17:30"}, expect: {C02_fired: false, state: AWAIT_CALL, note: "VN gọi tới 21:00 (AGENTS.md)"}}
+  - {id: TC_VN_02_call_after_21h, input: {chosen_action: CALL, buyer_local_time: "2026-10-14T21:30"}, expect: {rule: C02, state: DEFERRED, earliest_contact_at: "2026-10-15T08:00+07:00"}}
+  - {id: TC_VN_03_called_today_by_other_shop, input: {chosen_action: CALL, phone_calls_24h: 1, called_by_other_shop: true}, expect: {rule: C04, removed_channels: [AI_CALL], action: CONFIRM, confirm_channel: ZNS}}
   # --- ID ---
-  - {id: TC_ID_01_wit_evening, input: {country: ID, ship_region: Papua, phase: 2, agent_quality_gate_passed: true, chosen_action: CALL, server_time_utc: "2026-10-14T12:30:00Z"}, expect: {buyer_timezone: Asia/Jayapura, buyer_local_time: "2026-10-14T21:30", rule: C02, state: DEFERRED, earliest_contact_at: "2026-10-15T08:00+09:00"}}
-  - {id: TC_ID_02_wib_same_instant, input: {country: ID, ship_region: Jawa Barat, phase: 2, agent_quality_gate_passed: true, chosen_action: CALL, server_time_utc: "2026-10-14T12:30:00Z"}, expect: {buyer_timezone: Asia/Jakarta, buyer_local_time: "2026-10-14T19:30", C02_fired: false, state: AWAIT_CALL}}
-  - {id: TC_ID_03_sunday_call, input: {country: ID, phase: 2, agent_quality_gate_passed: true, chosen_action: CALL, buyer_local_time: "2026-10-18T10:00"}, expect: {rule: C02, state: DEFERRED, earliest_contact_at: "2026-10-19T08:00+07:00"}}
+  - {id: TC_ID_01_wit_evening, input: {country: ID, ship_region: Papua, chosen_action: CALL, server_time_utc: "2026-10-14T12:30:00Z"}, expect: {buyer_timezone: Asia/Jayapura, buyer_local_time: "2026-10-14T21:30", rule: C02, state: DEFERRED, earliest_contact_at: "2026-10-15T08:00+09:00"}}
+  - {id: TC_ID_02_wib_same_instant, input: {country: ID, ship_region: Jawa Barat, chosen_action: CALL, server_time_utc: "2026-10-14T12:30:00Z"}, expect: {buyer_timezone: Asia/Jakarta, buyer_local_time: "2026-10-14T19:30", C02_fired: false, state: AWAIT_CALL}}
+  - {id: TC_ID_03_sunday_call, input: {country: ID, chosen_action: CALL, buyer_local_time: "2026-10-18T10:00"}, expect: {rule: C02, state: DEFERRED, earliest_contact_at: "2026-10-19T08:00+07:00"}}
   - {id: TC_ID_04_holiday_message_ok, input: {country: ID, chosen_action: CONFIRM, buyer_local_time: "2026-10-14T10:00", is_public_holiday: true}, expect: {C01_fired: false, state: AWAIT_CONFIRM, confirm_channel: WHATSAPP}}
   - {id: TC_ID_05_dpia_missing, input: {country: ID, compliance: {dpia_completed: false}}, expect: {effective_phase: 0, contact_buyer: false, executed: false}}
-  - {id: TC_ID_06_deposit_qris, input: {country: ID, phase: 3, a_final: DEPOSIT}, expect: {state: AWAIT_DEPOSIT, rail: QRIS}}
+  - {id: TC_ID_06_deposit_qris, input: {country: ID, a_final: DEPOSIT}, expect: {state: AWAIT_DEPOSIT, rail: QRIS}}
   # --- PH ---
-  - {id: TC_PH_01_recording_declined, input: {country: PH, phase: 2, agent_quality_gate_passed: true, source: AGENT, out: {recording_consent: DECLINED}, confirm_sent_for_order: false}, expect: {rule: P13, end_call: true, discard_recording: true, state: AWAIT_CONFIRM}}
+  - {id: TC_PH_01_recording_declined, input: {country: PH, source: AGENT, out: {recording_consent: DECLINED}, confirm_sent_for_order: false}, expect: {rule: P13, end_call: true, discard_recording: true, state: AWAIT_CONFIRM}}
   - {id: TC_PH_02_sms_reply_keyword, input: {country: PH, chosen_action: CONFIRM, compliance: {VIBER_registered: false}}, expect: {confirm_channel: SMS, rule: C14, confirm_variant: REPLY_KEYWORD, no_links: true}}
   - {id: TC_PH_03_npc_missing, input: {country: PH, compliance: {npc_adm_registration_done: false}}, expect: {effective_phase: 0, contact_buyer: false}}
   # --- TH ---
-  - {id: TC_TH_01_saturday_evening, input: {country: TH, phase: 2, agent_quality_gate_passed: true, chosen_action: CALL, buyer_local_time: "2026-10-17T18:30"}, expect: {rule: C02, state: DEFERRED, earliest_contact_at: "2026-10-18T08:00+07:00"}}
-  - {id: TC_TH_02_friday_evening, input: {country: TH, phase: 2, agent_quality_gate_passed: true, chosen_action: CALL, buyer_local_time: "2026-10-16T18:30"}, expect: {C02_fired: false, state: AWAIT_CALL}}
-  - {id: TC_TH_03_holiday_evening, input: {country: TH, phase: 2, agent_quality_gate_passed: true, chosen_action: CALL, buyer_local_time: "2026-10-14T18:30", is_public_holiday: true}, expect: {rule: C02, state: DEFERRED}}
+  - {id: TC_TH_01_saturday_evening, input: {country: TH, chosen_action: CALL, buyer_local_time: "2026-10-17T18:30"}, expect: {rule: C02, state: DEFERRED, earliest_contact_at: "2026-10-18T08:00+07:00"}}
+  - {id: TC_TH_02_friday_evening, input: {country: TH, chosen_action: CALL, buyer_local_time: "2026-10-16T18:30"}, expect: {C02_fired: false, state: AWAIT_CALL}}
+  - {id: TC_TH_03_holiday_evening, input: {country: TH, chosen_action: CALL, buyer_local_time: "2026-10-14T18:30", is_public_holiday: true}, expect: {rule: C02, state: DEFERRED}}
   - {id: TC_TH_04_line_first, input: {country: TH, chosen_action: CONFIRM}, expect: {confirm_channel: LINE}}
   # --- MY ---
-  - {id: TC_MY_01_opt_out_calls, input: {country: MY, phase: 2, agent_quality_gate_passed: true, chosen_action: CALL, buyer_opted_out_calls_tenant: true}, expect: {rule: C03a, removed_channels: [AI_CALL], action: CONFIRM, confirm_channel: WHATSAPP}}
-  - {id: TC_MY_02_holiday_call, input: {country: MY, phase: 2, agent_quality_gate_passed: true, chosen_action: CALL, is_public_holiday: true}, expect: {rule: C02, state: DEFERRED}}
+  - {id: TC_MY_01_opt_out_calls, input: {country: MY, chosen_action: CALL, buyer_opted_out_calls_tenant: true}, expect: {rule: C03a, removed_channels: [AI_CALL], action: CONFIRM, confirm_channel: WHATSAPP}}
+  - {id: TC_MY_02_holiday_call, input: {country: MY, chosen_action: CALL, is_public_holiday: true}, expect: {rule: C02, state: DEFERRED}}
   # --- SG ---
   - {id: TC_SG_01_transactional_no_dnc, input: {country: SG, chosen_action: CONFIRM, dnc_listed: true}, expect: {C03c_fired: false, state: AWAIT_CONFIRM, must_include: [shop_name, contact_info]}}
   - {id: TC_SG_02_promo_template_rejected, input: {country: SG, chosen_action: CONFIRM, template_has_promo: true}, expect: {rule: C09, removed_channels: [WHATSAPP, SMS], action: REVIEW}}
-  - {id: TC_SG_03_phase_capped, input: {country: SG, phase: 2, agent_quality_gate_passed: true}, expect: {effective_phase: 1, CALL_in_effective_actions: false}}
+  - {id: TC_SG_03_phase_capped, input: {country: SG, phase: 2}, expect: {effective_phase: 1, exploration: false}}
   # --- IN ---
   - {id: TC_IN_01_dlt_missing, input: {country: IN, chosen_action: CONFIRM, compliance: {SMS_registered: false}}, expect: {rule: C12, removed_channels: [SMS], confirm_channel: WHATSAPP}}
-  - {id: TC_IN_02_call_not_registered, input: {country: IN, phase: 2, agent_quality_gate_passed: true, chosen_action: CALL, compliance: {AI_CALL_registered: false}}, expect: {rule: C12, removed_channels: [AI_CALL], action: CONFIRM, confirm_channel: WHATSAPP}}
+  - {id: TC_IN_02_call_not_registered, input: {country: IN, chosen_action: CALL, compliance: {AI_CALL_registered: false}}, expect: {rule: C12, removed_channels: [AI_CALL], action: CONFIRM, confirm_channel: WHATSAPP}}
   - {id: TC_IN_03_message_late, input: {country: IN, chosen_action: CONFIRM, buyer_local_time: "2026-10-14T21:30"}, expect: {rule: C01, state: DEFERRED, earliest_contact_at: "2026-10-15T09:00+05:30"}}
   - {id: TC_IN_04_inferred_consent_expired, input: {country: IN, chosen_action: CONFIRM, days_since_order: 8}, expect: {rule: C18, action: REVIEW}}
   # --- xuyên biên giới, nước chưa hỗ trợ ---
-  - {id: TC_XB_01_vn_phone_th_address, input: {country: TH, phone_e164: "+84912345678", phase: 2, agent_quality_gate_passed: true, chosen_action: CALL, buyer_local_time: "2026-10-16T17:30"}, expect: {contact_packs: [TH, VN], rule: C02, state: DEFERRED, earliest_contact_at: "2026-10-17T08:00+07:00", note: "TH còn mở tới 20:00 nhưng VN đóng lúc 17:00"}}
+  - {id: TC_XB_01_vn_phone_th_address, input: {country: TH, phone_e164: "+84000000001", chosen_action: CALL, buyer_local_time: "2026-10-16T20:30"}, expect: {contact_packs: [TH, VN], rule: C02, state: DEFERRED, earliest_contact_at: "2026-10-17T08:00+07:00", note: "VN còn mở tới 21:00 nhưng TH đóng lúc 20:00; lấy mức chặt nhất"}}
   - {id: TC_UNS_01_japan, input: {ship_country: JP}, expect: {country: UNSUPPORTED, effective_phase: 0, contact_buyer: false, executed: false}}
