@@ -29,6 +29,8 @@ with tags `sha-<commit>` and `main`.
 | `app/schemas/` | Request and response models with examples |
 | `app/data/` | Order record (`docs/data-model.md`): phone normalisation and hashing, the Firestore document, the training label and snapshot row |
 | `app/risk/` | Scoring engine (features, Model 1, hard rules, tier, action) and the jobs `jobs/train.py`, `jobs/monitor.py` (`tasks/E2.3-risk-features.md`) |
+| `app/decision/` | Policy engine (E4.2): action per tier, no contact when the expected loss does not cover its cost, escalation when the buyer does not respond |
+| `config/cod_guard_rules_apac.yaml` | Rule set. Only the `tier_policy` section is read by the code today; the image copies this folder |
 | `tests/` | Contract and app tests |
 | `Dockerfile` | Production image: uv-built virtualenv, non-root user, listens on `$PORT` |
 

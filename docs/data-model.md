@@ -50,7 +50,7 @@ One document per order. It is a top-level collection with a `shop_id` field rath
 | `conversation_text` | string \| null | `OrderCreate.conversation_text` | |
 | `note` | string \| null | `OrderCreate.note` | |
 | `status` | string | system | One of `OrderStatus`; `new` on creation |
-| `scoring` | map \| null | scoring (E2.4, E2.5) | Latest run: `probability`, `risk_score`, `tier`, `expected_loss_vnd`, `hard_rules`, `top_signals`, `model_version`, `scored_at`, and `features`, the exact inputs the model saw |
+| `scoring` | map \| null | scoring (E2.4, E2.5) | Latest run: `probability`, `risk_score`, `tier`, `expected_loss_vnd`, `chosen_by`, `hard_rules`, `top_signals`, `model_version`, `scored_at`, and `features`, the exact inputs the model saw. `expected_loss_vnd` = probability × 60,000 VND until E2.5 uses the shop's costs |
 | `delivery` | map \| null | `DeliveryOutcome` | `result`, `carrier`, `tracking_code`, `occurred_at` (UTC) |
 | `created_at`, `updated_at` | timestamp | system | |
 
