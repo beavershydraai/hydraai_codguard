@@ -9,6 +9,7 @@ from app.data.phone import phone_hash, to_e164
 from app.data.store import OrderStore, phone_key
 from app.decision import policy as decisions
 from app.risk import engine
+from app.risk.features import cod_amount
 from app.schemas.common import Address
 from app.schemas.delivery import DeliveryOutcome
 from app.schemas.enums import (
@@ -144,6 +145,23 @@ def _set_decision(doc: dict, decision: Decision) -> None:
         doc.update(random_slice=False, action_probability=1.0)
 
 
+def _record_intervention(doc: dict, action: str) -> None:
+    """Keep the first completed contact assignment for training after decisions change."""
+    if not doc.get("intervention"):
+        assigned = doc.get("contact_action") == action
+        doc["intervention"] = {
+            "tier": doc.get("tier"),
+            "contact_action": action,
+            "random_slice": bool(doc.get("random_slice")) and assigned,
+            "action_probability": doc.get("action_probability", 1.0) if assigned else 1.0,
+        }
+        scoring = doc.get("scoring") or {}
+        if scoring.get("features"):
+            doc["intervention"]["features"] = dict(scoring["features"])
+            doc["intervention"]["probability"] = scoring.get("probability")
+            doc["intervention"]["province"] = doc["address"].get("province")
+
+
 def _score(
     store: OrderStore,
     doc: dict,
@@ -212,15 +230,21 @@ def score_order(
 
 
 def _release(doc: dict, now: datetime, *, confirmed=False) -> None:
+    """Clear pending contacts; an invalid COD phone still requires manual review."""
     previous = doc.get("decision") or {}
+    invalid_phone = doc.get("buyer_phone_hash") is None and cod_amount(doc) > 0
+    action = DecisionAction.HOLD_FOR_REVIEW if invalid_phone else DecisionAction.SHIP_NOW
+    _move(doc, "rescored", action)
     _set_decision(
         doc,
         Decision(
             decided_at=now,
-            action=DecisionAction.SHIP_NOW,
+            action=action,
             policy_version=previous.get("policy_version", decisions.default_policy().version),
             expected_loss_vnd=(doc.get("scoring") or {}).get("expected_loss_vnd"),
-            block_reasons=[ContactBlockReason.ALREADY_CONFIRMED] if confirmed else [],
+            block_reasons=[ContactBlockReason.ALREADY_CONFIRMED]
+            if confirmed and not invalid_phone
+            else [],
         ),
     )
 
@@ -257,6 +281,8 @@ def _edit(
         and fields.get("prepaid_vnd", doc["prepaid_vnd"]) > doc["prepaid_vnd"]
     )
     staff = doc.get("decision") and doc["decision"]["decided_by"] == "staff"
+    if deposit_paid:
+        _record_intervention(doc, "deposit")
     doc.update(changed)
     _event(doc, "edited", now, "Đã sửa đơn hàng.", actor)
     scored = _score(store, doc, now, settings=settings, policy=policy)
@@ -269,6 +295,8 @@ def _edit(
                 decision=None, contact_action="none", random_slice=False, action_probability=1.0
             )
             _move(doc, "score_unavailable")
+            if doc.get("buyer_phone_hash") is None and cod_amount(doc) > 0:
+                _release(doc, now)
     if not staff:
         if doc.get("confirmation") and not scored:
             _move(doc, "buyer_confirmed")
@@ -353,6 +381,7 @@ def apply_buyer_response(
             if doc.get("confirmation"):
                 return doc
             _editable(doc)
+            _record_intervention(doc, "link")
             if action == BuyerAction.EDIT_ADDRESS:
                 doc["confirmation"] = {"at": now, "via": "link"}
                 _edit(
@@ -372,6 +401,8 @@ def apply_buyer_response(
             else:
                 _confirm(doc, "link", now)
         else:
+            if doc["status"] != OrderStatus.CANCELLED:
+                _record_intervention(doc, "link")
             _cancel(doc, "not_ordered" if action == BuyerAction.NOT_ORDERED else "cancelled", now)
         return doc
 
@@ -394,6 +425,7 @@ def _no_response(
         return
     if call_attempts is None:
         call_attempts = sum(c.get("started_at") is not None for c in doc.get("calls", []))
+    _record_intervention(doc, engine.ACTION_NAME[previous.action])
     decision = decisions.escalate(
         RiskTier(doc["tier"]),
         previous.expected_loss_vnd or 0,
@@ -446,6 +478,8 @@ def apply_call_outcome(
         raise ValueError("update is required for an edited call")
 
     def apply(doc):
+        if doc["status"] in EDITABLE and not doc.get("confirmation"):
+            _record_intervention(doc, "call")
         if outcome in {CallOutcome.CONFIRMED, CallOutcome.EDITED}:
             if doc.get("confirmation"):
                 return doc

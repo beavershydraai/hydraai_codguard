@@ -54,7 +54,7 @@ One document per order. It is a top-level collection with a `shop_id` field rath
 | `decision` | map \| null | lifecycle (E4.1), policy (E4.2) | Current `Decision`: `decided_at`, `action`, `policy_version`, `expected_loss_vnd`, `contact_cost_vnd`, `block_reasons`, `next_action`, `next_action_at`, `decided_by`. Null until decided |
 | `score_history` | array of map | rescore (E4.1) | Earlier `scoring` maps, newest first; starts empty. `OrderDetail.score_history` combines the current score with these earlier runs |
 | `confirmation` | map \| null | buyer response, call outcome (E4.1) | `at`, `via` (`link` or `call`); set once after confirmation or a buyer correction. A confirmed order is never contacted again |
-| `intervention` | optional map | completed buyer response, call outcome, deposit update (E4.1) | First completed contact assignment: `tier`, `contact_action`, `random_slice`, `action_probability`. Saved before a response or deposit update replaces the current score or decision; preserved on later edits |
+| `intervention` | optional map | completed buyer response, call outcome, deposit update (E4.1) | First completed contact assignment: `tier`, `contact_action`, `random_slice`, `action_probability`, original address `province`, plus the original scoring `features` and `probability` when available. Saved before a response or deposit update replaces the current score or decision; preserved on later edits |
 | `cancel` | map \| null | buyer response, staff override | `reason` (`cancelled`, `not_ordered`, `shop`), `at`, `by`; buyer cancellation reasons count as failure labels, `shop` alone does not |
 | `timeline` | array of map | lifecycle (E4.1) | `OrderEvent` entries, newest first; starts with `created` |
 | `delivery` | map \| null | `DeliveryOutcome` | `result`, `carrier`, `tracking_code`, `occurred_at` (UTC) |
@@ -66,8 +66,14 @@ One document per order. It is a top-level collection with a `shop_id` field rath
   and prior scoring maps to `RiskScore` values, newest first.
 - `contact_action` describes the current decision. A confirmation can clear a pending call or link to
   `none`; the optional `intervention` map retains the completed assignment and its randomization
-  metadata. Model 2 training and monitoring use that original tier and action, falling back to the
-  top-level metadata for historical documents that have no intervention record.
+  metadata. Training and monitoring pair that original tier and action with the features captured
+  before a response changes the address or COD amount; monitoring also uses the original probability.
+  Training fits province encodings against the captured province and recomputes province encoding
+  and phone failure smoothing from the current training encodings and frozen outcome counts. This
+  keeps raw assignment inputs fixed while using the same encodings as the new serving model.
+  Monitoring retains the exact original encoded features and probability the live model produced.
+  Historical documents without captured features retain the existing feature calculation or latest
+  scoring fallback, and documents without an intervention use their top-level assignment metadata.
 - Phone history query: `buyer_phone_hash == h and placed_at < t`. It needs a composite index on
   (`buyer_phone_hash`, `placed_at`).
 - The phone key lives in Secret Manager and is the same for every shop, otherwise a phone would not match

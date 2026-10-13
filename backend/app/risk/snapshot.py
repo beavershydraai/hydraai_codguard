@@ -29,8 +29,10 @@ def fit_encodings(rows: list[tuple[dict, int, object]]) -> dict:
     p0 = sum(lbl for _, lbl, _ in rows) / len(rows)
     by = defaultdict(lambda: [0, 0])
     for d, lbl, _ in rows:
-        by[d["address"].get("province")][0] += lbl
-        by[d["address"].get("province")][1] += 1
+        assignment = d.get("intervention") or {}
+        province = assignment.get("province", d["address"].get("province"))
+        by[province][0] += lbl
+        by[province][1] += 1
     return {
         "p0": p0,
         "province": {k: (f + M_SMOOTH * p0) / (n + M_SMOOTH) for k, (f, n) in by.items()},
@@ -46,18 +48,28 @@ def build_table(docs: list[dict], rows, enc: dict) -> pd.DataFrame:
     for d, label, at in rows:
         history = by_phone.get(d.get("buyer_phone_hash"), [])
         assignment = d.get("intervention") or d
+        province = assignment.get("province", d["address"].get("province"))
+        frozen = assignment.get("features")
+        if frozen:
+            features = dict(frozen)
+            features["province_fail_rate_te"] = enc["province"].get(province, enc["p0"])
+            features["phone_fail_rate_smoothed_all"] = (
+                features["phone_failed_all"] + M_SMOOTH * enc["p0"]
+            ) / (features["phone_outcomes_all"] + M_SMOOTH)
+        else:
+            features = compute_features(d, history, d["placed_at"], enc)
         table.append(
             {
                 "order_id": d["order_id"],
                 "placed_at": d["placed_at"],
                 "final_at": at,
-                "province": d["address"].get("province"),
+                "province": province,
                 "tier": assignment.get("tier"),
                 "contact_action": assignment.get("contact_action", "none"),
                 "action_probability": assignment.get("action_probability", 1.0),
                 "random_slice": bool(assignment.get("random_slice")),
                 "is_failed": label,
-                **compute_features(d, history, d["placed_at"], enc),
+                **features,
             }
         )
     df = pd.DataFrame(table)

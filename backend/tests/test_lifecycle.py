@@ -9,6 +9,7 @@ from app.api.errors import ApiError
 from app.data.orders import order_document, training_label
 from app.decision import lifecycle, policy
 from app.risk import engine
+from app.risk.features import compute_features
 from app.schemas.common import Address
 from app.schemas.delivery import DeliveryOutcome
 from app.schemas.enums import BuyerAction, CallOutcome, DecisionAction, OrderStatus
@@ -556,22 +557,29 @@ def test_staff_decision_does_not_inherit_randomized_model_action_metadata(store,
 
 
 @pytest.mark.parametrize("verified_by", ["confirmation", "deposit"])
-def test_an_invalid_phone_edit_is_held_even_when_the_model_is_unavailable(store, monkeypatch, verified_by):
+def test_an_invalid_phone_edit_is_held_even_when_the_model_is_unavailable(
+    store, monkeypatch, verified_by
+):
     if verified_by == "deposit":
-        monkeypatch.setattr(engine, "score", lambda doc, history: scored_fields("very_high", "deposit"))
+        monkeypatch.setattr(
+            engine, "score", lambda doc, history: scored_fields("very_high", "deposit")
+        )
     lifecycle.score_order(store, store.docs["ord_test"], NOW)
     if verified_by == "confirmation":
         lifecycle.apply_buyer_response(store, "ord_test", BuyerAction.CONFIRM, None, NOW)
     monkeypatch.setattr(engine, "score", lambda doc, history: None)
-    result = lifecycle.edit_order(store, "ord_test", "shop_a",
-                                 OrderUpdate(buyer_phone="+8400000000", prepaid_vnd=30000), NOW)
+    result = lifecycle.edit_order(
+        store, "ord_test", "shop_a", OrderUpdate(buyer_phone="+8400000000", prepaid_vnd=30000), NOW
+    )
     assert result["buyer_phone_hash"] is None and result["scoring"] is None
     assert result["status"] == "pending_review"
     assert result["decision"]["action"] == "hold_for_review"
     assert result["decision"]["next_action"] is None and result["contact_action"] == "hold"
 
 
-@pytest.mark.parametrize("response", [CallOutcome.CONFIRMED, CallOutcome.CANCELLED, CallOutcome.NOT_ORDERED])
+@pytest.mark.parametrize(
+    "response", [CallOutcome.CONFIRMED, CallOutcome.CANCELLED, CallOutcome.NOT_ORDERED]
+)
 def test_completed_randomized_calls_keep_their_training_intervention(store, monkeypatch, response):
     def randomized(doc, history):
         fields = scored_fields("high", "call")
@@ -584,7 +592,10 @@ def test_completed_randomized_calls_keep_their_training_intervention(store, monk
     result = lifecycle.apply_call_outcome(store, "ord_test", response, NOW)
     assert result["decision"]["next_action"] is None
     assert result["intervention"] == {
-        "tier": "high", "contact_action": "call", "random_slice": True, "action_probability": 0.5,
+        "tier": "high",
+        "contact_action": "call",
+        "random_slice": True,
+        "action_probability": 0.5,
     }
     if response == CallOutcome.CONFIRMED:
         updated = lifecycle.edit_order(store, "ord_test", "shop_a", OrderUpdate(note="Mẫu"), NOW)
@@ -619,7 +630,51 @@ def test_escalation_keeps_the_original_randomized_contact_assignment(store, monk
     call = lifecycle.on_no_response(store, "ord_test", first["decision"]["next_action_at"])
     assert call["contact_action"] == "call"
     assert call["intervention"] == {
-        "tier": "medium", "contact_action": "link", "random_slice": True, "action_probability": 1 / 3,
+        "tier": "medium",
+        "contact_action": "link",
+        "random_slice": True,
+        "action_probability": 1 / 3,
     }
-    confirmed = lifecycle.apply_call_outcome(store, "ord_test", CallOutcome.CONFIRMED, NOW + timedelta(hours=3))
+    confirmed = lifecycle.apply_call_outcome(
+        store, "ord_test", CallOutcome.CONFIRMED, NOW + timedelta(hours=3)
+    )
     assert confirmed["intervention"] == call["intervention"]
+
+
+@pytest.mark.parametrize("correction", ["deposit", "address"])
+def test_contact_training_inputs_are_frozen_before_a_buyer_correction(
+    store, monkeypatch, correction
+):
+    def randomized(doc, history):
+        fields = scored_fields(
+            "very_high" if correction == "deposit" else "high",
+            "deposit" if correction == "deposit" else "call",
+        )
+        fields.update(random_slice=True, action_probability=0.5)
+        fields["scoring"].update(
+            chosen_by="random slice",
+            features=compute_features(doc, history, doc["placed_at"], {"p0": 0.2, "province": {}}),
+        )
+        return fields
+
+    monkeypatch.setattr(engine, "score", randomized)
+    first = lifecycle.score_order(store, store.docs["ord_test"], NOW)
+    if correction == "deposit":
+        result = lifecycle.edit_order(
+            store, "ord_test", "shop_a", OrderUpdate(prepaid_vnd=30000), NOW
+        )
+        assert result["scoring"]["features"]["cod_amount_vnd"] == 300000
+    else:
+        result = lifecycle.apply_call_outcome(
+            store,
+            "ord_test",
+            CallOutcome.EDITED,
+            NOW,
+            update=OrderUpdate(address=Address(raw="Địa chỉ mẫu chưa có số nhà")),
+        )
+        assert result["scoring"]["features"]["address_has_house_number"] == 0
+    assert result["intervention"]["features"] == first["scoring"]["features"]
+    assert result["intervention"]["probability"] == first["scoring"]["probability"]
+    assert result["intervention"]["features"]["cod_amount_vnd"] == 330000
+    assert result["intervention"]["features"]["address_has_house_number"] == 1
+    assert result["intervention"]["province"] == "Hà Nội"
