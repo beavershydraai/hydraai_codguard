@@ -71,6 +71,23 @@ def test_random_slice_then_tier_rule():
     assert engine.decide(BASE, 0.01, True, MODELS, Rng(0.01))["chosen_by"] == "tier rule"  # low
 
 
+def test_tier_rule_follows_the_policy_and_its_cost_gate(monkeypatch):
+    assert engine.TIER_RULE == {
+        "low": "none",
+        "medium": "link",
+        "high": "call",
+        "very_high": "deposit",
+    }
+    no_rng = Rng(0.99)
+    actions = [
+        engine.decide(BASE, p, True, MODELS, no_rng)["action"] for p in (0.01, 0.1, 0.3, 0.5)
+    ]
+    assert actions == ["none", "link", "call", "deposit"]
+    monkeypatch.setattr(engine, "FAIL_COST", 2_000)  # 0.1 × 2,000 = 200, less than a link (300)
+    d = engine.decide(BASE, 0.1, True, MODELS, no_rng)
+    assert (d["action"], d["chosen_by"]) == ("none", "tier rule: expected loss ≤ contact cost")
+
+
 @pytest.fixture(scope="module")
 def trained():
     docs = orders()
@@ -105,6 +122,8 @@ def test_engine_scores_with_the_latest_model(trained, tmp_path, monkeypatch):
     assert 0 <= fields["scoring"]["probability"] <= 1
     assert fields["scoring"]["model_version"] == report["version"]
     assert fields["contact_action"] in {"none", "link", "call", "deposit", "hold"}
+    scoring = fields["scoring"]
+    assert scoring["expected_loss_vnd"] == pytest.approx(scoring["probability"] * 60_000, abs=4)
 
 
 def test_engine_without_a_model_leaves_the_order_unscored(tmp_path, monkeypatch):

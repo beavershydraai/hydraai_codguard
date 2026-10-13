@@ -16,6 +16,7 @@ RUN useradd --create-home --uid 10001 app
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
 COPY --from=build /app/app ./app
+COPY config ./config
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PORT=8080

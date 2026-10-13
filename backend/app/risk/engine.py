@@ -1,5 +1,6 @@
 """Scoring a new order (docs/diagrams/action-decision.png, top lane):
-features → Model 1 → hard rules → random slice → Model 2 in switched tiers → tier rule.
+features → Model 1 → hard rules → random slice → Model 2 in switched tiers → tier policy
+(app/decision/policy.py: the tier's action, unless the expected loss does not cover its cost).
 
 The models are loaded from the bucket on first use; until a model exists, orders are stored
 unscored and the load is retried every few minutes.
@@ -14,9 +15,11 @@ from datetime import UTC, datetime
 
 import pandas as pd
 
+from app.decision import policy
 from app.risk import artifacts
 from app.risk.features import compute_features
-from app.risk.model import expected_cost, predict1
+from app.risk.model import FAIL_COST, expected_cost, predict1
+from app.schemas.enums import DecisionAction, RiskTier
 
 log = logging.getLogger(__name__)
 TIER_OPTIONS = {
@@ -25,7 +28,14 @@ TIER_OPTIONS = {
     "high": ["link", "call"],
     "very_high": ["call", "deposit"],
 }
-TIER_RULE = {"low": "none", "medium": "link", "high": "call", "very_high": "deposit"}
+ACTION_NAME = {  # DecisionAction → the name stored in contact_action and used by Model 2
+    DecisionAction.SHIP_NOW: "none",
+    DecisionAction.SEND_CONFIRMATION_LINK: "link",
+    DecisionAction.AI_CALL: "call",
+    DecisionAction.REQUIRE_DEPOSIT: "deposit",
+    DecisionAction.HOLD_FOR_REVIEW: "hold",
+}
+TIER_RULE = {t.tier.value: ACTION_NAME[t.action] for t in policy.default_policy().tiers}
 RANDOM_SLICE = 0.12  # team decision: 10–15 %
 RETRY_SECONDS = 300
 _rng = random.Random()
@@ -35,6 +45,11 @@ _cache: dict = {"at": 0.0, "models": None}
 def tier_of(p: float) -> str:
     """ponytail: fixed cut-offs until E2.5 sets them from the shop's costs."""
     return "low" if p < 0.08 else "medium" if p < 0.20 else "high" if p < 0.40 else "very_high"
+
+
+def expected_loss(p: float) -> int:
+    """ponytail: P(failed) × the default failed-delivery cost until E2.5 uses the shop's costs."""
+    return round(p * FAIL_COST)
 
 
 def load_models() -> dict | None:
@@ -81,7 +96,9 @@ def decide(features: dict, p: float, phone_valid: bool, models: dict, rng=_rng) 
         X = pd.DataFrame([features])
         costs = {a: float(expected_cost(models["model2"], X, a)[0]) for a in options}
         return {"tier": tier, "action": min(costs, key=costs.get), "chosen_by": "model 2"}
-    return {"tier": tier, "action": TIER_RULE[tier], "chosen_by": "tier rule"}
+    decision = policy.decide(RiskTier(tier), expected_loss(p), datetime.now(UTC))
+    chosen_by = "tier rule: expected loss ≤ contact cost" if decision.block_reasons else "tier rule"
+    return {"tier": tier, "action": ACTION_NAME[decision.action], "chosen_by": chosen_by}
 
 
 def score(doc: dict, history: list[dict]) -> dict | None:
@@ -104,6 +121,7 @@ def score(doc: dict, history: list[dict]) -> dict | None:
             "probability": round(p, 4),
             "risk_score": round(p * 100),
             "tier": decision["tier"],
+            "expected_loss_vnd": expected_loss(p),
             "chosen_by": decision["chosen_by"],
             "features": features,
             "model_version": model1["version"],
