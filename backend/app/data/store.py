@@ -8,6 +8,7 @@
 import hashlib
 import os
 import uuid
+from collections.abc import Callable
 from functools import lru_cache
 
 from google.api_core.exceptions import AlreadyExists
@@ -22,6 +23,7 @@ def _client() -> firestore.Client:
 
 class OrderStore:
     def __init__(self, client):
+        self.client = client
         self.orders = client.collection("orders")
 
     def create(self, doc: dict) -> dict | None:
@@ -36,6 +38,25 @@ class OrderStore:
 
     def update(self, order_id: str, fields: dict) -> None:
         self.orders.document(order_id).update(fields)
+
+    def transact(self, order_id: str, fn: Callable[[dict], dict]) -> dict:
+        """Read, transform and write one order atomically, retrying concurrent updates.
+
+        The callback runs again with the latest document after a conflict, so it must
+        not perform external side effects. Missing orders raise `order_not_found`.
+        """
+        ref = self.orders.document(order_id)
+
+        @firestore.transactional
+        def apply(transaction):
+            snapshot = ref.get(transaction=transaction)
+            if not snapshot.exists:
+                raise ValueError("order_not_found")
+            updated = fn(snapshot.to_dict())
+            transaction.set(ref, updated)
+            return updated
+
+        return apply(self.client.transaction())
 
     def history(self, phone_hash: str, before) -> list[dict]:
         """Earlier orders of a phone, all shops (composite index: buyer_phone_hash, placed_at)."""

@@ -45,16 +45,17 @@ def build_table(docs: list[dict], rows, enc: dict) -> pd.DataFrame:
     table = []
     for d, label, at in rows:
         history = by_phone.get(d.get("buyer_phone_hash"), [])
+        assignment = d.get("intervention") or d
         table.append(
             {
                 "order_id": d["order_id"],
                 "placed_at": d["placed_at"],
                 "final_at": at,
                 "province": d["address"].get("province"),
-                "tier": d.get("tier"),
-                "contact_action": d.get("contact_action", "none"),
-                "action_probability": d.get("action_probability", 1.0),
-                "random_slice": bool(d.get("random_slice")),
+                "tier": assignment.get("tier"),
+                "contact_action": assignment.get("contact_action", "none"),
+                "action_probability": assignment.get("action_probability", 1.0),
+                "random_slice": bool(assignment.get("random_slice")),
                 "is_failed": label,
                 **compute_features(d, history, d["placed_at"], enc),
             }

@@ -27,7 +27,7 @@ The backend API contract exists; the rest of the application code does not yet. 
 api/            OpenAPI contract (generated from backend/, used by frontend/)
 backend/        Python service on Cloud Run: API, decision engine, ADK agents
   app/          FastAPI app: routes (api/v1/) and request/response schemas (schemas/)
-    decision/   tier policy: action per tier, expected-loss gate, escalation (E4.2)
+    decision/   order lifecycle, rescoring, confirmed-order guard (E4.1) and tier policy (E4.2)
   config/       rule set YAML; only `tier_policy` is read by the code so far
   scoring/      hard rules, expected loss, model calls
   agents/       ADK orchestration

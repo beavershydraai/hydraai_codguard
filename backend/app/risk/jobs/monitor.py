@@ -159,14 +159,15 @@ def scored_rows(docs: list[dict]) -> pd.DataFrame:
         if not scoring.get("features"):
             continue
         label, at = final_state(d)
+        assignment = d.get("intervention") or d
         rows.append(
             {
                 "placed_at": d["placed_at"],
                 "final_at": at,
                 "is_failed": label,
-                "tier": d.get("tier"),
-                "contact_action": d.get("contact_action"),
-                "random_slice": bool(d.get("random_slice")),
+                "tier": assignment.get("tier"),
+                "contact_action": assignment.get("contact_action"),
+                "random_slice": bool(assignment.get("random_slice")),
                 "probability": scoring.get("probability"),
                 **scoring["features"],
             }

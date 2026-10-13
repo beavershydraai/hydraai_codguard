@@ -203,7 +203,7 @@ cod-guard/
 ├── api/                # OpenAPI contract (generated from backend, used by frontend)
 ├── backend/            # Cloud Run service: API, decision engine, ADK agents
 │   ├── app/            # FastAPI app: routes and request/response schemas
-│   │   └── decision/   # tier policy: action per tier, expected-loss gate, escalation
+│   │   └── decision/   # order lifecycle, rescoring, confirmed-order guard and tier policy
 │   ├── config/         # rule set YAML (tier_policy is the part in use)
 │   ├── scoring/        # hard rules, expected loss, model calls
 │   ├── agents/         # ADK orchestration

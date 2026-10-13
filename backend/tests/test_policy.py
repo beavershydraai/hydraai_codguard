@@ -47,6 +47,168 @@ def test_default_action_per_tier(tier, expected_loss, action, next_action, wait)
     assert d.policy_version == 1 and d.expected_loss_vnd == expected_loss
 
 
+@pytest.mark.parametrize("tier", [RiskTier.MEDIUM, RiskTier.HIGH, RiskTier.VERY_HIGH])
+@pytest.mark.parametrize("expected_loss", [0, 30_000])
+def test_a_confirmed_order_is_not_contacted_again(tier, expected_loss):
+    d = policy.decide(tier, expected_loss, NOW, confirmed=True)
+    assert d.action == A.SHIP_NOW
+    assert d.block_reasons == [ContactBlockReason.ALREADY_CONFIRMED]
+    assert d.contact_cost_vnd is None
+    assert d.next_action is None and d.next_action_at is None
+    assert d.expected_loss_vnd == expected_loss and d.policy_version == 1
+
+
+def test_confirmation_does_not_block_a_noncontact_decision():
+    d = policy.decide(RiskTier.LOW, 3_000, NOW, confirmed=True)
+    assert d.action == A.SHIP_NOW and d.block_reasons == []
+    d = policy.decide(RiskTier.HIGH, 30_000, NOW, confirmed=True, action=A.HOLD_FOR_REVIEW)
+    assert d.action == A.HOLD_FOR_REVIEW and d.block_reasons == []
+
+
+@pytest.mark.parametrize("confirmed", [False, True])
+def test_hard_rule_actions_are_preserved(confirmed):
+    d = policy.decide(RiskTier.LOW, 0, NOW, confirmed=confirmed, action=A.HOLD_FOR_REVIEW)
+    assert d.action == A.HOLD_FOR_REVIEW
+    assert d.contact_cost_vnd is None and d.next_action is None
+
+
+@pytest.mark.parametrize("expected_loss", [300, 301])
+@pytest.mark.parametrize("tier", [RiskTier.LOW, RiskTier.HIGH])
+def test_an_engine_contact_action_obeys_the_contact_cost_gate(tier, expected_loss):
+    d = policy.decide(tier, expected_loss, NOW, action=A.SEND_CONFIRMATION_LINK)
+    assert d.action == (A.SHIP_NOW if expected_loss == 300 else A.SEND_CONFIRMATION_LINK)
+    assert d.block_reasons == (
+        [ContactBlockReason.EXPECTED_LOSS_BELOW_COST] if expected_loss == 300 else []
+    )
+
+
+@pytest.mark.parametrize("action", [A.SEND_CONFIRMATION_LINK, A.REQUIRE_DEPOSIT])
+def test_a_contact_override_has_a_review_deadline_when_the_tier_has_no_wait(action):
+    d = policy.decide(RiskTier.LOW, 30_000, NOW, action=action)
+    assert d.action == action
+    assert d.next_action == A.HOLD_FOR_REVIEW
+    assert d.next_action_at == at(30)
+
+
+def test_an_engine_contact_action_obeys_confirmation():
+    d = policy.decide(RiskTier.LOW, 30_000, NOW, action=A.AI_CALL, confirmed=True)
+    assert d.action == A.SHIP_NOW
+    assert d.block_reasons == [ContactBlockReason.ALREADY_CONFIRMED]
+    assert d.contact_cost_vnd is None and d.next_action is None
+
+
+def test_the_engine_cannot_cancel_an_order():
+    with pytest.raises(ValueError, match="cancels"):
+        policy.decide(RiskTier.HIGH, 30_000, NOW, action=A.CANCEL)
+
+
+@pytest.mark.parametrize(
+    ("tier", "unanswered", "call_attempts"),
+    [
+        (RiskTier.MEDIUM, A.SEND_CONFIRMATION_LINK, 0),
+        (RiskTier.HIGH, A.AI_CALL, 1),
+        (RiskTier.HIGH, A.AI_CALL, 2),
+        (RiskTier.VERY_HIGH, A.REQUIRE_DEPOSIT, 0),
+    ],
+)
+def test_confirmation_stops_pending_escalations(tier, unanswered, call_attempts):
+    assert (
+        policy.escalate(
+            tier,
+            30_000,
+            at(120),
+            unanswered=unanswered,
+            call_attempts=call_attempts,
+            confirmed=True,
+        )
+        is None
+    )
+
+
+def test_unconfirmed_orders_still_contact_and_escalate():
+    first = policy.decide(RiskTier.HIGH, 30_000, NOW, confirmed=False)
+    assert first.action == A.AI_CALL and first.block_reasons == []
+    assert first.contact_cost_vnd == 1_500
+    next_decision = policy.escalate(
+        RiskTier.HIGH,
+        30_000,
+        at(30),
+        unanswered=A.AI_CALL,
+        call_attempts=1,
+        confirmed=False,
+    )
+    assert next_decision.action == A.AI_CALL
+    assert next_decision.next_action == A.HOLD_FOR_REVIEW
+
+
+def test_a_saved_escalation_action_is_preserved_after_a_policy_change():
+    revised = policy.default_policy().model_copy(deep=True, update={"version": 2})
+    d = policy.escalate(
+        RiskTier.MEDIUM,
+        30_000,
+        at(120),
+        unanswered=A.SEND_CONFIRMATION_LINK,
+        policy=revised,
+        action=A.HOLD_FOR_REVIEW,
+    )
+    assert d.action == A.HOLD_FOR_REVIEW
+    assert d.policy_version == 2
+    assert d.next_action is None and d.next_action_at is None
+
+
+@pytest.mark.parametrize("expected_loss", [300, 301])
+def test_a_saved_contact_escalation_obeys_the_contact_cost_gate(expected_loss):
+    d = policy.escalate(
+        RiskTier.HIGH,
+        expected_loss,
+        at(120),
+        unanswered=A.AI_CALL,
+        action=A.SEND_CONFIRMATION_LINK,
+    )
+    assert d.action == (A.SHIP_NOW if expected_loss == 300 else A.SEND_CONFIRMATION_LINK)
+    assert d.block_reasons == (
+        [ContactBlockReason.EXPECTED_LOSS_BELOW_COST] if expected_loss == 300 else []
+    )
+
+
+def test_confirmation_stops_a_saved_escalation_action():
+    assert (
+        policy.escalate(
+            RiskTier.MEDIUM,
+            30_000,
+            at(120),
+            unanswered=A.SEND_CONFIRMATION_LINK,
+            action=A.AI_CALL,
+            confirmed=True,
+        )
+        is None
+    )
+
+
+def test_a_saved_escalation_never_makes_a_third_call():
+    d = policy.escalate(
+        RiskTier.HIGH,
+        30_000,
+        at(60),
+        unanswered=A.AI_CALL,
+        action=A.AI_CALL,
+        call_attempts=2,
+    )
+    assert d.action == A.HOLD_FOR_REVIEW
+    assert d.block_reasons == [ContactBlockReason.ATTEMPTS_EXHAUSTED]
+
+
+def test_a_saved_escalation_cannot_cancel_an_order():
+    with pytest.raises(ValueError, match="cancels"):
+        policy.escalate(
+            RiskTier.HIGH,
+            30_000,
+            at(120),
+            unanswered=A.AI_CALL,
+            action=A.CANCEL,
+        )
+
+
 def test_medium_calls_when_the_link_gets_no_response_in_two_hours():
     first = policy.decide(RiskTier.MEDIUM, 9_000, NOW)
     assert first.contact_cost_vnd == 300

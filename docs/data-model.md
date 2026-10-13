@@ -49,12 +49,25 @@ One document per order. It is a top-level collection with a `shop_id` field rath
 | `prepaid_vnd` | int | `OrderCreate.prepaid_vnd` | Deposit or prepayment |
 | `conversation_text` | string \| null | `OrderCreate.conversation_text` | |
 | `note` | string \| null | `OrderCreate.note` | |
-| `status` | string | system | One of `OrderStatus`; `new` on creation |
+| `status` | string | lifecycle (E4.1) | One of the nine `OrderStatus` values; `new` on creation. Only the lifecycle service changes it |
 | `scoring` | map \| null | scoring (E2.4, E2.5) | Latest run: `probability`, `risk_score`, `tier`, `expected_loss_vnd`, `chosen_by`, `hard_rules`, `top_signals`, `model_version`, `scored_at`, and `features`, the exact inputs the model saw. `expected_loss_vnd` = probability × 60,000 VND until E2.5 uses the shop's costs |
+| `decision` | map \| null | lifecycle (E4.1), policy (E4.2) | Current `Decision`: `decided_at`, `action`, `policy_version`, `expected_loss_vnd`, `contact_cost_vnd`, `block_reasons`, `next_action`, `next_action_at`, `decided_by`. Null until decided |
+| `score_history` | array of map | rescore (E4.1) | Earlier `scoring` maps, newest first; starts empty. `OrderDetail.score_history` combines the current score with these earlier runs |
+| `confirmation` | map \| null | buyer response, call outcome (E4.1) | `at`, `via` (`link` or `call`); set once after confirmation or a buyer correction. A confirmed order is never contacted again |
+| `intervention` | optional map | completed buyer response, call outcome, deposit update (E4.1) | First completed contact assignment: `tier`, `contact_action`, `random_slice`, `action_probability`. Saved before a response or deposit update replaces the current score or decision; preserved on later edits |
+| `cancel` | map \| null | buyer response, staff override | `reason` (`cancelled`, `not_ordered`, `shop`), `at`, `by`; buyer cancellation reasons count as failure labels, `shop` alone does not |
+| `timeline` | array of map | lifecycle (E4.1) | `OrderEvent` entries, newest first; starts with `created` |
 | `delivery` | map \| null | `DeliveryOutcome` | `result`, `carrier`, `tracking_code`, `occurred_at` (UTC) |
 | `created_at`, `updated_at` | timestamp | system | |
 
 - Totals are not stored. `total_vnd` = items − discount + shipping fee; `cod_amount_vnd` = total − prepaid.
+- Earlier scores are stored in an array on the order for this prototype, so edits, scores, decisions and
+  status changes can be written together in one transaction. The order-detail view converts the current
+  and prior scoring maps to `RiskScore` values, newest first.
+- `contact_action` describes the current decision. A confirmation can clear a pending call or link to
+  `none`; the optional `intervention` map retains the completed assignment and its randomization
+  metadata. Model 2 training and monitoring use that original tier and action, falling back to the
+  top-level metadata for historical documents that have no intervention record.
 - Phone history query: `buyer_phone_hash == h and placed_at < t`. It needs a composite index on
   (`buyer_phone_hash`, `placed_at`).
 - The phone key lives in Secret Manager and is the same for every shop, otherwise a phone would not match
@@ -63,18 +76,27 @@ One document per order. It is a top-level collection with a `shop_id` field rath
 
 ## Training snapshot: `orders.parquet`
 
-One row per order whose delivery result gives a label. It is built by the training job from Firestore:
+One row per order whose buyer cancellation or delivery result gives a label. It is built by the training
+job from Firestore:
 
-- copy every field except `buyer_name`, `recipient_name`, `buyer_phone`, `recipient_phone` and `scoring`;
+- copy every field except `buyer_name`, `recipient_name`, `buyer_phone`, `recipient_phone`, `scoring`,
+  `status`, `decision`, `score_history`, `timeline`, `confirmation`, `cancel` and `intervention`;
 - flatten `address.*` to `address_*` and `delivery.*` to `delivery_*`; keep `items` as a list column;
 - add the label `is_failed`.
 
-`scoring` is left out because it is the output of an earlier model; training on it would leak that output
-into the new model.
+Scores and decisions are outputs of earlier models. Status, timeline, confirmation and cancellation
+records can reveal the eventual outcome. These fields are left out so the new model cannot train on its
+target or earlier predictions; `final_state()` still reads cancellation and delivery to derive the label.
+The feature table separately includes the completed intervention's assignment metadata for Model 2;
+it is excluded from the risk model's features.
 
 ### Label
 
 Only buyer-caused failures count (`COD_Guard_Epics.md`, E2.1).
+
+A buyer cancellation with `cancel.reason` equal to `cancelled` or `not_ordered` gives `is_failed = 1`.
+`cancel.at` is when that result became known. A shop cancellation alone gives no label. Otherwise the
+delivery result determines the label:
 
 | `delivery.result` | `is_failed` |
 |---|---|
@@ -105,5 +127,3 @@ mind (`GHN-DCD0A8`), no money (`GHN-DCD1A5`) → `refused` / `unreachable`; wron
    digits), not whether the prefix exists.
 2. `README.md` lists category, carrier and expected delivery time as context signals, but `OrderCreate` has
    no field for them.
-3. Where earlier scoring runs live (`OrderDetail.score_history`): an array on the order or a subcollection
-   (E4.1).
