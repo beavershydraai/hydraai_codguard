@@ -28,6 +28,7 @@ with tags `sha-<commit>` and `main`.
 | `app/api/errors.py` | Problem-details errors and the shared error responses |
 | `app/schemas/` | Request and response models with examples |
 | `app/data/` | Order record (`docs/data-model.md`): phone normalisation and hashing, the Firestore document, the training label and snapshot row |
+| `app/risk/` | Scoring engine (features, Model 1, hard rules, tier, action) and the jobs `jobs/train.py`, `jobs/monitor.py` (`tasks/E2.3-risk-features.md`) |
 | `tests/` | Contract and app tests |
 | `Dockerfile` | Production image: uv-built virtualenv, non-root user, listens on `$PORT` |
 

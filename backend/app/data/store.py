@@ -12,6 +12,7 @@ from functools import lru_cache
 
 from google.api_core.exceptions import AlreadyExists
 from google.cloud import firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 
 @lru_cache
@@ -32,6 +33,21 @@ class OrderStore:
             return None
         except AlreadyExists:
             return ref.get().to_dict()
+
+    def update(self, order_id: str, fields: dict) -> None:
+        self.orders.document(order_id).update(fields)
+
+    def history(self, phone_hash: str, before) -> list[dict]:
+        """Earlier orders of a phone, all shops (composite index: buyer_phone_hash, placed_at)."""
+        query = (
+            self.orders.where(filter=FieldFilter("buyer_phone_hash", "==", phone_hash))
+            .where(filter=FieldFilter("placed_at", "<", before))
+            .order_by("placed_at")
+        )
+        return [d.to_dict() for d in query.stream()]
+
+    def all(self) -> list[dict]:
+        return [d.to_dict() for d in self.orders.stream()]
 
 
 def get_store() -> OrderStore:
