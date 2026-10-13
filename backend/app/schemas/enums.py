@@ -133,6 +133,63 @@ class CallOutcome(StrEnum):
     UNCLEAR = "unclear"
 
 
+class CallAgent(StrEnum):
+    """Who speaks for the shop on a call.
+
+    script: Kịch bản (pre-recorded prompts and TTS; keypad first, speech as fallback) ·
+    gemini_live: Gemini Live (free conversation)
+    """
+
+    SCRIPT = "script"
+    GEMINI_LIVE = "gemini_live"
+
+
+class CallLanguage(StrEnum):
+    """Language of a call. vi: Tiếng Việt · en: Tiếng Anh"""
+
+    VI = "vi"
+    EN = "en"
+
+
+class CallTargetKind(StrEnum):
+    """Where the call controller dials.
+
+    sip: a softphone extension on Asterisk · webrtc: a browser tab registered on Asterisk ·
+    pstn: a real phone through the SIP trunk (after M4)
+    """
+
+    SIP = "sip"
+    WEBRTC = "webrtc"
+    PSTN = "pstn"
+
+
+class CallInputMethod(StrEnum):
+    """How the buyer gave the answer that decided the outcome.
+
+    dtmf: keypad · voice: speech · none: no answer
+    """
+
+    DTMF = "dtmf"
+    VOICE = "voice"
+    NONE = "none"
+
+
+class CallFailureReason(StrEnum):
+    """Why a call failed technically. A call that rang without an answer is not a failure:
+    it completes with outcome no_answer.
+
+    target_unreachable: the softphone or browser is not registered, or the trunk refused ·
+    asterisk_unavailable: the controller could not reach Asterisk (ARI) ·
+    agent_error: the script or the Gemini Live session failed ·
+    controller_error: any other error in the call controller
+    """
+
+    TARGET_UNREACHABLE = "target_unreachable"
+    ASTERISK_UNAVAILABLE = "asterisk_unavailable"
+    AGENT_ERROR = "agent_error"
+    CONTROLLER_ERROR = "controller_error"
+
+
 class CallChangeField(StrEnum):
     """Field the buyer changed during a call."""
 
@@ -205,6 +262,7 @@ class ErrorCode(StrEnum):
     FORBIDDEN = "forbidden"
     NOT_FOUND = "not_found"
     CONFLICT = "conflict"
+    CALL_NOT_ACTIVE = "call_not_active"
     CONTACT_BLOCKED = "contact_blocked"
     ORDER_NOT_EDITABLE = "order_not_editable"
     LINK_EXPIRED = "link_expired"

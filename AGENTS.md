@@ -28,13 +28,15 @@ api/            OpenAPI contract (generated from backend/, used by frontend/)
 backend/        Python service on Cloud Run: API, decision engine, ADK agents
   app/          FastAPI app: routes (api/v1/) and request/response schemas (schemas/)
     decision/   tier policy: action per tier, expected-loss gate, escalation (E4.2)
+    telephony/  call controller: Pub/Sub consumer, ARI client, call agents (runs on the Asterisk VM)
   config/       rule set YAML; only `tier_policy` is read by the code so far
   scoring/      hard rules, expected loss, model calls
   agents/       ADK orchestration
   voice/        Gemini Live session handling
     prompts/    AI call system instruction and the record_call_outcome tool
+    scripts/    scripted call: steps, prompts and key map
   tests/
-docs/           Technical notes (Gemini Live integration)
+docs/           Technical notes (Gemini Live integration, call controller)
 frontend/       Shop web app + buyer confirmation page (Firebase Hosting)
 ml/             Data prep, synthetic data generator, BigQuery ML SQL, backtest
 data/seed/      Pseudonymised demo data only
@@ -50,6 +52,7 @@ scripts/        Demo reset, abuse simulation, call test runner
 - Data: BigQuery ML boosted trees (risk model), BigQuery (training data, analytics), Firestore (app state)
 - Secrets in Secret Manager; region `asia-southeast1`. Exception: Gemini Live API sessions run in `GEMINI_LIVE_LOCATION` (`us-central1`), because the Live API is not served from Asia regions.
 - Model IDs come from environment variables (`GEMINI_MODEL`, `GEMINI_LIVE_MODEL`). Never hard-code them.
+- Telephony: Asterisk and the call controller run on the VM `codguard-asterisk` (`us-central1`); the backend sends them call jobs on the Pub/Sub topic `call-jobs`. Read `docs/call-controller.md` before changing call code.
 - Before changing voice code or the call prompt, read `docs/gemini-live.md`. Live models changed in September 2026 (`gemini-3.8-live`), and older tutorials use config that 3.8 rejects.
 
 ## Commands
@@ -77,6 +80,7 @@ Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 - Any change to a schema or route must re-export `api/openapi.yaml` in the same PR. `tests/test_contract.py` fails when the file is out of date.
 - Routes that are not implemented yet return 501 `not_implemented`. The frontend works against the Prism mock until then; see `api/README.md`.
 - Every schema example must validate against its model (also enforced by the tests), because the mock server returns those examples.
+- Endpoints for the call controller have the tag `internal` and accept only a Google ID token of a controller service account. The Pub/Sub call job is documented as the `call-job` webhook. See `docs/call-controller.md`.
 
 ## Domain rules
 

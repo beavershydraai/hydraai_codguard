@@ -14,7 +14,7 @@ Research notes and integration rules for the voice workstream (E5). Checked on 8
 | Platform | Gemini Enterprise Agent Platform (formerly Vertex AI), with the project's service account | Same project and credits as the rest of the stack, no API key to manage. |
 | Location (`GEMINI_LIVE_LOCATION`) | `us-central1` | Live models are not served from `asia-southeast1` or the `global` endpoint. 3.8 Live runs only in `us`, `eu` and `us-central1`. |
 | SDK | `google-genai>=2.29,<3` (Python) | 2.x speaks the 3.8 Live protocol. Version 3.0 removes `session.send()` and `LiveConnectConfig.generation_config`. |
-| Topology | Browser ⇄ backend WebSocket on Cloud Run ⇄ Live API | Credentials, order data and the tool stay server-side, and the backend enforces call caps (E1.4). |
+| Topology | Softphone, browser or phone ⇄ Asterisk ⇄ call controller on the Asterisk VM (`us-central1`) ⇄ Live API. See [call-controller.md](call-controller.md). | Credentials, order data and the tool stay server-side, the session runs in the Live API's region, and the backend enforces call caps (E1.4) before it publishes a call. |
 | Orchestration | A plain `google-genai` session in `backend/voice/`. ADK only starts the call (E4.7). | ADK's Live docs list the 2.5 and 3.1 Live models but not 3.8 yet, and the outcome tool needs custom handling anyway. |
 | Outcome tool | `record_call_outcome`, declared `BLOCKING` | The server cancels a blocking call when the buyer starts talking, so a half-made decision is never recorded. |
 
@@ -40,10 +40,10 @@ What 3.8 Live changes compared with older tutorials:
 ## Where it runs
 
 - The rest of the stack stays in `asia-southeast1`. Only the Live client uses `GEMINI_LIVE_LOCATION=us-central1`. Create a separate `genai.Client` for it rather than changing `GOOGLE_CLOUD_LOCATION` for other Gemini calls.
-- Every turn makes a round trip between Singapore and Iowa. Measure the latency in the spike before deciding where the voice service runs.
+- The Live session runs in the call controller on the Asterisk VM, also in `us-central1`, so turns do not go through Singapore. Measure the latency from Vietnam in the spike.
 - Audio and order details are processed in the US. That is fine for pseudonymised demo data. A production rollout needs a cross-border transfer review under Vietnam's personal data protection law.
 - Agent Platform allows up to 1,000 concurrent Live sessions per project.
-- Cloud Run treats each WebSocket as a long-running request, which is cut at the service's request timeout (5 minutes by default, 60 at most). Set the backend's timeout above the longest call. An instance with an open WebSocket is billed as active.
+- The backend on Cloud Run does not hold the call open; the controller does. Cloud Run would cut a WebSocket at its request timeout and bill the instance as active for the whole call.
 
 ## Session setup
 
@@ -160,8 +160,8 @@ The backend renders one JSON object into the instruction for each call. Pseudony
 
 ## Call flow
 
-1. The buyer answers in the browser phone, and the backend opens the Live session.
-2. Once the session is set up, the backend sends the start event:
+1. The buyer answers, and the call controller opens the Live session.
+2. Once the session is set up, the controller sends the start event:
 
    ```python
    await session.send_client_content(
@@ -170,12 +170,12 @@ The backend renders one JSON object into the instruction for each call. Pseudony
    )
    ```
 
-3. Stream microphone audio with `send_realtime_input(audio=types.Blob(data=chunk, mime_type="audio/pcm;rate=16000"))` and forward the model's audio to the browser. On `server_content.interrupted`, tell the browser to drop its playback queue at once.
+3. Stream the caller's audio with `send_realtime_input(audio=types.Blob(data=chunk, mime_type="audio/pcm;rate=16000"))` and send the model's audio back to Asterisk. On `server_content.interrupted`, drop the queued audio at once.
 4. Run the timers. These are starting values; tune them in E9.2.
    - No buyer speech for 8 s after the model's turn: send `[NO_RESPONSE]` once. Still nothing 8 s later: end the call.
    - At 4 minutes, send `[TIME_UP]`. At 5 minutes, hang up.
 5. When `record_call_outcome` arrives, validate it, keep it as the provisional outcome and reply (see the next section). If a `tool_call_cancellation` message lists its id, drop it.
-6. After an `ok` reply, wait for the model's closing turn to finish. The server sends `turn_complete` once it estimates playback has ended. Give the browser a moment to drain its queue, then close the session.
+6. After an `ok` reply, wait for the model's closing turn to finish. The server sends `turn_complete` once it estimates playback has ended. Give the queued audio a moment to play out, then close the session.
 7. However the call ends, commit exactly one outcome: the last accepted `record_call_outcome`. Without one, commit `NO_ANSWER` if the buyer never spoke and `UNCLEAR` if they did. Store the outcome, the `summary` and both transcripts on the order. An `EDITED` outcome applies the changes and triggers a rescore (E5.4).
 
 | Event | Sent when | What the model does |
@@ -248,6 +248,8 @@ The model only talks and reports the buyer's answer. Keep these rules in code, w
 Writing these rules into the prompt would not enforce them.
 
 ## Browser audio (E5.2)
+
+With the call controller, the browser joins over WebRTC through Asterisk ([call-controller.md](call-controller.md)), and Asterisk carries the audio. The notes below apply only to a direct browser-to-backend prototype.
 
 - Capture with `getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } })`.
 - Resample to 16 kHz mono 16-bit PCM in an AudioWorklet and send 20–40 ms chunks (640–1,280 bytes). Do not buffer more than that.
