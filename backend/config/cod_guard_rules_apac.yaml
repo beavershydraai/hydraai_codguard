@@ -224,6 +224,24 @@ core_parameters:
   exploration: {epsilon: 0.05, segments: ALL}   # ASSUMPTION; người bán quyết định tỷ lệ và phân khúc (Baseline A 7.2)
   checkout: {payment_step_integrated: false, require_prepaid_enabled: false, require_prepaid_min_loss: null}
 
+# ---------------------------------------------------------------------------
+# Policy mặc định theo tier (E4.2). Đây là mục backend ĐANG CHẠY: app/decision/policy.py đọc mục này,
+# validate bằng schema Policy của API (app/schemas/shops.py). Các tầng L1-L4 ở dưới chưa được cài.
+# - Chỉ liên hệ khi expected_loss > chi phí của hành động (ShopSettings); không thì gửi ngay.
+# - AI gọi tối đa 2 lần mỗi đơn, cách nhau ít nhất 30 phút; hết lượt mà không nghe máy thì chờ duyệt.
+# - Bước leo thang không có phản hồi (ví dụ Medium: AI gọi sau link) cũng hết thì chờ duyệt.
+# Shop đổi policy thì tạo version mới, chỉ áp cho quyết định sau effective_from (E7.6).
+# ---------------------------------------------------------------------------
+tier_policy:
+  version: 1
+  effective_from: "2026-10-13T00:00:00+07:00"
+  updated_by: system
+  tiers:
+    - {tier: low, action: ship_now, if_no_response: null, no_response_after_minutes: null}
+    - {tier: medium, action: send_confirmation_link, if_no_response: ai_call, no_response_after_minutes: 120}
+    - {tier: high, action: ai_call, if_no_response: hold_for_review, no_response_after_minutes: 30}
+    - {tier: very_high, action: require_deposit, if_no_response: hold_for_review, no_response_after_minutes: 1440}
+
 permissions:   # Baseline A, ma trận quyền; "deny" luôn thắng
   agent:
     allow: [collect_evidence, converse, propose_change, emit_agent_output]
