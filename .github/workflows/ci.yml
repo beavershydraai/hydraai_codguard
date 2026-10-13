@@ -101,7 +101,9 @@ jobs:
       GCP_WIF_PROVIDER: projects/186430269525/locations/global/workloadIdentityPools/github/providers/github-oidc
       GCP_DEPLOYER_SA: codguard-deployer@ai-codguard.iam.gserviceaccount.com
       GCP_RUNTIME_SA: codguard-runtime@ai-codguard.iam.gserviceaccount.com
+      GCP_TRAINER_SA: codguard-trainer@ai-codguard.iam.gserviceaccount.com
       SERVICE: codguard-api
+      DATA_ENV: FIRESTORE_DATABASE=vn-synthetic,MODEL_BUCKET=ai-codguard-ml
       SOURCE_IMAGE: ghcr.io/${{ github.repository }}/backend
     steps:
       - name: Image names
@@ -130,11 +132,21 @@ jobs:
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --service-account "$GCP_RUNTIME_SA" --allow-unauthenticated \
             --port 8080 --cpu 1 --memory 512Mi --min-instances 0 --max-instances 2 \
-            --update-env-vars "FIRESTORE_DATABASE=vn-synthetic,MODEL_URI=gs://ai-codguard-ml/synthetic/models/v2/model1.pkl" \
+            --update-env-vars "$DATA_ENV" --remove-env-vars MODEL_URI \
             --update-secrets "PHONE_HASH_KEY=phone-hash-key-synthetic:latest,INTAKE_API_KEYS=intake-api-keys:latest" --quiet
           URL=$(gcloud run services describe "$SERVICE" --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" --format 'value(status.url)')
           echo "URL=$URL" >> "$GITHUB_ENV"
+      - name: Deploy the training and monitoring jobs
+        run: |
+          # Same image as the service; run on demand (train) or daily by Cloud Scheduler (monitor).
+          for job in train monitor; do
+            gcloud run jobs deploy "codguard-$job" --image "$TARGET_IMAGE" \
+              --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+              --service-account "$GCP_TRAINER_SA" --command python --args="-m,app.risk.jobs.$job" \
+              --cpu 1 --memory 2Gi --task-timeout 30m --max-retries 0 \
+              --set-env-vars "$DATA_ENV,RETRAIN_MODE=on_demand,REGION=$GCP_REGION" --quiet
+          done
       - name: Check the deployed service
         run: |
           echo "Deployed \`$TAG\` to $URL ([API docs]($URL/docs))" >> "$GITHUB_STEP_SUMMARY"

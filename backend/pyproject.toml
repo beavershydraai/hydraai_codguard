@@ -4,11 +4,16 @@ version = "0.1.0"
 description = "COD Guard API: COD order risk scoring, decisions and buyer verification"
 requires-python = ">=3.12"
 dependencies = [
+    "evidently>=0.7.23",
     "fastapi>=0.115",
     "google-cloud-firestore>=2.34.1",
+    "google-cloud-storage>=3.17.0",
+    "pandas>=3.0.6",
+    "pyarrow>=26.0.0",
     "pydantic>=2.9",
     "python-multipart>=0.0.9",
     "pyyaml>=6.0",
+    "scikit-learn>=1.9.1",
     "uvicorn[standard]>=0.30",
 ]
 
