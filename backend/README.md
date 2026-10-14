@@ -25,6 +25,9 @@ with tags `sha-<commit>` and `main`.
 |---|---|
 | `app/main.py` | App factory, OpenAPI settings |
 | `app/api/v1/` | Routes: `shop_app.py` (shop web app), `external.py` (intake, buyer page, demo) |
+| `app/api/v1/auth.py` | `POST /auth/login` for the shop app |
+| `app/api/security.py` | Security schemes and `CurrentUser`, the dependency that verifies the bearer token |
+| `app/auth.py` | Admin account from the environment, token signing and verification |
 | `app/api/errors.py` | Problem-details errors and the shared error responses |
 | `app/schemas/` | Request and response models with examples |
 | `app/data/` | Order record (`docs/data-model.md`): phone normalisation and hashing, the Firestore document, the training label and snapshot row |
@@ -36,6 +39,29 @@ with tags `sha-<commit>` and `main`.
 | `Dockerfile` | Production image: uv-built virtualenv, non-root user, listens on `$PORT` |
 
 See `../api/README.md` for how the frontend uses the contract.
+
+## Sign-in (stand-in for Firebase Auth, E7.1)
+
+`POST /api/v1/auth/login` takes `{"username", "password"}` and returns a bearer token (HS256 JWT,
+valid 12 hours) plus the user. There is one account, read from the environment:
+
+| Variable | Use |
+|---|---|
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | The account (`admin` / `admin1234` in `.env.example`, local only) |
+| `AUTH_TOKEN_SECRET` | HMAC key for the tokens; changing it signs everyone out |
+| `ADMIN_SHOP_ID`, `ADMIN_EMAIL` | Optional: the account's shop (default `shop_demo`) and email |
+
+Sign-in is disabled until the first three are set. A route that reads or changes shop data takes a
+`user: CurrentUser` parameter, which answers 401 for a missing, invalid or expired token and
+gives the route the user's `shop_id` and role. `GET /api/v1/me` is the first such route. The
+router-level `bearer_auth` dependency only declares the scheme in the contract; it checks nothing.
+
+```bash
+ADMIN_USERNAME=admin ADMIN_PASSWORD=admin1234 AUTH_TOKEN_SECRET=dev \
+  uv run uvicorn app.main:app --reload --port 8080
+curl -s -X POST localhost:8080/api/v1/auth/login -H 'content-type: application/json' \
+  -d '{"username": "admin", "password": "admin1234"}'
+```
 
 ## Order lifecycle services (E4.1)
 
@@ -55,8 +81,8 @@ An invalid-phone hard rule can still hold a confirmed order for review; it sched
 Staff decisions retain their status during rescoring. In the demo, increasing `prepaid_vnd` on an
 engine-decided order awaiting a deposit releases it after rescoring, unless the phone is invalid.
 
-Shop order-detail and edit routes stay at `501 not_implemented` until Firebase token verification can
-provide a trusted shop identity. The lifecycle functions are available for integration by those routes;
+Shop order-detail and edit routes stay at `501 not_implemented` until they are wired to the lifecycle;
+the trusted shop identity now comes from `CurrentUser` (see "Sign-in"). The lifecycle functions are available for integration by those routes;
 buyer-page tokens, call sessions, contact limits and timer scheduling belong to their own epics.
 
 ## ADK orchestration (E4.7)

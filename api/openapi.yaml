@@ -14,6 +14,56 @@ info:
     - Lists use cursor pagination: pass `next_cursor` back as `cursor`.
   version: 0.1.0
 paths:
+  /api/v1/auth/login:
+    post:
+      tags:
+      - auth
+      summary: Sign in to the shop app
+      description: 'Exchanges a username and password for a bearer access token valid for 12 hours. A
+        stand-in for Firebase Auth (E7.1): the only account is the admin account configured on the server.'
+      operationId: login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Wrong username or password.
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Validation error
+                status: 422
+                code: validation_error
+                errors:
+                - loc:
+                  - body
+                  - password
+                  msg: String should have at least 1 character
+                  type: string_too_short
   /api/v1/me:
     get:
       tags:
@@ -38,9 +88,9 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
   /api/v1/shop:
     get:
       tags:
@@ -65,9 +115,9 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
     patch:
       tags:
       - shop
@@ -97,7 +147,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
         '403':
           description: Authenticated but not allowed (e.g. staff changing policy).
           content:
@@ -128,7 +178,7 @@ paths:
                   msg: String should match pattern '^\+?[0-9]{9,15}$'
                   type: string_pattern_mismatch
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
   /api/v1/shop/policy:
     get:
       tags:
@@ -153,9 +203,9 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
     put:
       tags:
       - shop
@@ -187,7 +237,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
         '403':
           description: Authenticated but not allowed (e.g. staff changing policy).
           content:
@@ -218,7 +268,7 @@ paths:
                   msg: String should match pattern '^\+?[0-9]{9,15}$'
                   type: string_pattern_mismatch
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
   /api/v1/shop/policy/versions:
     get:
       tags:
@@ -246,9 +296,9 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
   /api/v1/orders:
     get:
       tags:
@@ -257,7 +307,7 @@ paths:
       description: Filter by status and tier. The manual review queue is `status=pending_review`.
       operationId: list_orders
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
       parameters:
       - name: status
         in: query
@@ -350,7 +400,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
         '422':
@@ -377,7 +427,7 @@ paths:
       description: Scoring runs asynchronously; poll the order to see the score.
       operationId: create_order
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -400,7 +450,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
         '409':
@@ -476,7 +526,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
         '422':
           description: Request body or parameters failed validation. See `errors`.
           content:
@@ -495,7 +545,7 @@ paths:
                   msg: String should match pattern '^\+?[0-9]{9,15}$'
                   type: string_pattern_mismatch
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
   /api/v1/orders/{order_id}:
     get:
       tags:
@@ -503,7 +553,7 @@ paths:
       summary: 'Order page: score, reasons, decision, contacts, calls, timeline'
       operationId: get_order
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
       parameters:
       - name: order_id
         in: path
@@ -531,7 +581,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
         '404':
@@ -570,7 +620,7 @@ paths:
       description: Triggers a new scoring run. 409 `order_not_editable` once shipped.
       operationId: update_order
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
       parameters:
       - name: order_id
         in: path
@@ -604,7 +654,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
         '404':
@@ -656,7 +706,7 @@ paths:
       description: Recorded in the audit log. The action must be in `allowed_overrides` of the order.
       operationId: override_order
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
       parameters:
       - name: order_id
         in: path
@@ -690,7 +740,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
         '404':
@@ -743,7 +793,7 @@ paths:
         the call is not allowed.'
       operationId: start_call
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
       parameters:
       - name: order_id
         in: path
@@ -771,7 +821,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
         '404':
@@ -814,7 +864,7 @@ paths:
       summary: Call status and result (poll during a live call)
       operationId: get_call
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
       parameters:
       - name: call_id
         in: path
@@ -840,7 +890,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
         '404':
@@ -892,7 +942,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
         '422':
           description: Request body or parameters failed validation. See `errors`.
           content:
@@ -911,7 +961,7 @@ paths:
                   msg: String should match pattern '^\+?[0-9]{9,15}$'
                   type: string_pattern_mismatch
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
   /api/v1/delivery-outcomes/import:
     post:
       tags:
@@ -954,7 +1004,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
         '422':
           description: Request body or parameters failed validation. See `errors`.
           content:
@@ -973,7 +1023,7 @@ paths:
                   msg: String should match pattern '^\+?[0-9]{9,15}$'
                   type: string_pattern_mismatch
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
   /api/v1/dashboard/summary:
     get:
       tags:
@@ -981,7 +1031,7 @@ paths:
       summary: ROI dashboard
       operationId: get_dashboard_summary
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
       parameters:
       - name: from
         in: query
@@ -1013,7 +1063,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
         '422':
@@ -1057,9 +1107,9 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
   /api/v1/intake/orders:
     post:
       tags:
@@ -1093,7 +1143,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
         '422':
           description: Request body or parameters failed validation. See `errors`.
           content:
@@ -1279,7 +1329,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
         '403':
           description: Authenticated but not allowed (e.g. staff changing policy).
           content:
@@ -1305,7 +1355,7 @@ paths:
                 code: rate_limited
                 detail: Demo rate limit reached. Try again in a minute.
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
   /api/v1/demo/spam-simulation:
     post:
       tags:
@@ -1330,7 +1380,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
         '403':
           description: Authenticated but not allowed (e.g. staff changing policy).
           content:
@@ -1356,7 +1406,7 @@ paths:
                 code: rate_limited
                 detail: Demo rate limit reached. Try again in a minute.
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
 components:
   schemas:
     ActionCount:
@@ -2379,6 +2429,62 @@ components:
       - policy
       - points
       title: LiftSeries
+    LoginRequest:
+      properties:
+        username:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Username
+        password:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Password
+      additionalProperties: false
+      type: object
+      required:
+      - username
+      - password
+      title: LoginRequest
+      examples:
+      - password: admin1234
+        username: admin
+    LoginResponse:
+      properties:
+        access_token:
+          type: string
+          title: Access Token
+          description: 'Send as `Authorization: Bearer <token>`.'
+        token_type:
+          type: string
+          const: bearer
+          title: Token Type
+          default: bearer
+        expires_at:
+          type: string
+          format: date-time
+          title: Expires At
+          description: The token stops working after this time.
+        user:
+          $ref: '#/components/schemas/Me'
+      additionalProperties: false
+      type: object
+      required:
+      - access_token
+      - expires_at
+      - user
+      title: LoginResponse
+      examples:
+      - access_token: example-access-token
+        expires_at: '2026-10-15T08:00:00+07:00'
+        token_type: bearer
+        user:
+          display_name: Admin
+          email: admin@codguard.local
+          role: owner
+          shop_id: shop_demo
+          user_id: usr_admin
     Me:
       properties:
         user_id:
@@ -3701,9 +3807,10 @@ components:
       - action
       title: TierPolicy
   securitySchemes:
-    firebaseAuth:
+    bearerAuth:
       type: http
-      description: 'Firebase ID token of a shop user (role in custom claims: owner or staff).'
+      description: Access token of a shop user from `POST /api/v1/auth/login` (role owner or staff). Firebase
+        ID tokens will replace it (E7.1).
       scheme: bearer
       bearerFormat: JWT
     intakeApiKey:
@@ -3712,6 +3819,8 @@ components:
       in: header
       name: X-Api-Key
 tags:
+- name: auth
+  description: Sign-in for the shop app.
 - name: me
   description: Signed-in user.
 - name: shop

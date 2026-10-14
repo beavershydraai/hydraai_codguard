@@ -79,6 +79,7 @@ Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 
 - The contract is defined in code: Pydantic models in `backend/app/schemas/` and routes in `backend/app/api/v1/`. `api/openapi.yaml` is generated from them and committed.
 - Any change to a schema or route must re-export `api/openapi.yaml` in the same PR. `tests/test_contract.py` fails when the file is out of date.
+- Shop app sign-in: `POST /api/v1/auth/login` with the one admin account from `ADMIN_USERNAME` / `ADMIN_PASSWORD`; tokens are signed with `AUTH_TOKEN_SECRET`. It stands in for Firebase Auth (E7.1). Every route that reads or changes shop data takes `user: CurrentUser` (`app/api/security.py`) and scopes its work to `user.shop_id`; the router-level `bearer_auth` only declares the scheme.
 - Routes that are not implemented yet return 501 `not_implemented`. The frontend works against the Prism mock until then; see `api/README.md`.
 - Every schema example must validate against its model (also enforced by the tests), because the mock server returns those examples.
 

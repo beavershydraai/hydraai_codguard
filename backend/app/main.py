@@ -12,6 +12,7 @@ from app.api.v1 import router as v1_router
 API_VERSION = "0.1.0"
 
 TAGS = [
+    {"name": "auth", "description": "Sign-in for the shop app."},
     {"name": "me", "description": "Signed-in user."},
     {"name": "shop", "description": "Shop settings and tier policy."},
     {"name": "orders", "description": "Order inbox, order page, edits, overrides, manual calls."},
