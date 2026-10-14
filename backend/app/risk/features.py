@@ -26,7 +26,7 @@ SIGNALS = {
     "placed_hour_vn": ("order_behavior", "Hour the order was placed"),
     "placed_dow": ("order_behavior", "Day of the week"),
     "is_night": ("order_behavior", "Placed at night"),
-    "address_has_house_number": ("address_quality", "Address missing a house number"),
+    "address_missing_house_number": ("address_quality", "Address missing a house number"),
     "address_parts_filled": ("address_quality", "Address completeness"),
     "province_fail_rate_te": ("address_quality", "Failed delivery rate of the province"),
     "is_gift": ("context", "Gift order"),
@@ -86,7 +86,7 @@ def compute_features(order: dict, history: list[dict], at, enc: dict) -> dict:
         "placed_dow": local.weekday(),
         "is_night": int(local.hour >= 22 or local.hour < 6),
         # address quality
-        "address_has_house_number": has_house_number(order["address"]),
+        "address_missing_house_number": 1 - has_house_number(order["address"]),
         "address_parts_filled": sum(
             order["address"].get(k) is not None for k in ("street", "ward", "province")
         ),

@@ -56,7 +56,7 @@ scripts/        Demo reset, abuse simulation, call test runner
 - The login page calls `POST /api/v1/auth/login` (`src/lib/auth.ts`) and keeps the token in the Zustand auth store; a 401 from any call signs the user out.
 - AI: Gemini (signal extraction and reasons), Gemini Live API (voice), Agent Development Kit (orchestration)
 - Data: BigQuery ML boosted trees (risk model), BigQuery (training data, analytics), Firestore (app state)
-- Secrets in Secret Manager; region `asia-southeast1`. Exception: Gemini Live API sessions run in `GEMINI_LIVE_LOCATION` (`us-central1`), because the Live API is not served from Asia regions.
+- Secrets in Secret Manager; region `asia-southeast1`. Exceptions: the Gemini assessment (`GEMINI_MODEL`, `gemini-3.1-flash-lite` in `ci.yml`) calls Vertex AI in `GOOGLE_CLOUD_LOCATION=global`, because that model is not served from `asia-southeast1`; Gemini Live API sessions run in `GEMINI_LIVE_LOCATION` (`us-central1`), because the Live API is not served from Asia regions.
 - Model IDs come from environment variables (`GEMINI_MODEL`, `GEMINI_LIVE_MODEL`). Never hard-code them.
 - Before changing voice code or the call prompt, read `docs/gemini-live.md`. Live models changed in September 2026 (`gemini-3.8-live`), and older tutorials use config that 3.8 rejects.
 - The pipeline is written against `google-adk` 2.x (`>=2.11,<3` in `backend/pyproject.toml`). ADK 2.0 replaced the template workflows with a graph engine: most tutorials online are still 1.x, and the 1.x pattern (`SequentialAgent`, subclassing `BaseAgent` and overriding `_run_async_impl`) is ignored without an error on 2.x. Use `Workflow` with function nodes.
@@ -76,8 +76,8 @@ Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 | Inspect the ADK pipeline | `uv run adk web app` (the pipeline is listed as `agents`) |
 | Backend lint and format | `uv run ruff check . && uv run ruff format --check .` |
 | Export the API contract | `uv run python -m app.openapi_export` (writes `api/openapi.yaml`) |
-| Train the risk model | `uv run python -m app.risk.jobs.train` (env `FIRESTORE_DATABASE`, and `MODEL_BUCKET` or a local `MODEL_DIR`); in the cloud: `gcloud run jobs execute codguard-train` |
-| Monitor the models | `uv run python -m app.risk.jobs.monitor` (same env); in the cloud: Cloud Run job `codguard-monitor`, daily |
+| Train the risk model | `uv run python -m app.risk.jobs.train` (env `FIRESTORE_DATABASE`, and `MODEL_BUCKET` or a local `MODEL_DIR`); in the cloud: `gcloud run jobs execute codguard-train`. Run it after every deploy that changes the feature set: scoring fails until a model with the new columns is promoted |
+| Monitor the models | `uv run python -m app.risk.jobs.monitor` (same env); in the cloud: Cloud Run job `codguard-monitor`, run daily at 02:00 Vietnam time by the Cloud Scheduler job `codguard-monitor-daily`, which was created in GCP by hand, not by `ci.yml` |
 | Build and run the backend image | `docker build -t codguard-backend backend` then `docker run -p 8080:8080 codguard-backend` (from the repo root) |
 | Mock API for the frontend | Built in: `src/mocks/` answers 501 endpoints (`VITE_API_MOCK=fallback`, default) or everything (`all`). Prism with the contract's fixed examples: `pnpm mock` from `frontend/` |
 | Install frontend dependencies | `pnpm install` (from `frontend/`, as are the frontend commands below) |

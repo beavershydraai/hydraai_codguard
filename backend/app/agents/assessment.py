@@ -34,7 +34,7 @@ FEATURES = frozenset(
         "placed_hour_vn",
         "placed_dow",
         "is_night",
-        "address_has_house_number",
+        "address_missing_house_number",
         "address_parts_filled",
         "province_fail_rate_te",
         "is_gift",
@@ -65,9 +65,18 @@ class AssessmentResult(BaseModel):
     model: str | None = None
 
 
+# A Reason as the model returns it. Vertex AI rejects `examples` in a response schema, which the
+# API model `Reason` carries, so the agents get this copy without them (and no docstring, which
+# would be sent as the schema description).
+class _Pick(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text_vi: str = Field(max_length=200)
+    signal_keys: list[str] = Field(min_length=1)
+
+
 class _Selection(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    reasons: list[Reason] = Field(max_length=3)
+    reasons: list[_Pick] = Field(max_length=3)
 
 
 def _numeric(value) -> bool:
@@ -137,8 +146,8 @@ def _candidates(features: dict) -> list[dict]:
         if outcomes or count("phone_orders_all"):
             raise ValueError("Conflicting new-phone evidence")
         add("This phone has no past orders.", "phone_is_new")
-    if features.get("address_has_house_number") == 0:
-        add("The address is missing a house number.", "address_has_house_number")
+    if features.get("address_missing_house_number") == 1:
+        add("The address is missing a house number.", "address_missing_house_number")
     parts = count("address_parts_filled")
     if parts is not None and parts < 3:
         add(f"The address has only {parts} of the 3 required parts.", "address_parts_filled")
@@ -209,7 +218,9 @@ async def _run(context: dict, *, shop_id: str, model: BaseLlm) -> list[dict]:
     runner = Runner(app_name=app_name, node=workflow, session_service=sessions)
     result = None
     try:
-        message = types.Content(role="user", parts=[types.Part(text=json.dumps(context))])
+        # Plain Vietnamese: with \u escapes the model miscopies the candidate reasons.
+        text = json.dumps(context, ensure_ascii=False)
+        message = types.Content(role="user", parts=[types.Part(text=text)])
         async for event in runner.run_async(
             user_id=shop_id,
             session_id=session.id,

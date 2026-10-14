@@ -145,8 +145,8 @@ async def assess_order(node_input: dict) -> dict:
     result = AssessmentResult.model_validate(
         await assessment.assess(deepcopy(node_input["order"] | fields), log=pipe.log, now=now)
     )
-    if result.status == "quota_exhausted":
-        raise ValueError("Assessment budget exhausted")
+    # Over the daily budget the order goes on like `disabled`: the engine decides, without Gemini
+    # reasons. Raising here held every later order of the day for review.
     fields = deepcopy(fields)
     fields["scoring"]["reasons"] = [reason.model_dump() for reason in result.reasons]
     fields["scoring"]["assessment"] = result.model_dump(exclude={"reasons"}, exclude_none=True)

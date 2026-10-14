@@ -672,9 +672,9 @@ def test_contact_training_inputs_are_frozen_before_a_buyer_correction(
             NOW,
             update=OrderUpdate(address=Address(raw="Địa chỉ mẫu chưa có số nhà")),
         )
-        assert result["scoring"]["features"]["address_has_house_number"] == 0
+        assert result["scoring"]["features"]["address_missing_house_number"] == 1
     assert result["intervention"]["features"] == first["scoring"]["features"]
     assert result["intervention"]["probability"] == first["scoring"]["probability"]
     assert result["intervention"]["features"]["cod_amount_vnd"] == 330000
-    assert result["intervention"]["features"]["address_has_house_number"] == 1
+    assert result["intervention"]["features"]["address_missing_house_number"] == 0
     assert result["intervention"]["province"] == "Hà Nội"

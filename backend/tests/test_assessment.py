@@ -44,7 +44,7 @@ DOC = {
             "phone_failed_all": 2,
             "phone_outcomes_all": 4,
             "phone_is_new": 0,
-            "address_has_house_number": 1,
+            "address_missing_house_number": 0,
             "address_parts_filled": 3,
             "phone_orders_24h": 1,
             "cod_vs_phone_avg_ratio": 1.0,
@@ -66,7 +66,7 @@ class FakeModel(BaseLlm):
     async def generate_content_async(self, llm_request, stream=False):
         texts = [p.text for c in llm_request.contents for p in c.parts if p.text]
         payload = json.loads(texts[-1])
-        self.requests.append({"input": payload, "request": str(llm_request)})
+        self.requests.append({"input": payload, "request": str(llm_request), "text": texts[-1]})
         await asyncio.sleep(self.delay)
         response = self.responses.pop(0) if self.responses else {"reasons": [REASON]}
         if isinstance(response, Exception):
@@ -165,10 +165,10 @@ async def test_missing_or_invalid_verifier_output_fails_the_assessment(response)
 
 async def test_verifier_cannot_add_evidence_the_analyst_did_not_select():
     doc = deepcopy(DOC)
-    doc["scoring"]["features"]["address_has_house_number"] = 0
+    doc["scoring"]["features"]["address_missing_house_number"] = 1
     invented_selection = {
         "text_vi": "The address is missing a house number.",
-        "signal_keys": ["address_has_house_number"],
+        "signal_keys": ["address_missing_house_number"],
     }
     model = FakeModel(responses=[{"reasons": [REASON]}, {"reasons": [invented_selection]}])
     with pytest.raises(ValueError):
@@ -185,7 +185,7 @@ async def test_duplicate_reasons_are_returned_once():
     ("features", "reason"),
     [
         ({"phone_is_new": 1}, "This phone has no past orders."),
-        ({"address_has_house_number": 0}, "The address is missing a house number."),
+        ({"address_missing_house_number": 1}, "The address is missing a house number."),
         ({"address_parts_filled": 2}, "The address has only 2 of the 3 required parts."),
         ({"phone_orders_24h": 3}, "This phone placed 3 other orders in the last 24 hours."),
         (
@@ -339,3 +339,38 @@ async def test_conflicting_feature_evidence_is_rejected_without_spending_quota()
     with pytest.raises(ValueError, match="Conflicting"):
         await assess(doc, model=model, log=log)
     assert not model.requests and not log.claims
+
+
+def test_the_response_schema_is_accepted_by_vertex_ai():
+    """Vertex AI rejects `examples` in a response schema; with them every live call failed."""
+    from app.agents.assessment import _Selection
+
+    assert "examples" not in json.dumps(_Selection.model_json_schema())
+
+
+async def test_the_agents_read_plain_vietnamese():
+    """Escaped text (\\u0110...) made gemini-3.1-flash-lite miscopy the candidate reasons."""
+    model = FakeModel()
+    await assess(model=model)
+    text = model.requests[0]["text"]
+    assert "\\u" not in text
+    assert any(c["text_vi"] in text for c in model.requests[0]["input"]["candidates"])
+
+
+def test_every_reason_cites_a_key_that_top_signals_uses():
+    """The E3.3 reason check matches reasons to `top_signals` by key, so the names must agree."""
+    from app.agents.assessment import _candidates
+    from app.risk.features import SIGNALS
+    from app.risk.model import top_signals
+
+    features = {k: 0 for k in SIGNALS} | {
+        "phone_failed_all": 1,
+        "phone_outcomes_all": 2,
+        "phone_orders_24h": 3,
+        "cod_vs_phone_avg_ratio": 2,
+        "address_missing_house_number": 1,
+    }
+    every = top_signals(features, dict.fromkeys(SIGNALS, 1.0), top=len(SIGNALS))
+    cited = {key for reason in _candidates(features) for key in reason["signal_keys"]}
+    assert "address_missing_house_number" in cited
+    assert cited <= {s["key"] for s in every}

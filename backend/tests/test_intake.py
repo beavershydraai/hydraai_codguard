@@ -146,7 +146,7 @@ def test_intake_scores_the_order_when_a_model_exists(api):
     engine._cache.update(at=0.0, models=None)
     assert 0 <= doc["scoring"]["probability"] <= 1
     assert doc["scoring"]["chosen_by"] and doc["contact_action"]
-    assert doc["scoring"]["features"]["address_has_house_number"] == 1
+    assert doc["scoring"]["features"]["address_missing_house_number"] == 0
 
 
 def test_intake_returns_the_decided_status_and_duplicate_preserves_it(api, monkeypatch):
