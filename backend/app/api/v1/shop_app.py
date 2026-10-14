@@ -3,10 +3,14 @@
 from datetime import date, datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, File, Path, Query, Security, UploadFile, status
+from fastapi import APIRouter, Depends, File, Path, Query, Security, UploadFile, status
 
-from app.api.errors import NotImplementedYet, problem_example, problem_responses
+from app.api.errors import ApiError, NotImplementedYet, problem_example, problem_responses
 from app.api.security import CurrentUser, bearer_auth
+from app.data.orders import to_utc
+from app.data.store import OrderStore, get_store
+from app.decision.inbox import InvalidCursor, order_page
+from app.decision.views import order_detail
 from app.schemas.calls import Call
 from app.schemas.dashboard import BacktestResult, DashboardSummary
 from app.schemas.delivery import DeliveryImportResult, DeliveryOutcomeBatch
@@ -118,7 +122,7 @@ OrderSort = Literal["-placed_at", "placed_at", "-risk_score", "-cod_amount_vnd",
     summary="Order inbox",
     description="Filter by status and tier. The manual review queue is `status=pending_review`.",
 )
-async def list_orders(
+def list_orders(
     status_: Annotated[list[OrderStatus], Query(alias="status", default_factory=list)],
     tier: Annotated[list[RiskTier], Query(default_factory=list)],
     q: Annotated[
@@ -129,8 +133,35 @@ async def list_orders(
     sort: Annotated[OrderSort, Query()] = "-placed_at",
     cursor: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    *,
+    user: CurrentUser,
+    store: Annotated[OrderStore, Depends(get_store)],
 ) -> OrderPage:
-    raise NotImplementedYet("list_orders")
+    docs = store.for_shop(
+        user.shop_id,
+        placed_from=to_utc(placed_from) if placed_from else None,
+        placed_to=to_utc(placed_to) if placed_to else None,
+    )
+    try:
+        return order_page(
+            docs,
+            statuses=status_,
+            tiers=tier,
+            q=q,
+            placed_from=placed_from,
+            placed_to=placed_to,
+            sort=sort,
+            cursor=cursor,
+            limit=limit,
+        )
+    except InvalidCursor as exc:
+        raise ApiError(
+            422,
+            ErrorCode.VALIDATION_ERROR,
+            "Validation error",
+            str(exc),
+            errors=[{"loc": ["query", "cursor"], "msg": str(exc), "type": "value_error"}],
+        ) from exc
 
 
 @orders_router.post(
@@ -165,8 +196,16 @@ async def import_orders(
     responses=problem_responses(401, 404),
     summary="Order page: score, reasons, decision, contacts, calls, timeline",
 )
-async def get_order(order_id: OrderId) -> OrderDetail:
-    raise NotImplementedYet("get_order")
+def get_order(
+    order_id: OrderId,
+    user: CurrentUser,
+    store: Annotated[OrderStore, Depends(get_store)],
+) -> OrderDetail:
+    doc = store.get(order_id)
+    # Another shop's order answers 404 too, so ids cannot be probed across shops.
+    if doc is None or doc.get("shop_id") != user.shop_id:
+        raise ApiError(404, ErrorCode.NOT_FOUND, "Not found", f"Order {order_id} not found.")
+    return order_detail(doc)
 
 
 @orders_router.patch(

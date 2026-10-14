@@ -9,6 +9,7 @@ import hashlib
 import os
 import uuid
 from collections.abc import Callable
+from datetime import datetime
 from functools import lru_cache
 
 from google.api_core.exceptions import AlreadyExists
@@ -69,6 +70,19 @@ class OrderStore:
             .where(filter=FieldFilter("placed_at", "<", before))
             .order_by("placed_at")
         )
+        return [d.to_dict() for d in query.stream()]
+
+    def for_shop(
+        self, shop_id: str, placed_from: datetime | None = None, placed_to: datetime | None = None
+    ) -> list[dict]:
+        """A shop's orders, newest first (composite index: shop_id, placed_at desc;
+        see infra/firestore.indexes.json)."""
+        query = self.orders.where(filter=FieldFilter("shop_id", "==", shop_id))
+        if placed_from is not None:
+            query = query.where(filter=FieldFilter("placed_at", ">=", placed_from))
+        if placed_to is not None:
+            query = query.where(filter=FieldFilter("placed_at", "<=", placed_to))
+        query = query.order_by("placed_at", direction=firestore.Query.DESCENDING)
         return [d.to_dict() for d in query.stream()]
 
     def all(self) -> list[dict]:

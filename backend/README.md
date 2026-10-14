@@ -32,6 +32,7 @@ with tags `sha-<commit>` and `main`.
 | `app/schemas/` | Request and response models with examples |
 | `app/data/` | Order record (`docs/data-model.md`): phone normalisation and hashing, the Firestore document, the training label and snapshot row |
 | `app/risk/` | Scoring engine (features, Model 1, calibrated-probability SHAP, hard rules, tier, action) and the jobs `jobs/train.py`, `jobs/monitor.py` (`tasks/E2.3-risk-features.md`) |
+| `app/decision/inbox.py` | Order inbox for `GET /orders`: status/tier filters, search, sort and cursor paging over one shop's orders |
 | `app/decision/` | Order lifecycle (E4.1): nine statuses, transactional edits and rescoring, buyer/call/delivery outcomes, confirmed-order guard, order-detail view. Policy engine (E4.2): action per tier, expected-loss gate and escalation |
 | `app/agents/` | ADK workflows (E4.7), two advisory assessment agents, runners, decision log and contact claims; contact channels return `mock: true` |
 | `config/cod_guard_rules_apac.yaml` | Rule set: the policy engine reads `tier_policy`; the ADK routing and log read `baseline_alignment.api_actions` and `metadata.rule_set_version`. Tests also inspect `enums.outcomes`. The image copies this folder; `tests/test_rules_file.py` checks consistency |
@@ -39,6 +40,30 @@ with tags `sha-<commit>` and `main`.
 | `Dockerfile` | Production image: uv-built virtualenv, non-root user, listens on `$PORT` |
 
 See `../api/README.md` for how the frontend uses the contract.
+
+## Order inbox and order page (E7.2, E7.3)
+
+`GET /api/v1/orders` and `GET /api/v1/orders/{order_id}` read the signed-in user's shop only;
+another shop's order answers 404. The inbox runs one Firestore query per request (`shop_id`, and
+`placed_at` when `placed_from`/`placed_to` are given), then filters by status and tier, searches and
+sorts in `app/decision/inbox.py`: the tier sits inside `scoring` and the COD amount is derived,
+so Firestore cannot do it. That suits demo-sized shops (a few thousand orders each).
+
+- Search `q` ignores case and Vietnamese diacritics on the buyer name, order id and external id,
+  and matches phones written as `09…`, `+84 9…` or any three or more consecutive digits.
+- `next_cursor` is an offset tied to the filters and sort it came from; reusing it with other
+  filters answers 422.
+- The query needs the composite index (`shop_id`, `placed_at` descending) from
+  `infra/firestore.indexes.json`. Create it once per database, for example:
+
+  ```bash
+  gcloud firestore indexes composite create --project=ai-codguard --database=vn-synthetic \
+    --collection-group=orders \
+    --field-config=field-path=shop_id,order=ascending \
+    --field-config=field-path=placed_at,order=descending
+  ```
+
+Running it locally needs Firestore credentials: `gcloud auth application-default login`.
 
 ## Sign-in (stand-in for Firebase Auth, E7.1)
 

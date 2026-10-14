@@ -263,7 +263,7 @@ GHN_API_TOKEN=<from-secret-manager>     # optional, never commit
 cp .env.example .env    # once: backend settings, including the demo sign-in admin@gmail.com / admin12345
 make install            # uv sync + pnpm install
 make dev                # backend :8080, Prism mock :4010, frontend :5173 (calls the mock)
-make dev API=backend    # backend + frontend, with the frontend calling the local backend
+make dev API=backend    # backend + frontend calling it (needs `gcloud auth application-default login` for Firestore)
 ```
 
 `make dev` prefixes each server's output with `[api]`, `[mock]` or `[web]`; Ctrl-C stops them all.

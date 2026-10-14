@@ -13,7 +13,7 @@ PROBLEM = "application/problem+json"
 def client(monkeypatch):
     monkeypatch.setenv("ADMIN_USERNAME", "admin@gmail.com")
     monkeypatch.setenv("ADMIN_PASSWORD", "admin12345")
-    monkeypatch.setenv("AUTH_TOKEN_SECRET", "test-secret")
+    monkeypatch.setenv("AUTH_TOKEN_SECRET", "test-secret-at-least-32-bytes-long")
     monkeypatch.delenv("ADMIN_SHOP_ID", raising=False)
     monkeypatch.delenv("ADMIN_EMAIL", raising=False)
     return TestClient(create_app())
@@ -82,7 +82,7 @@ def test_me_needs_a_valid_token(client):
 
 def test_me_rejects_a_token_signed_with_another_secret(client, monkeypatch):
     token = login(client).json()["access_token"]
-    monkeypatch.setenv("AUTH_TOKEN_SECRET", "rotated-secret")
+    monkeypatch.setenv("AUTH_TOKEN_SECRET", "rotated-secret-at-least-32-bytes-long")
     response = client.get("/api/v1/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
 

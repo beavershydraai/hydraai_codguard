@@ -42,7 +42,7 @@ frontend/       Shop web app + buyer confirmation page (Vite + React, Firebase H
   src/components/blocks/  ReUI blocks adapted to the app: app-shell-1 (shop layout), auth-4 (login), data-grid-base-1 (order table)
 ml/             Data prep, synthetic data generator, BigQuery ML SQL, backtest
 data/seed/      Pseudonymised demo data only
-infra/          Deployment and Firebase config
+infra/          Deployment and Firebase config; firestore.indexes.json lists the composite indexes the queries need
 scripts/        Demo reset, abuse simulation, call test runner
 ```
 
@@ -52,7 +52,7 @@ scripts/        Demo reset, abuse simulation, call test runner
 - Frontend: Node.js 20+, pnpm, React 19 + TypeScript on Vite, Tailwind CSS v4, shadcn/ui and ReUI components, TanStack Router (file-based) and TanStack Query, Zustand for client state, Hey API for the API client
 - Use ReUI's `data-grid` for data tables, not a hand-rolled `<table>`. Install registry components with the shadcn CLI rather than writing or editing them by hand (see `frontend/README.md`).
 - Server state lives in TanStack Query through the generated `*Options` helpers; Zustand only holds client state (auth token, theme).
-- Sign-in is a development stub until Firebase Auth lands (E7.1): `src/lib/auth.ts` stores `VITE_DEV_AUTH_TOKEN`. Never set that variable in a production build.
+- The login page calls `POST /api/v1/auth/login` (`src/lib/auth.ts`) and keeps the token in the Zustand auth store; a 401 from any call signs the user out.
 - AI: Gemini (signal extraction and reasons), Gemini Live API (voice), Agent Development Kit (orchestration)
 - Data: BigQuery ML boosted trees (risk model), BigQuery (training data, analytics), Firestore (app state)
 - Secrets in Secret Manager; region `asia-southeast1`. Exception: Gemini Live API sessions run in `GEMINI_LIVE_LOCATION` (`us-central1`), because the Live API is not served from Asia regions.
@@ -92,6 +92,7 @@ Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 - The contract is defined in code: Pydantic models in `backend/app/schemas/` and routes in `backend/app/api/v1/`. `api/openapi.yaml` is generated from them and committed.
 - Any change to a schema or route must re-export `api/openapi.yaml` and regenerate the frontend client (`pnpm generate:api`) in the same PR. `tests/test_contract.py` fails when the YAML is out of date; the frontend CI job fails when `frontend/src/api/gen/` is.
 - Shop app sign-in: `POST /api/v1/auth/login` with the one admin account from `ADMIN_USERNAME` / `ADMIN_PASSWORD`; tokens are signed with `AUTH_TOKEN_SECRET`. It stands in for Firebase Auth (E7.1). Every route that reads or changes shop data takes `user: CurrentUser` (`app/api/security.py`) and scopes its work to `user.shop_id`; the router-level `bearer_auth` only declares the scheme.
+- Order reads: `GET /orders` filters, searches, sorts and pages one shop's orders in Python (`app/decision/inbox.py`) after a single Firestore query on `shop_id` and `placed_at`. A new Firestore query that filters or orders on more than one field needs its index added to `infra/firestore.indexes.json`.
 - Routes that are not implemented yet return 501 `not_implemented`. The frontend works against the Prism mock until then; see `api/README.md`.
 - Every schema example must validate against its model (also enforced by the tests), because the mock server returns those examples.
 
