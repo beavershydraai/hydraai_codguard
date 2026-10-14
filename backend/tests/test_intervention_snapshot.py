@@ -112,7 +112,7 @@ def test_training_pairs_a_completed_assignment_with_its_original_order_features(
     doc = _edited_after_assignment()
     table = _training_table(doc)
     assert table.loc[0, "cod_amount_vnd"] == 330000
-    assert table.loc[0, "address_has_house_number"] == 1
+    assert table.loc[0, "address_missing_house_number"] == 0
     assert set(feature_columns(table)) == set(doc["intervention"]["features"])
     for name, value in doc["intervention"]["features"].items():
         assert table.loc[0, name] == value
@@ -126,7 +126,7 @@ def test_monitoring_uses_original_assignment_features_and_probability(current_sc
     rows = scored_rows([doc])
     assert len(rows) == 1
     assert rows.loc[0, "cod_amount_vnd"] == 330000
-    assert rows.loc[0, "address_has_house_number"] == 1
+    assert rows.loc[0, "address_missing_house_number"] == 0
     assert rows.loc[0, "probability"] == 0.3
     for name, value in doc["intervention"]["features"].items():
         assert rows.loc[0, name] == value
@@ -163,7 +163,7 @@ def test_training_reencodes_frozen_features_with_the_current_training_encodings(
     table = build_table([doc], [(doc, label, at)], current_enc)
     assert table.loc[0, "province"] == "Hà Nội"
     assert table.loc[0, "cod_amount_vnd"] == 330000
-    assert table.loc[0, "address_has_house_number"] == 1
+    assert table.loc[0, "address_missing_house_number"] == 0
     assert table.loc[0, "province_fail_rate_te"] == 0.8
     assert table.loc[0, "phone_fail_rate_smoothed_all"] == 0.9
     serving_features = compute_features(original, [], original["placed_at"], current_enc)

@@ -87,8 +87,6 @@ def top_signals(features: dict, contributions: dict, top: int = 5) -> list[dict]
     for key in sorted(contributions, key=lambda k: -abs(contributions[k]))[:top]:
         group, label = SIGNALS[key]
         value, contribution = features[key], contributions[key]
-        if key == "address_has_house_number":  # the API has named the inverse flag since 8 Oct
-            key, value = "address_missing_house_number", 1 - value
         signals.append(
             {
                 "key": key,
