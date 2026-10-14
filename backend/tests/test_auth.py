@@ -82,7 +82,7 @@ def test_me_needs_a_valid_token(client):
 
 def test_me_rejects_a_token_signed_with_another_secret(client, monkeypatch):
     token = login(client).json()["access_token"]
-    monkeypatch.setenv("AUTH_TOKEN_SECRET", "rotated-secret-at-least-32-bytes-long")
+    monkeypatch.setenv("AUTH_TOKEN_SECRET", "r" * 40)  # a different signing key
     response = client.get("/api/v1/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
 

@@ -71,7 +71,7 @@ def api(monkeypatch):
             "ord_2",
             minutes=2,
             name="Trần Thị Bình",
-            phone="0900000002",
+            phone="0000000002",
             price=900_000,
             status="pending_review",
             tier="high",
@@ -131,8 +131,8 @@ def test_filters_by_status_and_tier(api):
         ("nguyen", ["ord_1"]),  # without diacritics
         ("ĐỨC", ["ord_3"]),
         ("fb-1", ["ord_1"]),
-        ("0900000002", ["ord_2"]),  # local form of +84900000002
-        ("+84 900 000 002", ["ord_2"]),
+        ("0000000002", ["ord_2"]),  # local form of +84000000002
+        ("+84 000 000 002", ["ord_2"]),
         ("000002", ["ord_2"]),  # part of a phone
         ("zzz", []),
     ],
@@ -198,7 +198,7 @@ def test_order_detail(api):
     body = response.json()
     assert body["id"] == "ord_2"
     assert body["current_score"]["tier"] == "high"
-    assert body["buyer_phone"] == "+84900000002"
+    assert body["buyer_phone"] == "+84000000002"
 
 
 @pytest.mark.parametrize("order_id", ["ord_b", "ord_missing"])

@@ -1,0 +1,3 @@
+# Findings reviewed as false positives. Format: <commit>:<file>:<rule>:<line>
+# Test-only signing key in a test that rotates the key; replaced by "r" * 40 in a later commit.
+a121b9d551e985e69dab922353fde4a7e9f88b35:backend/tests/test_auth.py:generic-api-key:85
