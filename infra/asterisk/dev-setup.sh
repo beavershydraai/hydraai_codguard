@@ -120,6 +120,12 @@ if [[ -n "$AUDIO" ]]; then
     sox "$AUDIO" -r 8000 -c 1 -b 16 "$tmp/codguard-demo.wav"
   elif command -v ffmpeg >/dev/null 2>&1; then
     ffmpeg -loglevel error -y -i "$AUDIO" -ar 8000 -ac 1 -c:a pcm_s16le "$tmp/codguard-demo.wav"
+  elif [[ ${#RUN[@]} -gt 0 ]] && inside sh -c "command -v sox" >/dev/null 2>&1; then
+    # The image in this folder has sox: convert inside the container.
+    in="/tmp/codguard-in.${AUDIO##*.}"
+    inside sh -c "cat > '$in'" < "$AUDIO"
+    inside sox "$in" -r 8000 -c 1 -b 16 -t wav - > "$tmp/codguard-demo.wav"
+    inside rm -f "$in"
   else
     die "install sox to convert the audio file: apt-get install -y sox"
   fi
@@ -158,10 +164,13 @@ done
 
 ast "pjsip reload" >/dev/null
 ast "dialplan reload" >/dev/null
-sleep 1
-ast "pjsip show transports" | grep -q "$TRANSPORT" ||
+# A reload can take several seconds when the sample configs are large.
+retry() { for _ in $(seq 1 20); do "$@" && return 0; sleep 1; done; return 1; }
+transport_up() { ast "pjsip show transports" | grep -q "$TRANSPORT"; }
+dialplan_up() { ast "dialplan show 301@$CONTEXT" | grep -q Read; }
+retry transport_up ||
   die "transport $TRANSPORT did not start: is $BIND_IP:$SIP_PORT free? Check: asterisk -rx 'pjsip show transports'"
-ast "dialplan show 301@$CONTEXT" | grep -q Read || die "dialplan $CONTEXT did not load"
+retry dialplan_up || die "dialplan $CONTEXT did not load. Check: asterisk -rx 'dialplan show $CONTEXT'"
 
 echo
 echo "Ready. Softphone settings (Zoiper: account type SIP, transport UDP, STUN off, codec u-law, DTMF RFC-2833):"
