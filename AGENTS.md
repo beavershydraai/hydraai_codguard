@@ -51,7 +51,9 @@ scripts/        Demo reset, abuse simulation, call test runner
 - Secrets in Secret Manager; region `asia-southeast1`. Exception: Gemini Live API sessions run in `GEMINI_LIVE_LOCATION` (`us-central1`), because the Live API is not served from Asia regions.
 - Model IDs come from environment variables (`GEMINI_MODEL`, `GEMINI_LIVE_MODEL`). Never hard-code them.
 - Before changing voice code or the call prompt, read `docs/gemini-live.md`. Live models changed in September 2026 (`gemini-3.8-live`), and older tutorials use config that 3.8 rejects.
-- The pipeline is written against `google-adk` 2.x, which is pinned in `backend/pyproject.toml`. ADK 2.0 replaced the template workflows with a graph engine: most tutorials online are still 1.x, and the 1.x pattern (`SequentialAgent`, subclassing `BaseAgent` and overriding `_run_async_impl`) is ignored without an error on 2.x. Use `Workflow` with function nodes.
+- The pipeline is written against `google-adk` 2.x (`>=2.11,<3` in `backend/pyproject.toml`). ADK 2.0 replaced the template workflows with a graph engine: most tutorials online are still 1.x, and the 1.x pattern (`SequentialAgent`, subclassing `BaseAgent` and overriding `_run_async_impl`) is ignored without an error on 2.x. Use `Workflow` with function nodes.
+- ADK caps `websockets` below 16 and `opentelemetry-api` at 1.42.1, and its `google-genai` dependency caps `tenacity` below 9.2. The `opentelemetry-api` cap also holds `fastapi` and `google-api-core` back. The Gemini Live client (E5) therefore runs on `websockets` 15.x.
+- ADK runs synchronous nodes on the event loop. The intake route is a sync endpoint, so FastAPI runs it in a worker thread and `asyncio.run` gives each run its own loop there. Do not turn the route into `async def` while the nodes make blocking Firestore calls: they would then block every request on the instance.
 
 ## Commands
 
