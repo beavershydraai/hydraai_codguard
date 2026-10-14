@@ -115,7 +115,7 @@ flowchart LR
 | Data | Firestore (orders and app state, see [data model](docs/data-model.md)), Cloud Storage (training snapshots, models) |
 | Secrets | Secret Manager |
 | Delivery outcomes | GHN staging API, CSV import |
-| Region | `asia-southeast1`; Gemini Live API sessions in `us-central1`, because the Live API is not served from Asia regions ([details](docs/gemini-live.md)) |
+| Region | `asia-southeast1`; the Gemini assessment in `global` (Vertex AI, `gemini-3.1-flash-lite` is not served from `asia-southeast1`); Gemini Live API sessions in `us-central1`, because the Live API is not served from Asia regions ([details](docs/gemini-live.md)) |
 
 ---
 
@@ -248,8 +248,9 @@ Fill in `.env`:
 
 ```bash
 GOOGLE_CLOUD_PROJECT=<your-project-id>
-GOOGLE_CLOUD_REGION=asia-southeast1
-GEMINI_MODEL=<gemini-model-id>
+GOOGLE_GENAI_USE_VERTEXAI=true
+GOOGLE_CLOUD_LOCATION=global             # gemini-3.1-flash-lite is not served from asia-southeast1
+GEMINI_MODEL=gemini-3.1-flash-lite        # empty = no Gemini assessment
 GEMINI_LIVE_MODEL=<gemini-live-model-id>   # gemini-3.8-live, see docs/gemini-live.md
 GEMINI_LIVE_LOCATION=us-central1          # Live API is not served from asia-southeast1
 BQ_DATASET=cod_guard

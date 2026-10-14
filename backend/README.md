@@ -28,7 +28,7 @@ with tags `sha-<commit>` and `main`.
 | `app/api/errors.py` | Problem-details errors and the shared error responses |
 | `app/schemas/` | Request and response models with examples |
 | `app/data/` | Order record (`docs/data-model.md`): phone normalisation and hashing, the Firestore document, the training label and snapshot row |
-| `app/risk/` | Scoring engine (features, Model 1, calibrated-probability SHAP, hard rules, tier, action) and the jobs `jobs/train.py`, `jobs/monitor.py` (`tasks/E2.3-risk-features.md`) |
+| `app/risk/` | Scoring engine (features, Model 1, exact TreeSHAP on the pre-calibration probability, hard rules, tier, action) and the jobs `jobs/train.py`, `jobs/monitor.py` (`tasks/E2.3-risk-features.md`) |
 | `app/decision/` | Order lifecycle (E4.1): nine statuses, transactional edits and rescoring, buyer/call/delivery outcomes, confirmed-order guard, order-detail view. Policy engine (E4.2): action per tier, expected-loss gate and escalation |
 | `app/agents/` | ADK workflows (E4.7), two advisory assessment agents, runners, decision log and contact claims; contact channels return `mock: true` |
 | `config/cod_guard_rules_apac.yaml` | Rule set: the policy engine reads `tier_policy`; the ADK routing and log read `baseline_alignment.api_actions` and `metadata.rule_set_version`. Tests also inspect `enums.outcomes`. The image copies this folder; `tests/test_rules_file.py` checks consistency |
@@ -90,8 +90,8 @@ that decision instead. This check runs inside the fallback transaction, includin
 
 Set `GEMINI_MODEL` in the service process environment to enable assessment, with authenticated
 Vertex AI credentials and the project/location variables documented in `../.env.example`.
-Retrain older risk artifacts to add their SHAP background; until then assessment can use the
-available feature evidence and explicitly reports SHAP unavailable.
+SHAP is exact TreeSHAP on the trained classifier and needs no background, so every `model1.pkl` can be
+explained. After any change to the feature set, run `codguard-train` once the new code is deployed.
 
 The assessment budget uses atomic claims in the shared `DecisionLog`: at most
 `ASSESSMENT_DAILY_LIMIT` assessment runs per UTC day across all shops (default 30, permitted
