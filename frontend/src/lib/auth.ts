@@ -1,20 +1,28 @@
+import { login } from '@/api/gen'
 import { useAuthStore } from '@/stores/auth'
 
 export class SignInError extends Error {}
 
 /**
- * Signs the shop user in and stores their bearer token.
- *
- * Firebase Auth is not wired yet (E7.1). Until then this only works in local development: with
- * VITE_DEV_AUTH_TOKEN set it accepts any credentials and stores that token, which the Prism mock
- * accepts. Replace the body with Firebase `signInWithEmailAndPassword`.
+ * Signs the shop user in with `POST /api/v1/auth/login` and stores the returned bearer token.
+ * The Prism mock answers with its example token for any credentials.
  */
-export async function signIn(_credentials: { email: string; password: string }): Promise<void> {
-  const devToken = import.meta.env.VITE_DEV_AUTH_TOKEN
-  if (!devToken) {
-    throw new SignInError('Đăng nhập chưa được cấu hình (cần Firebase Auth, E7.1).')
+export async function signIn({ email, password }: { email: string; password: string }): Promise<void> {
+  let result
+  try {
+    result = await login({ body: { username: email, password } })
+  } catch {
+    throw new SignInError('Không kết nối được máy chủ. Vui lòng thử lại.')
   }
-  useAuthStore.getState().setToken(devToken)
+  if (result.data) {
+    useAuthStore.getState().setToken(result.data.access_token)
+    return
+  }
+  const status = result.response?.status
+  if (status === 401 || status === 422) {
+    throw new SignInError('Sai email hoặc mật khẩu.')
+  }
+  throw new SignInError('Không đăng nhập được. Vui lòng thử lại.')
 }
 
 export function signOut(): void {

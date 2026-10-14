@@ -16,8 +16,6 @@ ifeq ($(API),backend)
 API_PROXY_TARGET := http://127.0.0.1:$(BACKEND_PORT)
 else ifeq ($(API),mock)
 API_PROXY_TARGET := http://127.0.0.1:$(MOCK_PORT)
-# The login page's dev stub stores this token; Prism accepts any bearer token.
-export VITE_DEV_AUTH_TOKEN ?= dev-token
 else
 $(error API must be "mock" or "backend", got "$(API)")
 endif

@@ -60,9 +60,9 @@ body; `src/components/query-error.tsx` shows them.
 `/login` (ReUI `auth-4`) signs in with email and password. Every shop route sits under the
 `_shop` layout, which sends signed-out users to `/login?redirect=…` and back afterwards.
 
-Firebase Auth is not wired yet (E7.1). Until then `signIn` in `src/lib/auth.ts` accepts any
-credentials when `VITE_DEV_AUTH_TOKEN` is set and stores that token; without it, sign-in fails
-with a message. Never set `VITE_DEV_AUTH_TOKEN` in a production build.
+`signIn` in `src/lib/auth.ts` calls `POST /api/v1/auth/login` and stores the returned token.
+Against the backend, use the account from the repo's `.env` (`admin@gmail.com` / `admin12345` in
+`.env.example`); the Prism mock accepts any credentials.
 
 ## Adding components
 
