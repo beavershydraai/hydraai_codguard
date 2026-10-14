@@ -47,9 +47,9 @@ valid 12 hours) plus the user. There is one account, read from the environment:
 
 | Variable | Use |
 |---|---|
-| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | The account (`admin` / `admin1234` in `.env.example`, local only) |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | The account (`admin@gmail.com` / `admin12345` in `.env.example`, local only) |
 | `AUTH_TOKEN_SECRET` | HMAC key for the tokens; changing it signs everyone out |
-| `ADMIN_SHOP_ID`, `ADMIN_EMAIL` | Optional: the account's shop (default `shop_demo`) and email |
+| `ADMIN_SHOP_ID`, `ADMIN_EMAIL` | Optional: the account's shop (default `shop_demo`) and email (default: the username if it is an email) |
 
 Sign-in is disabled until the first three are set. A route that reads or changes shop data takes a
 `user: CurrentUser` parameter, which answers 401 for a missing, invalid or expired token and
@@ -57,10 +57,10 @@ gives the route the user's `shop_id` and role. `GET /api/v1/me` is the first suc
 router-level `bearer_auth` dependency only declares the scheme in the contract; it checks nothing.
 
 ```bash
-ADMIN_USERNAME=admin ADMIN_PASSWORD=admin1234 AUTH_TOKEN_SECRET=dev \
+ADMIN_USERNAME=admin@gmail.com ADMIN_PASSWORD=admin12345 AUTH_TOKEN_SECRET=dev \
   uv run uvicorn app.main:app --reload --port 8080
 curl -s -X POST localhost:8080/api/v1/auth/login -H 'content-type: application/json' \
-  -d '{"username": "admin", "password": "admin1234"}'
+  -d '{"username": "admin@gmail.com", "password": "admin12345"}'
 ```
 
 ## Order lifecycle services (E4.1)

@@ -2448,8 +2448,8 @@ components:
       - password
       title: LoginRequest
       examples:
-      - password: admin1234
-        username: admin
+      - password: admin12345
+        username: admin@gmail.com
     LoginResponse:
       properties:
         access_token:
@@ -2481,7 +2481,7 @@ components:
         token_type: bearer
         user:
           display_name: Admin
-          email: admin@codguard.local
+          email: admin@gmail.com
           role: owner
           shop_id: shop_demo
           user_id: usr_admin

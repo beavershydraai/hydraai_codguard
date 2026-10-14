@@ -3,10 +3,11 @@
 A stand-in for Firebase Auth (E7.1). The account and the signing key come from the environment
 (Secret Manager in the cloud), never from code:
 
-- ADMIN_USERNAME, ADMIN_PASSWORD: the only account that can sign in.
+- ADMIN_USERNAME, ADMIN_PASSWORD: the only account that can sign in. The username may be an email.
 - AUTH_TOKEN_SECRET: HMAC key for the tokens. Rotating it signs everyone out.
 - ADMIN_SHOP_ID: shop the account belongs to (default `shop_demo`, the intake demo shop).
-- ADMIN_EMAIL: email shown for the account (default `admin@codguard.local`).
+- ADMIN_EMAIL: email shown for the account (default: the username when it is an email,
+  otherwise `admin@codguard.local`).
 
 Sign-in is disabled unless the three required variables are set.
 """
@@ -59,13 +60,14 @@ def _config() -> _Config:
         password=password,
         secret=secret,
         shop_id=os.environ.get("ADMIN_SHOP_ID", "shop_demo"),
-        email=os.environ.get("ADMIN_EMAIL", "admin@codguard.local"),
+        email=os.environ.get("ADMIN_EMAIL")
+        or (username if "@" in username else "admin@codguard.local"),
     )
 
 
 def _admin(config: _Config) -> User:
     return User(
-        user_id=f"usr_{config.username}",
+        user_id="usr_admin",
         username=config.username,
         email=config.email,
         display_name="Admin",

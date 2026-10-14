@@ -11,15 +11,15 @@ PROBLEM = "application/problem+json"
 
 @pytest.fixture
 def client(monkeypatch):
-    monkeypatch.setenv("ADMIN_USERNAME", "admin")
-    monkeypatch.setenv("ADMIN_PASSWORD", "admin1234")
+    monkeypatch.setenv("ADMIN_USERNAME", "admin@gmail.com")
+    monkeypatch.setenv("ADMIN_PASSWORD", "admin12345")
     monkeypatch.setenv("AUTH_TOKEN_SECRET", "test-secret")
     monkeypatch.delenv("ADMIN_SHOP_ID", raising=False)
     monkeypatch.delenv("ADMIN_EMAIL", raising=False)
     return TestClient(create_app())
 
 
-def login(client, username="admin", password="admin1234"):
+def login(client, username="admin@gmail.com", password="admin12345"):
     return client.post("/api/v1/auth/login", json={"username": username, "password": password})
 
 
@@ -30,7 +30,7 @@ def test_login_returns_a_token_that_opens_me(client):
     assert body["token_type"] == "bearer"
     assert body["user"] == {
         "user_id": "usr_admin",
-        "email": "admin@codguard.local",
+        "email": "admin@gmail.com",
         "display_name": "Admin",
         "role": "owner",
         "shop_id": "shop_demo",
@@ -45,7 +45,12 @@ def test_login_returns_a_token_that_opens_me(client):
 
 @pytest.mark.parametrize(
     ("username", "password"),
-    [("admin", "wrong"), ("Admin", "admin1234"), ("root", "admin1234"), ("admin", "admin1234 ")],
+    [
+        ("admin@gmail.com", "wrong"),
+        ("Admin@gmail.com", "admin12345"),
+        ("admin", "admin12345"),
+        ("admin@gmail.com", "admin12345 "),
+    ],
 )
 def test_login_rejects_wrong_credentials(client, username, password):
     response = login(client, username, password)
@@ -83,8 +88,18 @@ def test_me_rejects_a_token_signed_with_another_secret(client, monkeypatch):
 
 
 def test_me_rejects_an_expired_token(client):
-    user = authenticate("admin", "admin1234")
+    user = authenticate("admin@gmail.com", "admin12345")
     token, _ = issue_token(user, now=datetime.now(UTC) - timedelta(hours=13))
     response = client.get("/api/v1/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
     assert response.json()["detail"] == "The access token has expired. Sign in again."
+
+
+def test_email_comes_from_settings_or_a_plain_username(client, monkeypatch):
+    monkeypatch.setenv("ADMIN_EMAIL", "owner@example.com")
+    assert login(client).json()["user"]["email"] == "owner@example.com"
+
+    monkeypatch.delenv("ADMIN_EMAIL")
+    monkeypatch.setenv("ADMIN_USERNAME", "admin")
+    user = login(client, username="admin").json()["user"]
+    assert user["email"] == "admin@codguard.local"
