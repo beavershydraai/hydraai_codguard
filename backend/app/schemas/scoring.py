@@ -6,7 +6,63 @@ from typing import Literal
 from pydantic import ConfigDict, Field
 
 from app.schemas.common import ApiModel, Vnd
-from app.schemas.enums import ContactBlockReason, DecisionAction, HardRule, RiskTier, SignalGroup
+from app.schemas.enums import (
+    AddressFlag,
+    ContactBlockReason,
+    DecisionAction,
+    HardRule,
+    RiskTier,
+    SignalGroup,
+)
+
+
+class AddressCheck(ApiModel):
+    """Address quality (E3.1), stored on the order as `signals.address`. Code computes the score
+    from verified flags; Gemini only reads the text, and every unit it names is checked against
+    the official 2025 tables. Not part of the API responses yet."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "score": 0.95,
+                    "flags": ["old_admin_name"],
+                    "admin_format": "old",
+                    "province": "Hồ Chí Minh",
+                    "ward": "Phường Chợ Quán",
+                    "old_province": None,
+                    "old_district": "Quận 5",
+                    "old_ward": "Phường 2",
+                    "ward_candidates": [],
+                    "suggested_raw": "12 Nguyễn Trãi, Phường Chợ Quán, Thành phố Hồ Chí Minh",
+                    "source": "rules",
+                    "version": "rules-1",
+                }
+            ]
+        }
+    )
+
+    score: float = Field(ge=0, le=1, description="Completeness, 1 = complete.")
+    flags: list[AddressFlag] = Field(default_factory=list, description="Heaviest first.")
+    admin_format: Literal["new", "old", "mixed", "unknown"] = Field(
+        description="Unit system the text uses: after the 1 July 2025 merger, before it, or both."
+    )
+    province: str | None = Field(default=None, description="Current province, when resolved.")
+    ward: str | None = Field(default=None, description="Current ward, when it resolves to one.")
+    old_province: str | None = Field(default=None, description="Merged-away province written.")
+    old_district: str | None = Field(default=None, description="Old district written.")
+    old_ward: str | None = Field(default=None, description="Pre-2025 ward written.")
+    ward_candidates: list[str] = Field(
+        default_factory=list,
+        description="Current wards a split old ward went into; ask the buyer which one.",
+    )
+    suggested_raw: str | None = Field(
+        default=None,
+        description="The address in the current units, only when the mapping is unambiguous. "
+        "A suggestion: only the buyer or staff changes the address.",
+    )
+    source: Literal["rules", "rules+gemini"] = "rules"
+    version: str = Field(description="Rules and prompt version, to invalidate cached results.")
 
 
 class Signal(ApiModel):

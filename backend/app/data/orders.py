@@ -6,6 +6,7 @@ from app.data.phone import phone_hash, to_e164
 from app.schemas.delivery import DeliveryOutcome
 from app.schemas.enums import DeliveryResult, OrderStatus
 from app.schemas.orders import OrderCreate
+from app.signals.address import address_signals
 
 VN_TIME = timezone(timedelta(hours=7))  # Asia/Ho_Chi_Minh has no daylight saving
 BUYER_FAILURES = {DeliveryResult.REFUSED, DeliveryResult.UNREACHABLE}
@@ -22,6 +23,7 @@ NOT_IN_SNAPSHOT = {
     "confirmation",
     "cancel",
     "intervention",
+    "signals",  # derived; the feature table recomputes the address features with the rules
 }
 
 
@@ -39,9 +41,16 @@ def _phone(raw: str | None, key: bytes) -> tuple[str | None, str | None]:
 
 
 def order_document(
-    order: OrderCreate, *, order_id: str, shop_id: str, phone_key: bytes, now: datetime
+    order: OrderCreate,
+    *,
+    order_id: str,
+    shop_id: str,
+    phone_key: bytes,
+    now: datetime,
+    address_check: dict | None = None,
 ) -> dict:
-    """Firestore `orders/{order_id}` for a new order."""
+    """Firestore `orders/{order_id}` for a new order. `address_check` is `signals.address`
+    computed by the caller (with Gemini at intake); by default the rules-only check."""
     buyer, buyer_hash = _phone(order.buyer_phone, phone_key)
     recipient, recipient_hash = _phone(order.recipient_phone, phone_key)
     return {
@@ -54,6 +63,7 @@ def order_document(
         "recipient_phone": recipient,
         "recipient_phone_hash": recipient_hash,
         "status": OrderStatus.NEW.value,
+        "signals": {"address": address_check or address_signals(order.address)},
         "scoring": None,
         "decision": None,
         "score_history": [],

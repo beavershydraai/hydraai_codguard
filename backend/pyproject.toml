@@ -8,6 +8,7 @@ dependencies = [
     "fastapi>=0.115",
     "google-cloud-firestore>=2.34.1",
     "google-cloud-storage>=3.17.0",
+    "google-genai>=2.29,<3",
     "pandas>=3.0.6",
     "pyarrow>=26.0.0",
     "pydantic>=2.9",

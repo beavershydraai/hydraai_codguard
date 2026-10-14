@@ -25,6 +25,7 @@ from app.schemas.enums import (
 from app.schemas.orders import OrderUpdate
 from app.schemas.scoring import Decision
 from app.schemas.shops import Policy, ShopSettings
+from app.signals.address import address_signals
 
 STATUS_FOR_ACTION = {
     DecisionAction.SHIP_NOW: OrderStatus.CLEARED_TO_SHIP,
@@ -284,6 +285,9 @@ def _edit(
     if deposit_paid:
         _record_intervention(doc, "deposit")
     doc.update(changed)
+    if "address" in changed:
+        # Rules only: this runs inside the order transaction, which may be retried.
+        doc["signals"] = {**(doc.get("signals") or {}), "address": address_signals(doc["address"])}
     _event(doc, "edited", now, "Đã sửa đơn hàng.", actor)
     scored = _score(store, doc, now, settings=settings, policy=policy)
     if not scored:

@@ -76,6 +76,31 @@ class SignalGroup(StrEnum):
     PAYMENT = "payment"
 
 
+class AddressFlag(StrEnum):
+    """Problem found by the address check (E3.1), heaviest first.
+
+    placeholder_text: Địa chỉ không có nghĩa · missing_ward: Địa chỉ thiếu phường / xã ·
+    unknown_ward: Không tìm thấy phường / xã này ·
+    missing_house_number: Địa chỉ thiếu số nhà · vague_landmark: Địa chỉ chỉ mô tả mốc ·
+    ward_province_mismatch: Phường / xã không thuộc tỉnh / thành đã ghi ·
+    missing_street: Địa chỉ thiếu tên đường / ngõ / thôn ·
+    missing_province: Địa chỉ thiếu tỉnh / thành phố ·
+    ambiguous_new_ward: Phường / xã cũ đã tách, chưa rõ thuộc phường / xã mới nào ·
+    old_admin_name: Địa chỉ dùng tên đơn vị hành chính trước sáp nhập 2025
+    """
+
+    PLACEHOLDER_TEXT = "placeholder_text"
+    MISSING_WARD = "missing_ward"
+    UNKNOWN_WARD = "unknown_ward"
+    MISSING_HOUSE_NUMBER = "missing_house_number"
+    VAGUE_LANDMARK = "vague_landmark"
+    WARD_PROVINCE_MISMATCH = "ward_province_mismatch"
+    MISSING_STREET = "missing_street"
+    MISSING_PROVINCE = "missing_province"
+    AMBIGUOUS_NEW_WARD = "ambiguous_new_ward"
+    OLD_ADMIN_NAME = "old_admin_name"
+
+
 class ContactChannel(StrEnum):
     """How the buyer was contacted. ai_call: AI gọi · confirmation_link: Link xác nhận ·
     deposit_request: Yêu cầu cọc"""

@@ -10,6 +10,7 @@ import re
 from datetime import timedelta
 
 from app.data.orders import VN_TIME, final_state
+from app.signals.address import address_features
 
 M_SMOOTH = 5  # E2.3 rule 7
 CHANNELS = ["facebook", "zalo", "tiktok", "website", "instagram", "other"]
@@ -61,6 +62,7 @@ def compute_features(order: dict, history: list[dict], at, enc: dict) -> dict:
         "address_parts_filled": sum(
             order["address"].get(k) is not None for k in ("street", "ward", "province")
         ),
+        **address_features(order["address"]),  # E3.1, rules only
         "province_fail_rate_te": enc["province"].get(order["address"].get("province"), p0),
         # context
         "is_gift": int(order["is_gift"]),

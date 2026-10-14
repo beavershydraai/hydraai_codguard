@@ -6,6 +6,7 @@
 """
 
 import hashlib
+import logging
 import os
 import uuid
 from collections.abc import Callable
@@ -14,6 +15,8 @@ from functools import lru_cache
 from google.api_core.exceptions import AlreadyExists
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
+
+log = logging.getLogger(__name__)
 
 
 @lru_cache
@@ -71,8 +74,36 @@ class OrderStore:
         return [d.to_dict() for d in self.orders.stream()]
 
 
+class FirestoreCache:
+    """Key-value cache in one collection, e.g. `address_checks/{address_key}` for Gemini readings
+    (E3.1). A failed read is a miss and a failed write is skipped: the cache never breaks the
+    request that uses it."""
+
+    def __init__(self, client, collection: str):
+        self.docs = client.collection(collection)
+
+    def get(self, key: str) -> dict | None:
+        try:
+            snapshot = self.docs.document(key).get()
+            return snapshot.to_dict() if snapshot.exists else None
+        except Exception:
+            log.warning("Cache read failed", exc_info=True)
+            return None
+
+    def set(self, key: str, value: dict) -> None:
+        try:
+            self.docs.document(key).set(value)
+        except Exception:
+            log.warning("Cache write failed", exc_info=True)
+
+
 def get_store() -> OrderStore:
     return OrderStore(_client())
+
+
+def get_address_cache() -> FirestoreCache | None:
+    """Cache of Gemini address readings; None while Gemini is off (GEMINI_MODEL unset)."""
+    return FirestoreCache(_client(), "address_checks") if os.environ.get("GEMINI_MODEL") else None
 
 
 def phone_key() -> bytes:

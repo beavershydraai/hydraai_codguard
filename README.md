@@ -203,7 +203,8 @@ cod-guard/
 ├── api/                # OpenAPI contract (generated from backend, used by frontend)
 ├── backend/            # Cloud Run service: API, decision engine, ADK agents
 │   ├── app/            # FastAPI app: routes and request/response schemas
-│   │   └── decision/   # order lifecycle, rescoring, confirmed-order guard and tier policy
+│   │   ├── decision/   # order lifecycle, rescoring, confirmed-order guard and tier policy
+│   │   └── signals/    # address check: 2025 admin-unit tables, rules, Gemini reading
 │   ├── config/         # rule set YAML (tier_policy is the part in use)
 │   ├── scoring/        # hard rules, expected loss, model calls
 │   ├── agents/         # ADK orchestration
@@ -216,7 +217,7 @@ cod-guard/
 ├── data/
 │   └── seed/           # pseudonymised demo data
 ├── infra/              # deployment config, Firebase config
-├── scripts/            # demo reset, abuse simulation, call test runner
+├── scripts/            # admin-unit data build, demo reset, abuse simulation, call test runner
 ├── .env.example
 └── README.md
 ```
@@ -249,7 +250,8 @@ Fill in `.env`:
 ```bash
 GOOGLE_CLOUD_PROJECT=<your-project-id>
 GOOGLE_CLOUD_REGION=asia-southeast1
-GEMINI_MODEL=<gemini-model-id>
+GEMINI_MODEL=<gemini-model-id>            # unset = Gemini off, address checks use rules only
+GEMINI_LOCATION=asia-southeast1           # Gemini text calls; `global` if the model is not served there
 GEMINI_LIVE_MODEL=<gemini-live-model-id>   # gemini-3.8-live, see docs/gemini-live.md
 GEMINI_LIVE_LOCATION=us-central1          # Live API is not served from asia-southeast1
 BQ_DATASET=cod_guard

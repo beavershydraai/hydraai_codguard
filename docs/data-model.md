@@ -50,6 +50,7 @@ One document per order. It is a top-level collection with a `shop_id` field rath
 | `conversation_text` | string \| null | `OrderCreate.conversation_text` | |
 | `note` | string \| null | `OrderCreate.note` | |
 | `status` | string | lifecycle (E4.1) | One of the nine `OrderStatus` values; `new` on creation. Only the lifecycle service changes it |
+| `signals` | map | address check (E3.1) | `address`: an `AddressCheck` (`score` 0–1, `flags`, `admin_format`, current `province` / `ward`, `old_province` / `old_district` / `old_ward`, `ward_candidates`, `suggested_raw`, `source`, `version`), or null if the check failed. Set at intake (rules, plus Gemini when `GEMINI_MODEL` is set); recomputed with the rules only when the address is edited. Model features do not read it: `compute_features` recomputes the address features with the same rules |
 | `scoring` | map \| null | scoring (E2.4, E2.5) | Latest run: `probability`, `risk_score`, `tier`, `expected_loss_vnd`, `chosen_by`, `hard_rules`, `top_signals`, `model_version`, `scored_at`, and `features`, the exact inputs the model saw. `expected_loss_vnd` = probability × 60,000 VND until E2.5 uses the shop's costs |
 | `decision` | map \| null | lifecycle (E4.1), policy (E4.2) | Current `Decision`: `decided_at`, `action`, `policy_version`, `expected_loss_vnd`, `contact_cost_vnd`, `block_reasons`, `next_action`, `next_action_at`, `decided_by`. Null until decided |
 | `score_history` | array of map | rescore (E4.1) | Earlier `scoring` maps, newest first; starts empty. `OrderDetail.score_history` combines the current score with these earlier runs |
@@ -76,9 +77,19 @@ One document per order. It is a top-level collection with a `shop_id` field rath
   scoring fallback, and documents without an intervention use their top-level assignment metadata.
 - Phone history query: `buyer_phone_hash == h and placed_at < t`. It needs a composite index on
   (`buyer_phone_hash`, `placed_at`).
+- `signals.address` is derived, can include Gemini's reading and is not a model input, so it stays out
+  of training snapshots.
 - The phone key lives in Secret Manager and is the same for every shop, otherwise a phone would not match
   across shops. A plain SHA-256 of a phone number can be reversed by trying every number, so the key is
   required.
+
+## Firestore: `address_checks/{address_key}`
+
+Cache of Gemini address readings (E3.1), so the same address text is never sent to Gemini twice.
+`address_key` is the SHA-256 of the normalised address text (lower case, no diacritics, single spaces,
+abbreviations such as "P." and "TP" expanded). Fields: `version` (prompt version; another version is
+read again), `model`, `reading` (the parsed parts and wording flags). Used only while `GEMINI_MODEL` is
+set.
 
 ## Training snapshot: `orders.parquet`
 
@@ -86,7 +97,8 @@ One row per order whose buyer cancellation or delivery result gives a label. It 
 job from Firestore:
 
 - copy every field except `buyer_name`, `recipient_name`, `buyer_phone`, `recipient_phone`, `scoring`,
-  `status`, `decision`, `score_history`, `timeline`, `confirmation`, `cancel` and `intervention`;
+  `status`, `decision`, `score_history`, `timeline`, `confirmation`, `cancel`, `intervention` and
+  `signals`;
 - flatten `address.*` to `address_*` and `delivery.*` to `delivery_*`; keep `items` as a list column;
 - add the label `is_failed`.
 

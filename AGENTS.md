@@ -28,6 +28,9 @@ api/            OpenAPI contract (generated from backend/, used by frontend/)
 backend/        Python service on Cloud Run: API, decision engine, ADK agents
   app/          FastAPI app: routes (api/v1/) and request/response schemas (schemas/)
     decision/   order lifecycle, rescoring, confirmed-order guard (E4.1) and tier policy (E4.2)
+    signals/    address check (E3.1): 2025 admin-unit tables, rules, Gemini reading; Gemini wrapper
+      data/     admin_units_2025.json, built by scripts/build_admin_units.py (do not edit by hand)
+      prompts/  Gemini prompts, each with a version in its front matter
   config/       rule set YAML; only `tier_policy` is read by the code so far
   scoring/      hard rules, expected loss, model calls
   agents/       ADK orchestration
@@ -39,7 +42,7 @@ frontend/       Shop web app + buyer confirmation page (Firebase Hosting)
 ml/             Data prep, synthetic data generator, BigQuery ML SQL, backtest
 data/seed/      Pseudonymised demo data only
 infra/          Deployment and Firebase config
-scripts/        Demo reset, abuse simulation, call test runner
+scripts/        Admin-unit data build; planned: demo reset, abuse simulation, call test runner
 ```
 
 ## Stack
@@ -50,6 +53,7 @@ scripts/        Demo reset, abuse simulation, call test runner
 - Data: BigQuery ML boosted trees (risk model), BigQuery (training data, analytics), Firestore (app state)
 - Secrets in Secret Manager; region `asia-southeast1`. Exception: Gemini Live API sessions run in `GEMINI_LIVE_LOCATION` (`us-central1`), because the Live API is not served from Asia regions.
 - Model IDs come from environment variables (`GEMINI_MODEL`, `GEMINI_LIVE_MODEL`). Never hard-code them.
+- Gemini text calls (`backend/app/signals/gemini.py`) use `GEMINI_LOCATION`, default `asia-southeast1`. Not yet verified that the chosen `GEMINI_MODEL` is served there; if it is not, set `global` and record the exception here. Gemini is off while `GEMINI_MODEL` is unset, and every feature that uses it falls back to rules.
 - Before changing voice code or the call prompt, read `docs/gemini-live.md`. Live models changed in September 2026 (`gemini-3.8-live`), and older tutorials use config that 3.8 rejects.
 
 ## Commands
@@ -66,6 +70,7 @@ Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 | Train the risk model | `uv run python -m app.risk.jobs.train` (env `FIRESTORE_DATABASE`, and `MODEL_BUCKET` or a local `MODEL_DIR`); in the cloud: `gcloud run jobs execute codguard-train` |
 | Monitor the models | `uv run python -m app.risk.jobs.monitor` (same env); in the cloud: Cloud Run job `codguard-monitor`, daily |
 | Build and run the backend image | `docker build -t codguard-backend backend` then `docker run -p 8080:8080 codguard-backend` (from the repo root) |
+| Rebuild the admin-unit data | `python scripts/build_admin_units.py` (from the repo root; standard library only; downloads the pinned `vietnamadminunits` wheel and checks its SHA-256) |
 | Mock API for the frontend | `npx @stoplight/prism-cli mock api/openapi.yaml` (from the repo root) |
 | Frontend dev server | Planned: `cd frontend && npm run dev` |
 | Reset demo data | Planned: `python scripts/reset_demo.py` |
@@ -91,6 +96,7 @@ These rules come from the README and the epics. Code and tests must enforce them
   - invalid phone number → held for review;
   - phone with a ≥75% return rate over at least 3 past orders → Very High.
 - Location may contribute to a score but is never the only reason for High or Very High.
+- Address quality (E3.1): code computes the 0–1 score from flags. Gemini only reads the address text; a unit it names is kept only if it is written in the text and found in the official 2025 tables. Model features use the rules only, so training and serving match. An old (pre-July 2025) unit name is a small penalty and a mild reason, never a fraud signal.
 - The training label "failed" counts buyer-caused failures only (refused, unreachable), never carrier or shop errors.
 
 ### Decisions

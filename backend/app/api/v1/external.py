@@ -9,12 +9,22 @@ from fastapi import APIRouter, Depends, Path, Security, status
 from app.api.errors import ApiError, NotImplementedYet, problem_example, problem_responses
 from app.api.security import firebase_auth, intake_api_key
 from app.data.orders import order_document
-from app.data.store import OrderStore, get_store, order_id_for, phone_key, shop_for_key
+from app.data.store import (
+    FirestoreCache,
+    OrderStore,
+    get_address_cache,
+    get_store,
+    order_id_for,
+    phone_key,
+    shop_for_key,
+)
 from app.decision.lifecycle import score_order
 from app.schemas.confirm import BuyerOrderView, BuyerResponse, BuyerResponseResult
 from app.schemas.demo import DemoResetResult, SpamSimulationResult
 from app.schemas.enums import ErrorCode
 from app.schemas.orders import IntakeAccepted, OrderCreate
+from app.signals.address import address_signals
+from app.signals.gemini import Gemini, get_gemini
 
 log = logging.getLogger(__name__)
 intake_router = APIRouter(
@@ -35,13 +45,22 @@ def intake_order(
     body: OrderCreate,
     api_key: Annotated[str | None, Security(intake_api_key)],
     store: Annotated[OrderStore, Depends(get_store)],
+    gemini: Annotated[Gemini | None, Depends(get_gemini)],
+    address_cache: Annotated[FirestoreCache | None, Depends(get_address_cache)],
 ) -> IntakeAccepted:
     shop_id = shop_for_key(api_key)
     if shop_id is None:
         raise ApiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized", "Missing or unknown X-Api-Key.")
     order_id = order_id_for(shop_id, body.external_id)
+    # Before the order transaction: Gemini is a network call and is never retried in it.
+    address_check = address_signals(body.address, gemini=gemini, cache=address_cache)
     doc = order_document(
-        body, order_id=order_id, shop_id=shop_id, phone_key=phone_key(), now=datetime.now(UTC)
+        body,
+        order_id=order_id,
+        shop_id=shop_id,
+        phone_key=phone_key(),
+        now=datetime.now(UTC),
+        address_check=address_check,
     )
     existing = store.create(doc)
     if existing:
