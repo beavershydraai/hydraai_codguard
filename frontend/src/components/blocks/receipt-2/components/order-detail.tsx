@@ -21,9 +21,9 @@ import {
   TimelineItem,
   TimelineSeparator,
 } from '@/components/reui/timeline'
+import { Frame, FrameHeader, FramePanel, FrameTitle } from '@/components/reui/frame'
 import { TierBadge } from '@/components/tier-badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Item, ItemMedia } from '@/components/ui/item'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -43,7 +43,7 @@ import {
 import { cn } from '@/lib/utils'
 
 // Order page (E7.3), laid out like ReUI receipt-2: a header strip with the order actions, a hero
-// card with status and the amount still to collect, then the order journey timeline beside the
+// frame with status and the amount still to collect, then the order journey timeline beside the
 // risk, decision, contact and order details.
 
 const TL_INDICATOR_BASE =
@@ -107,8 +107,8 @@ export function OrderDetailView({ order, actions }: { order: OrderDetail; action
       </header>
 
       {/* Hero strip: status + order id + amount to collect */}
-      <Card className="mb-6">
-        <CardContent>
+      <Frame className="mb-6">
+        <FramePanel>
           <div className="grid grid-cols-1 gap-5 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center md:gap-8">
             <div className="flex min-w-0 flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -124,9 +124,9 @@ export function OrderDetailView({ order, actions }: { order: OrderDetail; action
                   Đặt {formatRelative(order.placed_at)} · {SALES_CHANNEL_LABELS[order.channel]}
                 </span>
               </div>
-              <CardTitle id="order-heading" className="text-xl tracking-tight md:text-2xl">
+              <FrameTitle id="order-heading" className="text-xl tracking-tight md:text-2xl">
                 Đơn {code}
-              </CardTitle>
+              </FrameTitle>
               <p className="text-sm leading-snug text-muted-foreground">
                 {order.buyer_name} · <span className="tabular-nums">{order.buyer_phone}</span>
               </p>
@@ -147,8 +147,8 @@ export function OrderDetailView({ order, actions }: { order: OrderDetail; action
               </span>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </FramePanel>
+      </Frame>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] lg:gap-8">
         <JourneyPanel order={order} />
@@ -173,11 +173,11 @@ function JourneyPanel({ order }: { order: OrderDetail }) {
   const next = order.decision?.next_action
 
   return (
-    <Card className="self-start lg:sticky lg:top-6">
-      <CardHeader>
-        <CardTitle className="text-base">Hành trình đơn</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-5">
+    <Frame className="self-start lg:sticky lg:top-6">
+      <FrameHeader>
+        <FrameTitle className="text-base">Hành trình đơn</FrameTitle>
+      </FrameHeader>
+      <FramePanel className="flex flex-col gap-5">
         {events.length === 0 ? (
           <p className="text-sm text-muted-foreground">Chưa có sự kiện nào.</p>
         ) : (
@@ -230,8 +230,8 @@ function JourneyPanel({ order }: { order: OrderDetail }) {
             </p>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </FramePanel>
+    </Frame>
   )
 }
 
@@ -251,19 +251,19 @@ function actorLabel(actor: string): string {
 function RiskPanel({ score }: { score: RiskScore | null }) {
   if (!score) {
     return (
-      <PanelCard eyebrow="Rủi ro bom hàng" title="Chưa chấm điểm">
+      <PanelFrame eyebrow="Rủi ro bom hàng" title="Chưa chấm điểm">
         <p className="text-sm text-muted-foreground">Đơn mới vào, hệ thống đang chấm điểm.</p>
-      </PanelCard>
+      </PanelFrame>
     )
   }
   if (score.status === 'skipped') {
     return (
-      <PanelCard eyebrow="Rủi ro bom hàng" title="Bỏ qua chấm điểm">
+      <PanelFrame eyebrow="Rủi ro bom hàng" title="Bỏ qua chấm điểm">
         <p className="text-sm text-muted-foreground">
           {score.skipped_reason ? HARD_RULE_LABELS[score.skipped_reason] : 'Đơn không cần chấm điểm'}: không
           liên hệ người mua.
         </p>
-      </PanelCard>
+      </PanelFrame>
     )
   }
 
@@ -271,7 +271,7 @@ function RiskPanel({ score }: { score: RiskScore | null }) {
   const maxContribution = Math.max(0.01, ...signals.map((s) => Math.abs(s.contribution)))
 
   return (
-    <PanelCard
+    <PanelFrame
       eyebrow="Rủi ro bom hàng"
       title={
         <span className="flex flex-wrap items-center gap-2">
@@ -336,7 +336,7 @@ function RiskPanel({ score }: { score: RiskScore | null }) {
         Mô hình {score.model_version ?? '—'} · chấm lúc {formatDateTime(score.scored_at)}. Điểm và hành động
         do mô hình và decision engine quyết định; Gemini chỉ viết lý do.
       </p>
-    </PanelCard>
+    </PanelFrame>
   )
 }
 
@@ -377,13 +377,13 @@ function DecisionPanel({ order }: { order: OrderDetail }) {
   const decision = order.decision
   if (!decision) {
     return (
-      <PanelCard eyebrow="Quyết định" title="Chưa có quyết định">
+      <PanelFrame eyebrow="Quyết định" title="Chưa có quyết định">
         <p className="text-sm text-muted-foreground">Quyết định được đưa ra ngay sau khi chấm điểm.</p>
-      </PanelCard>
+      </PanelFrame>
     )
   }
   return (
-    <PanelCard
+    <PanelFrame
       eyebrow="Quyết định"
       title={
         <span className="flex flex-wrap items-center gap-2">
@@ -417,7 +417,7 @@ function DecisionPanel({ order }: { order: OrderDetail }) {
           </div>
         </div>
       )}
-    </PanelCard>
+    </PanelFrame>
   )
 }
 
@@ -434,7 +434,7 @@ function ContactsPanel({
   const calls = new Map((order.calls ?? []).map((call) => [call.id, call]))
 
   return (
-    <PanelCard eyebrow="Lịch sử liên hệ" title={`${contacts.length} lần liên hệ`}>
+    <PanelFrame eyebrow="Lịch sử liên hệ" title={`${contacts.length} lần liên hệ`}>
       {contacts.length === 0 ? (
         <p className="text-sm text-muted-foreground">Chưa liên hệ người mua.</p>
       ) : (
@@ -492,7 +492,7 @@ function ContactsPanel({
           })}
         </ul>
       )}
-    </PanelCard>
+    </PanelFrame>
   )
 }
 
@@ -539,14 +539,14 @@ function CallSummary({ call }: { call: Call }) {
 function DetailsPanel({ order }: { order: OrderDetail }) {
   const subtotal = order.items.reduce((sum, item) => sum + item.quantity * item.unit_price_vnd, 0)
   return (
-    <Card>
-      <CardHeader>
+    <Frame>
+      <FrameHeader className="gap-1">
         <span className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
           Sản phẩm
         </span>
-        <CardTitle className="text-base">{order.items.length} sản phẩm</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-6">
+        <FrameTitle className="text-base">{order.items.length} sản phẩm</FrameTitle>
+      </FrameHeader>
+      <FramePanel className="flex flex-col gap-6">
         <div role="list" aria-label="Sản phẩm trong đơn" className="flex flex-col gap-3">
           {order.items.map((item, i) => (
             <article key={`${item.name}-${i}`} role="listitem" className="flex min-w-0 items-start gap-3">
@@ -583,15 +583,15 @@ function DetailsPanel({ order }: { order: OrderDetail }) {
           <Separator className="my-1" />
           <SummaryRow label="Thu hộ (COD)" value={formatVnd(order.cod_amount_vnd)} strong />
         </dl>
-      </CardContent>
-    </Card>
+      </FramePanel>
+    </Frame>
   )
 }
 
 function PartiesPanel({ order }: { order: OrderDetail }) {
   return (
-    <Card>
-      <CardContent className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+    <Frame>
+      <FramePanel className="grid grid-cols-1 gap-5 sm:grid-cols-3">
         <PartyBlock label="Người mua">
           <p className="font-medium">{order.buyer_name}</p>
           <p className="text-muted-foreground tabular-nums">{order.buyer_phone}</p>
@@ -608,8 +608,8 @@ function PartiesPanel({ order }: { order: OrderDetail }) {
           <p className="text-muted-foreground">{order.address.raw}</p>
           {order.note && <p className="text-xs text-muted-foreground">Ghi chú: {order.note}</p>}
         </PartyBlock>
-      </CardContent>
-    </Card>
+      </FramePanel>
+    </Frame>
   )
 }
 
@@ -625,7 +625,7 @@ function PartyBlock({ label, children }: { label: string; children: ReactNode })
 function ScoreHistoryPanel({ runs }: { runs: RiskScore[] }) {
   if (runs.length === 0) return null
   return (
-    <PanelCard eyebrow="Lịch sử điểm" title={`${runs.length} lần chấm`}>
+    <PanelFrame eyebrow="Lịch sử điểm" title={`${runs.length} lần chấm`}>
       <ul className="flex flex-col divide-y text-sm">
         {runs.map((run) => (
           <li key={run.id} className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
@@ -643,23 +643,31 @@ function ScoreHistoryPanel({ runs }: { runs: RiskScore[] }) {
           </li>
         ))}
       </ul>
-    </PanelCard>
+    </PanelFrame>
   )
 }
 
 // ── Shared ──
 
-function PanelCard({ eyebrow, title, children }: { eyebrow: string; title: ReactNode; children: ReactNode }) {
+function PanelFrame({
+  eyebrow,
+  title,
+  children,
+}: {
+  eyebrow: string
+  title: ReactNode
+  children: ReactNode
+}) {
   return (
-    <Card>
-      <CardHeader>
+    <Frame>
+      <FrameHeader className="gap-1">
         <span className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
           {eyebrow}
         </span>
-        <CardTitle className="text-base">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-5">{children}</CardContent>
-    </Card>
+        <FrameTitle className="text-base">{title}</FrameTitle>
+      </FrameHeader>
+      <FramePanel className="flex flex-col gap-5">{children}</FramePanel>
+    </Frame>
   )
 }
 

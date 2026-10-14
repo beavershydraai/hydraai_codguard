@@ -5,8 +5,17 @@ import {
   type SortingState,
   useTable,
 } from '@tanstack/react-table'
-import { ListChecksIcon, RefreshCwIcon, SearchIcon, XIcon } from 'lucide-react'
-import { type ReactNode, useMemo, useState } from 'react'
+import {
+  CheckCheckIcon,
+  ClockAlertIcon,
+  InboxIcon,
+  ListChecksIcon,
+  RefreshCwIcon,
+  SearchIcon,
+  WalletIcon,
+  XIcon,
+} from 'lucide-react'
+import { useMemo, useState } from 'react'
 
 import type { OrderSummary } from '@/api/gen'
 import { Badge } from '@/components/reui/badge'
@@ -14,6 +23,14 @@ import { DataGrid, dataGridFeatures } from '@/components/reui/data-grid/data-gri
 import { DataGridPagination } from '@/components/reui/data-grid/data-grid-pagination'
 import { DataGridScrollArea } from '@/components/reui/data-grid/data-grid-scroll-area'
 import { DataGridTable } from '@/components/reui/data-grid/data-grid-table'
+import {
+  Frame,
+  FrameDescription,
+  FrameFooter,
+  FrameHeader,
+  FramePanel,
+  FrameTitle,
+} from '@/components/reui/frame'
 import {
   Timeline,
   TimelineContent,
@@ -32,15 +49,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { Separator } from '@/components/ui/separator'
@@ -51,6 +59,7 @@ import { formatDateTime, formatVnd } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 
 import { createReviewColumns, REVIEW_DECISIONS, type ReviewDecision, WAIT_WARNING_MS } from './review-columns'
+import { SummaryTiles } from './summary-tiles'
 
 // Manual review queue (E7.4), adapted from ReUI solution-agents-5 (approval inbox): a header with
 // live counts, summary tiles, the queue grid with bulk selection and a decision bar, a reason
@@ -137,29 +146,35 @@ export function ReviewInbox({
 
         <div className="mt-4 flex flex-col gap-4">
           {/* Summary tiles */}
-          <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @4xl:grid-cols-4">
-            <SummaryTile
-              title="Đơn chờ duyệt"
-              value={orders.length}
-              note="Gọi không được, chưa cọc, SĐT lỗi…"
-            />
-            <SummaryTile
-              title="Chờ quá 2 giờ"
-              value={late.length}
-              badge={late.length > 0 ? <Badge variant="destructive-light">Cần xử lý</Badge> : undefined}
-              note="Tính từ lần cập nhật gần nhất"
-            />
-            <SummaryTile
-              title="Tiền thu hộ đang giữ"
-              value={formatVnd(held)}
-              note="Tổng COD của các đơn đang chờ"
-            />
-            <SummaryTile
-              title="Đã xử lý trong phiên"
-              value={decisions.filter((d) => d.ok).length}
-              note="Mỗi quyết định có ghi người, lúc và lý do"
-            />
-          </div>
+          <SummaryTiles
+            items={[
+              {
+                title: 'Đơn chờ duyệt',
+                value: orders.length,
+                note: 'Gọi không được, chưa cọc, SĐT lỗi…',
+                icon: <InboxIcon aria-hidden="true" />,
+              },
+              {
+                title: 'Chờ quá 2 giờ',
+                value: late.length,
+                badge: late.length > 0 ? <Badge variant="destructive-light">Cần xử lý</Badge> : undefined,
+                note: 'Tính từ lần cập nhật gần nhất',
+                icon: <ClockAlertIcon aria-hidden="true" />,
+              },
+              {
+                title: 'Tiền thu hộ đang giữ',
+                value: formatVnd(held),
+                note: 'Tổng COD của các đơn đang chờ',
+                icon: <WalletIcon aria-hidden="true" />,
+              },
+              {
+                title: 'Đã xử lý trong phiên',
+                value: decisions.filter((d) => d.ok).length,
+                note: 'Mỗi quyết định có ghi người, lúc và lý do',
+                icon: <CheckCheckIcon aria-hidden="true" />,
+              },
+            ]}
+          />
 
           <ReviewQueue orders={orders} isLoading={isLoading} onDecide={ask} />
 
@@ -220,34 +235,6 @@ function Dot() {
   return <span className="size-1 shrink-0 rounded-full bg-input" aria-hidden="true" />
 }
 
-function SummaryTile({
-  title,
-  value,
-  note,
-  badge,
-}: {
-  title: string
-  value: ReactNode
-  note: string
-  badge?: ReactNode
-}) {
-  return (
-    <Card>
-      <CardContent className="flex flex-col gap-5">
-        <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
-        <div className="space-y-2.5">
-          <div className="flex items-center gap-2.5">
-            <span className="text-2xl font-medium tracking-tight tabular-nums">{value}</span>
-            {badge}
-          </div>
-          <Separator />
-          <div className="text-xs text-muted-foreground">{note}</div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
 function ReviewQueue({
   orders,
   isLoading,
@@ -300,23 +287,25 @@ function ReviewQueue({
       emptyMessage={orders.length === 0 ? 'Không có đơn nào chờ duyệt. 🎉' : 'Không có đơn khớp bộ lọc.'}
       tableLayout={{ headerSticky: true, dense: true, width: 'auto' }}
     >
-      <Card className="w-full gap-0 p-0">
-        <CardHeader className="gap-1 border-b px-5 py-4">
-          <CardTitle>Đơn cần shop quyết định</CardTitle>
-          <CardDescription className="text-xs">{filtered.length} đơn trong danh sách này</CardDescription>
-          <CardAction className="self-center">
-            <Button
-              variant="outline"
-              aria-pressed={lateOnly}
-              onClick={() => setLateOnly((v) => !v)}
-              className={cn(lateOnly && 'bg-muted')}
-            >
-              Chờ quá 2 giờ
-            </Button>
-          </CardAction>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="px-5 py-3">
+      <Frame variant="default" spacing="sm" className="w-full">
+        <FrameHeader className="flex-row items-center justify-between gap-3">
+          <div className="flex flex-col gap-0.5">
+            <FrameTitle className="text-balance">Đơn cần shop quyết định</FrameTitle>
+            <FrameDescription className="text-xs text-pretty">
+              {filtered.length} đơn trong danh sách này
+            </FrameDescription>
+          </div>
+          <Button
+            variant="outline"
+            aria-pressed={lateOnly}
+            onClick={() => setLateOnly((v) => !v)}
+            className={cn(lateOnly && 'bg-muted')}
+          >
+            Chờ quá 2 giờ
+          </Button>
+        </FrameHeader>
+        <FramePanel className="bg-card p-0! shadow-none!">
+          <div className="px-4 py-3">
             <InputGroup className="w-full sm:w-64">
               <InputGroupAddon align="inline-start">
                 <SearchIcon aria-hidden="true" />
@@ -339,7 +328,7 @@ function ReviewQueue({
           <Separator />
           {selected.length > 0 && (
             <>
-              <div className="flex flex-col gap-3 bg-muted/25 px-5 py-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col gap-3 bg-muted/25 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <span className="text-sm font-medium">Đã chọn {selected.length} đơn</span>
                   <span className="text-xs text-muted-foreground">
@@ -369,30 +358,30 @@ function ReviewQueue({
           <DataGridScrollArea>
             <DataGridTable />
           </DataGridScrollArea>
-        </CardContent>
-        <CardFooter className="border-t px-5 py-3">
+        </FramePanel>
+        <FrameFooter>
           <DataGridPagination
             info="{from} - {to} trên {count} đơn"
             rowsPerPageLabel="Số đơn mỗi trang"
             previousPageLabel="Trang trước"
             nextPageLabel="Trang sau"
           />
-        </CardFooter>
-      </Card>
+        </FrameFooter>
+      </Frame>
     </DataGrid>
   )
 }
 
 function RecentDecisions({ decisions }: { decisions: SessionDecision[] }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Quyết định gần đây</CardTitle>
-        <CardDescription className="text-xs">
+    <Frame variant="default" spacing="sm" className="w-full">
+      <FrameHeader className="gap-0.5">
+        <FrameTitle className="text-balance">Quyết định gần đây</FrameTitle>
+        <FrameDescription className="text-xs text-pretty">
           Trong phiên làm việc này. Nhật ký đầy đủ nằm ở từng đơn.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+        </FrameDescription>
+      </FrameHeader>
+      <FramePanel>
         {decisions.length === 0 ? (
           <p className="text-sm text-muted-foreground">Chưa có quyết định nào.</p>
         ) : (
@@ -425,7 +414,7 @@ function RecentDecisions({ decisions }: { decisions: SessionDecision[] }) {
             ))}
           </Timeline>
         )}
-      </CardContent>
-    </Card>
+      </FramePanel>
+    </Frame>
   )
 }
