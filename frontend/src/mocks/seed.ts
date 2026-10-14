@@ -82,6 +82,13 @@ export function tierFor(probability: number): RiskTier {
   return probability < 0.08 ? 'low' : probability < 0.2 ? 'medium' : probability < 0.4 ? 'high' : 'very_high'
 }
 
+const TIER_VI: Record<RiskTier, string> = {
+  low: 'thấp',
+  medium: 'trung bình',
+  high: 'cao',
+  very_high: 'rất cao',
+}
+
 export const TIER_ACTION: Record<RiskTier, DecisionAction> = {
   low: 'ship_now',
   medium: 'send_confirmation_link',
@@ -559,7 +566,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
         actor: 'engine',
         message_vi: skipped
           ? 'Đơn đã trả trước toàn bộ: bỏ qua chấm điểm.'
-          : `Chấm điểm rủi ro ${score.risk_score}/100 (${tier}).`,
+          : `Chấm điểm rủi ro ${score.risk_score}/100 (${TIER_VI[tier!]}).`,
       })
 
       const action: DecisionAction =

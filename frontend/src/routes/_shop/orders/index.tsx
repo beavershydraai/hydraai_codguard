@@ -72,7 +72,10 @@ export const Route = createFileRoute('/_shop/orders/')({
     tier: pick(search.tier, TIERS),
     status: pick(search.status, STATUSES),
   }),
-  loader: ({ context }) => context.queryClient.prefetchQuery(listOrdersOptions({ query: LIST_QUERY })),
+  // Not awaited: the page renders its skeleton while the data loads.
+  loader: ({ context }) => {
+    void context.queryClient.prefetchQuery(listOrdersOptions({ query: LIST_QUERY }))
+  },
   component: OrdersPage,
 })
 

@@ -39,7 +39,8 @@ frontend/       Shop web app + buyer confirmation page (Vite + React, Firebase H
   src/routes/   TanStack Router file routes; _shop/ is the shop layout, c/ the public buyer page
   src/api/gen/  Hey API client generated from api/openapi.yaml (do not edit)
   src/components/ui/, src/components/reui/  shadcn and ReUI registry components
-  src/components/blocks/  ReUI blocks adapted to the app: app-shell-1 (shop layout), auth-4 (login), data-grid-base-1 (order table)
+  src/components/blocks/  ReUI blocks adapted to the app: app-shell-1 (layout), auth-4 (login), wizard-1 (onboarding), dashboard-1 (dashboard, backtest), data-grid-base-1 (orders), receipt-2 (order page), solution-agents-5 (review queue), settings-3 (settings, demo), receipt-6 (buyer page)
+  src/mocks/    In-browser mock API with seeded synthetic data, used while endpoints return 501
 ml/             Data prep, synthetic data generator, BigQuery ML SQL, backtest
 data/seed/      Pseudonymised demo data only
 infra/          Deployment and Firebase config; firestore.indexes.json lists the composite indexes the queries need
@@ -68,7 +69,7 @@ Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 
 | Task | Command |
 |---|---|
-| Run all dev servers | `make dev` from the repo root: backend :8080, Prism mock :4010, frontend :5173 calling the mock; `make dev API=backend` points the frontend at the backend. `make help` lists `install`, `test`, `lint`, `generate`. |
+| Run all dev servers | `make dev` from the repo root: backend :8080 and frontend :5173 with every API call answered by the in-browser mock; `make dev API=backend` sends calls to the backend and mocks only its 501 answers. `make help` lists `install`, `test`, `lint`, `generate`. |
 | Install backend dependencies | `uv sync` |
 | Backend dev server | `uv run uvicorn app.main:app --reload --port 8080` (docs at `/docs`) |
 | Backend tests | `uv run pytest` |
@@ -78,9 +79,9 @@ Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 | Train the risk model | `uv run python -m app.risk.jobs.train` (env `FIRESTORE_DATABASE`, and `MODEL_BUCKET` or a local `MODEL_DIR`); in the cloud: `gcloud run jobs execute codguard-train` |
 | Monitor the models | `uv run python -m app.risk.jobs.monitor` (same env); in the cloud: Cloud Run job `codguard-monitor`, daily |
 | Build and run the backend image | `docker build -t codguard-backend backend` then `docker run -p 8080:8080 codguard-backend` (from the repo root) |
-| Mock API for the frontend | `pnpm mock` from `frontend/` (Prism, pinned in `package.json`), or `npx @stoplight/prism-cli mock api/openapi.yaml` from the repo root |
+| Mock API for the frontend | Built in: `src/mocks/` answers 501 endpoints (`VITE_API_MOCK=fallback`, default) or everything (`all`). Prism with the contract's fixed examples: `pnpm mock` from `frontend/` |
 | Install frontend dependencies | `pnpm install` (from `frontend/`, as are the frontend commands below) |
-| Frontend dev server | `pnpm dev` (http://localhost:5173, proxies `/api` to the Prism mock on :4010; `API_PROXY_TARGET` overrides) |
+| Frontend dev server | `pnpm dev` (http://localhost:5173, proxies `/api` to the backend on :8080; `API_PROXY_TARGET` overrides) |
 | Frontend lint, format, types, tests | `pnpm lint && pnpm format:check && pnpm typecheck && pnpm test` |
 | Frontend build | `pnpm build` |
 | Regenerate the frontend API client | `pnpm generate:api` (writes `frontend/src/api/gen/` from `api/openapi.yaml`) |
@@ -93,7 +94,7 @@ Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 - Any change to a schema or route must re-export `api/openapi.yaml` and regenerate the frontend client (`pnpm generate:api`) in the same PR. `tests/test_contract.py` fails when the YAML is out of date; the frontend CI job fails when `frontend/src/api/gen/` is.
 - Shop app sign-in: `POST /api/v1/auth/login` with the one admin account from `ADMIN_USERNAME` / `ADMIN_PASSWORD`; tokens are signed with `AUTH_TOKEN_SECRET`. It stands in for Firebase Auth (E7.1). Every route that reads or changes shop data takes `user: CurrentUser` (`app/api/security.py`) and scopes its work to `user.shop_id`; the router-level `bearer_auth` only declares the scheme.
 - Order reads: `GET /orders` filters, searches, sorts and pages one shop's orders in Python (`app/decision/inbox.py`) after a single Firestore query on `shop_id` and `placed_at`. A new Firestore query that filters or orders on more than one field needs its index added to `infra/firestore.indexes.json`.
-- Routes that are not implemented yet return 501 `not_implemented`. The frontend works against the Prism mock until then; see `api/README.md`.
+- Routes that are not implemented yet return 501 `not_implemented`. The frontend answers them from its in-browser mock (`frontend/src/mocks/`) until then. When you implement an endpoint, keep the mock's behaviour in line or remove what the backend now covers; the mock must keep following the domain rules below.
 - Every schema example must validate against its model (also enforced by the tests), because the mock server returns those examples.
 
 ## Domain rules

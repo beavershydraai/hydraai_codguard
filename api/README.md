@@ -22,6 +22,12 @@ const { data } = useQuery(listOrdersOptions({ query: { status: ["pending_review"
 
 ## Mock server
 
+The frontend has its own stateful mock (`frontend/src/mocks/`) that answers endpoints the
+backend still returns 501 for; see `frontend/README.md`. Prism below serves the contract's fixed
+examples, which is useful to check the contract itself.
+
+### Prism
+
 The backend returns `501 not_implemented` for endpoints that are not built yet. Until then, run
 a mock server that answers with the examples in the contract:
 

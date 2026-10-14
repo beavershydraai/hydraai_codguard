@@ -17,7 +17,10 @@ const QUEUE = { status: ['pending_review' as const], sort: '-updated_at' as cons
 
 export const Route = createFileRoute('/_shop/review')({
   staticData: { crumb: 'Chờ duyệt' },
-  loader: ({ context }) => context.queryClient.prefetchQuery(listOrdersOptions({ query: QUEUE })),
+  // Not awaited: the page renders its skeleton while the data loads.
+  loader: ({ context }) => {
+    void context.queryClient.prefetchQuery(listOrdersOptions({ query: QUEUE }))
+  },
   component: ReviewPage,
 })
 

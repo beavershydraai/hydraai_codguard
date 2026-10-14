@@ -262,11 +262,11 @@ GHN_API_TOKEN=<from-secret-manager>     # optional, never commit
 ```bash
 cp .env.example .env    # once: backend settings, including the demo sign-in admin@gmail.com / admin12345
 make install            # uv sync + pnpm install
-make dev                # backend :8080, Prism mock :4010, frontend :5173 (calls the mock)
-make dev API=backend    # backend + frontend calling it (needs `gcloud auth application-default login` for Firestore)
+make dev                # backend :8080 + frontend :5173 answering every API call from the in-browser mock
+make dev API=backend    # frontend calls the backend; endpoints still at 501 use the mock (Firestore needs `gcloud auth application-default login`)
 ```
 
-`make dev` prefixes each server's output with `[api]`, `[mock]` or `[web]`; Ctrl-C stops them all.
+`make dev` prefixes each server's output with `[api]` or `[web]`; Ctrl-C stops them all. Sign in with `admin@gmail.com` / `admin12345`.
 `make help` lists the other targets (`test`, `lint`, `generate`). The sections below run each part
 by hand.
 
@@ -287,19 +287,18 @@ It shows each node's input, output and session state for a run, which is the qui
 why an order took the branch it did. Posting an order to `/api/v1/intake/orders` runs the same
 graph without the UI.
 
-Endpoints are defined but return `501 not_implemented` until each one is built. To work on the frontend before that, run the mock server described in [`api/README.md`](api/README.md).
+Endpoints are defined but return `501 not_implemented` until each one is built. The frontend answers those from its in-browser mock (see [`frontend/README.md`](frontend/README.md)); [`api/README.md`](api/README.md) also describes a Prism server for the contract's fixed examples.
 
 ### 2b. Run the frontend locally
 
 ```bash
 cd frontend
-pnpm mock                                        # mock API on :4010 (Prism, in its own terminal)
 cp .env.example .env.local
 pnpm install
 pnpm dev                                         # http://localhost:5173
 ```
 
-The dev server proxies `/api` to the Prism mock. Set `API_PROXY_TARGET=http://127.0.0.1:8080` to use the local backend instead. See [`frontend/README.md`](frontend/README.md) for the other commands.
+The dev server proxies `/api` to the local backend; endpoints it still answers with 501 are served by the in-browser mock. `VITE_API_MOCK=all pnpm dev` runs without a backend. See [`frontend/README.md`](frontend/README.md) for the mock and the other commands.
 
 ### 4. Load demo data
 

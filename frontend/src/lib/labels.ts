@@ -130,7 +130,8 @@ export function formatRelative(iso: string, now = Date.now()): string {
     ['minute', 60],
   ]
   for (const [unit, size] of units) {
-    if (Math.abs(seconds) >= size) return relative.format(Math.round(seconds / size), unit)
+    if (Math.abs(seconds) >= size)
+      return relative.format(Math.round(seconds / size), unit).toLocaleLowerCase('vi')
   }
   return 'vừa xong'
 }
