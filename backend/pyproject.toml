@@ -12,10 +12,11 @@ dependencies = [
     "pandas>=3.0.6",
     "pyarrow>=26.0.0",
     "pydantic>=2.9",
+    "pyjwt>=2.10",
     "python-multipart>=0.0.9",
     "pyyaml>=6.0",
     "scikit-learn>=1.9.1",
-    "shap>=0.48,<1",
+    "shap>=0.53,<1",
     "uvicorn[standard]>=0.30",
 ]
 

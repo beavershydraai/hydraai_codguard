@@ -4,11 +4,12 @@ ponytail: sklearn HistGradientBoosting instead of LightGBM; same family (histogr
 boosting), no extra native dependency. Swap if validation shows a gap.
 """
 
-import math
-
+import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.isotonic import IsotonicRegression
+
+from app.risk.features import CHANNELS, SIGNALS
 
 FAIL_COST = 60_000  # ShopSettings.failed_delivery_cost_vnd default
 ACTION_COST = {"none": 0, "link": 300, "call": 1_500, "deposit": 0}  # ShopSettings; deposit unset
@@ -40,52 +41,64 @@ def fit_model1(df: pd.DataFrame, cols: list[str]) -> dict:
     clf = _gbm(300).fit(fit[cols], fit["is_failed"])
     iso = IsotonicRegression(out_of_bounds="clip")
     iso.fit(clf.predict_proba(cal[cols])[:, 1], cal["is_failed"])
-    background = fit[cols].sample(n=min(4, len(fit)), random_state=0).to_dict(orient="records")
-    return {"clf": clf, "iso": iso, "cols": cols, "shap_background": background}
+    return {"clf": clf, "iso": iso, "cols": cols}
 
 
 def predict1(model: dict, X: pd.DataFrame):
     return model["iso"].predict(model["clf"].predict_proba(X[model["cols"]])[:, 1])
 
 
-def explain1(model: dict, X: pd.DataFrame) -> dict:
-    """Bounded permutation SHAP of one calibrated probability against training feature rows.
+def explainer1(model: dict):
+    """SHAP TreeExplainer for model 1 (exact for HistGradientBoosting, log-odds scale)."""
+    import shap  # imported here: slow to load and only the scoring path needs it
 
-    Older model artifacts lack a background, so explanation evidence is explicitly unavailable.
-    One forward/reverse permutation preserves additivity but approximates higher interactions.
+    return shap.TreeExplainer(model["clf"])
+
+
+def explain1(model: dict, explainer, features: dict) -> dict:
+    """Exact TreeSHAP contributions of every feature to this order's risk (E2.4).
+
+    SHAP values are in log-odds. They are rescaled so they add up to the change in the model's
+    probability from the average order (`base_value`) to this one (`prediction`): positive raises
+    risk. This is the boosted model's probability before calibration; calibration is monotone,
+    so it keeps their order and sign.
     """
-    background = model.get("shap_background")
-    if not background:
-        return {"available": False, "method": "permutation_shap", "contributions": {}}
-
-    import shap
-
-    cols = model["cols"]
-
-    def predict(values):
-        probabilities = predict1(model, pd.DataFrame(values, columns=cols))
-        if not all(math.isfinite(float(p)) for p in probabilities):
-            raise ValueError("Model explanation probabilities must be finite.")
-        return probabilities
-
-    explainer = shap.PermutationExplainer(predict, pd.DataFrame(background, columns=cols), seed=0)
-    explanation = explainer(X[cols], max_evals=2 * len(cols) + 1, silent=True)
-    contributions = {
-        key: float(value) for key, value in zip(cols, explanation.values[0], strict=True)
-    }
-    base_value = float(explanation.base_values[0])
-    prediction = float(predict(X[cols])[0])
-    if not all(math.isfinite(value) for value in [base_value, *contributions.values()]):
-        raise ValueError("Model explanation evidence must be finite.")
+    x = pd.DataFrame([features])[model["cols"]]
+    phi = explainer.shap_values(x)[0]
+    base, logit = float(np.ravel(explainer.expected_value)[0]), float(phi.sum())
+    before, after = 1 / (1 + np.exp(-base)), 1 / (1 + np.exp(-(base + logit)))
+    scale = (after - before) / logit if abs(logit) > 1e-9 else 0.0
     return {
         "available": True,
-        "method": "permutation_shap",
-        "approximate": True,
-        "output": "calibrated_failure_probability",
-        "base_value": base_value,
-        "prediction": prediction,
-        "contributions": contributions,
+        "method": "tree_shap",
+        "approximate": False,
+        "output": "model_failure_probability",
+        "base_value": round(float(before), 4),
+        "prediction": round(float(after), 4),
+        "contributions": {
+            c: round(float(v * scale), 4) for c, v in zip(model["cols"], phi, strict=True)
+        },
     }
+
+
+def top_signals(features: dict, contributions: dict, top: int = 5) -> list[dict]:
+    """The `top` largest contributions as API Signal dicts (key, group, label_vi, value)."""
+    signals = []
+    for key in sorted(contributions, key=lambda k: -abs(contributions[k]))[:top]:
+        group, label = SIGNALS[key]
+        value, contribution = features[key], contributions[key]
+        if key == "address_has_house_number":  # the API has named the inverse flag since 8 Oct
+            key, value = "address_missing_house_number", 1 - value
+        signals.append(
+            {
+                "key": key,
+                "group": group,
+                "label_vi": label,
+                "value": CHANNELS[int(value)] if key == "channel" else round(value, 4),
+                "contribution": contribution,
+            }
+        )
+    return signals
 
 
 def with_action(X: pd.DataFrame, actions) -> pd.DataFrame:

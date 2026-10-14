@@ -35,7 +35,7 @@ _DESCRIPTIONS = {
 
 _EXAMPLES: dict[int, dict] = {
     400: {"detail": "CSV header is missing the buyer_phone column."},
-    401: {"detail": "Missing or expired Firebase ID token."},
+    401: {"detail": "Missing or expired access token."},
     403: {"detail": "Only the shop owner can change the policy."},
     404: {"detail": "Order ord_99 not found."},
     409: {"detail": "An order with external_id FB-20261009-0042 already exists."},
