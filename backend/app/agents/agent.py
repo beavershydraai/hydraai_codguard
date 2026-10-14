@@ -162,8 +162,8 @@ def post_interaction(node_input: dict):
     row = entry(doc, decision, workflow=ON_CONTACT_EVENT, step=routes.POST_INTERACTION)
     pipe.log.write(row)
     yield Event(state={"decision": _state(row)})
-    route = CANCELLED if decision.action == DecisionAction.CANCEL else routes.route_for(
-        decision.action
+    route = (
+        CANCELLED if decision.action == DecisionAction.CANCEL else routes.route_for(decision.action)
     )
     yield Event(output=doc, route=route)
 
@@ -215,9 +215,7 @@ def ship(node_input: dict) -> dict:
 def send_confirm(node_input: dict) -> dict:
     """CONFIRM: one confirmation link per order (E5 sends it for real)."""
     pipe = current()
-    return contact.contact(
-        pipe.log, node_input, DecisionAction.SEND_CONFIRMATION_LINK, pipe.now
-    )
+    return contact.contact(pipe.log, node_input, DecisionAction.SEND_CONFIRMATION_LINK, pipe.now)
 
 
 def call_buyer(node_input: dict) -> dict:

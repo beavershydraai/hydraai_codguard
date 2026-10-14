@@ -12,6 +12,7 @@ the decision log is a Firestore collection of our own rather than ADK session st
 that wants the per-node history of past runs should pass `DatabaseSessionService` instead.
 """
 
+import asyncio
 import json
 import logging
 from datetime import UTC, datetime
@@ -76,6 +77,12 @@ async def run_new_order(
         return hold_for_review(order_id, pipeline, agent.ON_NEW_ORDER)
     finally:
         agent.reset(token)
+
+
+def run_new_order_sync(order_id: str, shop_id: str, *, pipeline: Pipeline) -> dict:
+    """`run_new_order` for a caller that is not async. The intake route is a sync endpoint, so
+    FastAPI runs it in a worker thread that has no event loop of its own."""
+    return asyncio.run(run_new_order(order_id, shop_id, pipeline=pipeline))
 
 
 async def run_contact_event(

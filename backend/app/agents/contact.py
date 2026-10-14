@@ -56,7 +56,11 @@ def contact(log: DecisionLog, doc: dict, action: DecisionAction, now: datetime |
 
 def notify_ship(doc: dict) -> dict:
     """Tell the seller the order may go to the carrier. Nothing reaches the buyer."""
-    return {"order_id": doc["order_id"], "action": DecisionAction.SHIP_NOW.value, "status": doc["status"]}
+    return {
+        "order_id": doc["order_id"],
+        "action": DecisionAction.SHIP_NOW.value,
+        "status": doc["status"],
+    }
 
 
 def enqueue_review(doc: dict, reason: str) -> dict:
