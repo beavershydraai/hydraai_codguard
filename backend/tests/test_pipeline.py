@@ -6,10 +6,11 @@ the retries, the DEFAULT_ROUTE fallback and the decision log are the ones that r
 """
 
 from copy import deepcopy
+from datetime import timedelta
 
 import pytest
 
-from app.agents import agent, routes
+from app.agents import agent, contact, routes
 from app.agents.agent import Pipeline
 from app.agents.runner import run_contact_event, run_new_order
 from app.data.orders import order_document
@@ -27,9 +28,7 @@ EXAMPLE = OrderCreate.model_config["json_schema_extra"]["examples"][0]
 
 def _order(store: FakeStore, order_id: str) -> dict:
     order = OrderCreate.model_validate(EXAMPLE)
-    doc = order_document(
-        order, order_id=order_id, shop_id=SHOP, phone_key=b"test-key", now=NOW
-    )
+    doc = order_document(order, order_id=order_id, shop_id=SHOP, phone_key=b"test-key", now=NOW)
     store.create(doc)
     return doc
 
@@ -182,15 +181,14 @@ async def test_rerunning_the_same_order_does_not_send_a_second_message(pipe, mon
     assert list(pipe.log.claims) == ["ord_test:send_confirmation_link"]
 
 
-@pytest.mark.asyncio
-async def test_a_second_send_for_the_same_order_reports_the_first_one(pipe, monkeypatch):
-    """The claim, not the duplicate check, is what makes a send idempotent under a retry."""
-    monkeypatch.setattr(engine, "score", scorer("medium", "link"))
-    first = await run(pipe)
-    pipe.store.docs["ord_test"]["decision"] = None  # as if the run had not been recorded
-    again = await run(pipe)
-    assert again["sent"] is False
-    assert again["sent_at"] == first["sent_at"]
+def test_a_repeated_send_reports_the_first_one_instead_of_sending_again(pipe):
+    """The claim, not the duplicate check, is what makes a send idempotent under an ADK retry."""
+    doc = pipe.store.get("ord_test")
+    action = DecisionAction.SEND_CONFIRMATION_LINK
+    first = contact.contact(pipe.log, doc, action, NOW)
+    again = contact.contact(pipe.log, doc, action, NOW + timedelta(minutes=5))
+    assert first["sent"] is True
+    assert again["sent"] is False and again["sent_at"] == NOW
     assert len(pipe.log.claims) == 1
 
 

@@ -151,10 +151,10 @@ def post_interaction(node_input: dict):
     """The rule set's L4 table: decide from what the buyer or the call reported, without running
     the risk model again (`AFTER_INTERACTION` carries `model_rerun: false`)."""
     pipe = current()
-    before = (pipe.store.get(node_input["order_id"]) or {}).get("decision") or {}
+    before = _outcome(pipe.store.get(node_input["order_id"]) or {})
     doc = _apply(pipe, node_input)
     raw = doc.get("decision") or {}
-    if not raw or raw.get("decided_at") == before.get("decided_at"):
+    if not raw or _outcome(doc) == before:
         # L4 left the order alone: an early timer, or a repeat of an answer already recorded.
         yield Event(output=doc, route=UNCHANGED)
         return
@@ -199,6 +199,12 @@ def _apply(pipe: Pipeline, event: dict) -> dict:
             pipe.store, order_id, now, settings=pipe.settings, policy=pipe.policy
         )
     raise ValueError(f"unknown contact event {kind!r}")
+
+
+def _outcome(doc: dict) -> tuple:
+    """What L4 may change about an order. Comparing it before and after tells a real decision
+    from a timer that was not due, without relying on the clock moving between the two."""
+    return doc.get("status"), json.dumps(doc.get("decision"), sort_keys=True, default=str)
 
 
 def _state(row: dict) -> dict:

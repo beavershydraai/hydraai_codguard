@@ -108,6 +108,8 @@ async def run_contact_event(
 def hold_for_review(order_id: str, pipeline: Pipeline, workflow: str) -> dict:
     """The fallback for a failed run: a person looks at the order and nobody is contacted."""
     now = pipeline.now or datetime.now(UTC)
+    if pipeline.store.get(order_id) is None:
+        return {"order_id": order_id, "action": None, "reason": "order_not_found"}
     try:
         doc = lifecycle.hold_for_review(
             pipeline.store, order_id, now, settings=pipeline.settings, policy=pipeline.policy
