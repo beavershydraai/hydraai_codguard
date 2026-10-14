@@ -20,6 +20,7 @@ Run from `frontend/`. Needs Node.js 20+ and pnpm (`corepack enable` picks up the
 | ------------------------- | ---------------------------------------------- |
 | Install                   | `pnpm install`                                 |
 | Dev server                | `pnpm dev` (http://localhost:5173)             |
+| Mock API                  | `pnpm mock` (Prism on :4010)                   |
 | Regenerate the API client | `pnpm generate:api`                            |
 | Lint                      | `pnpm lint` (oxlint)                           |
 | Format                    | `pnpm format` / `pnpm format:check` (Prettier) |
@@ -33,7 +34,7 @@ The app calls `/api/...` on its own origin. In development Vite proxies `/api` t
 on port 4010; set `API_PROXY_TARGET=http://127.0.0.1:8080` to use the local backend instead.
 
 ```bash
-npx @stoplight/prism-cli mock api/openapi.yaml   # from the repo root
+pnpm mock                                        # Prism on :4010, in its own terminal
 cp .env.example .env.local                       # sets a dev bearer token for the mock
 pnpm dev
 ```

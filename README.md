@@ -257,7 +257,20 @@ GHN_API_BASE_URL=<ghn-staging-url>      # optional
 GHN_API_TOKEN=<from-secret-manager>     # optional, never commit
 ```
 
-### 2. Run the backend locally
+### 2. Run everything with make
+
+```bash
+cp .env.example .env    # once: backend settings, including the demo sign-in admin@gmail.com / admin12345
+make install            # uv sync + pnpm install
+make dev                # backend :8080, Prism mock :4010, frontend :5173 (calls the mock)
+make dev API=backend    # backend + frontend, with the frontend calling the local backend
+```
+
+`make dev` prefixes each server's output with `[api]`, `[mock]` or `[web]`; Ctrl-C stops them all.
+`make help` lists the other targets (`test`, `lint`, `generate`). The sections below run each part
+by hand.
+
+### 2a. Run the backend locally
 
 Requires [uv](https://docs.astral.sh/uv/), which also installs Python 3.12.
 
@@ -276,11 +289,11 @@ graph without the UI.
 
 Endpoints are defined but return `501 not_implemented` until each one is built. To work on the frontend before that, run the mock server described in [`api/README.md`](api/README.md).
 
-### 3. Run the frontend locally
+### 2b. Run the frontend locally
 
 ```bash
-npx @stoplight/prism-cli mock api/openapi.yaml   # mock API on :4010, from the repo root
 cd frontend
+pnpm mock                                        # mock API on :4010 (Prism, in its own terminal)
 cp .env.example .env.local
 pnpm install
 pnpm dev                                         # http://localhost:5173

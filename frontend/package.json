@@ -12,7 +12,8 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "mock": "prism mock ../api/openapi.yaml"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -39,6 +40,7 @@
   },
   "devDependencies": {
     "@hey-api/openapi-ts": "^0.99.0",
+    "@stoplight/prism-cli": "5.16.0",
     "@tanstack/react-query-devtools": "^5.104.2",
     "@tanstack/react-router-devtools": "^1.167.2",
     "@tanstack/router-plugin": "^1.168.45",

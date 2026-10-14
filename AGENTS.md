@@ -68,6 +68,7 @@ Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 
 | Task | Command |
 |---|---|
+| Run all dev servers | `make dev` from the repo root: backend :8080, Prism mock :4010, frontend :5173 calling the mock; `make dev API=backend` points the frontend at the backend. `make help` lists `install`, `test`, `lint`, `generate`. |
 | Install backend dependencies | `uv sync` |
 | Backend dev server | `uv run uvicorn app.main:app --reload --port 8080` (docs at `/docs`) |
 | Backend tests | `uv run pytest` |
@@ -77,7 +78,7 @@ Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 | Train the risk model | `uv run python -m app.risk.jobs.train` (env `FIRESTORE_DATABASE`, and `MODEL_BUCKET` or a local `MODEL_DIR`); in the cloud: `gcloud run jobs execute codguard-train` |
 | Monitor the models | `uv run python -m app.risk.jobs.monitor` (same env); in the cloud: Cloud Run job `codguard-monitor`, daily |
 | Build and run the backend image | `docker build -t codguard-backend backend` then `docker run -p 8080:8080 codguard-backend` (from the repo root) |
-| Mock API for the frontend | `npx @stoplight/prism-cli mock api/openapi.yaml` (from the repo root) |
+| Mock API for the frontend | `pnpm mock` from `frontend/` (Prism, pinned in `package.json`), or `npx @stoplight/prism-cli mock api/openapi.yaml` from the repo root |
 | Install frontend dependencies | `pnpm install` (from `frontend/`, as are the frontend commands below) |
 | Frontend dev server | `pnpm dev` (http://localhost:5173, proxies `/api` to the Prism mock on :4010; `API_PROXY_TARGET` overrides) |
 | Frontend lint, format, types, tests | `pnpm lint && pnpm format:check && pnpm typecheck && pnpm test` |
