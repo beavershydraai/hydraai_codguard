@@ -57,7 +57,7 @@ async def run_new_order(
     pipeline: Pipeline,
     session_service: BaseSessionService | None = None,
 ) -> dict:
-    """Run `load_order -> score -> decide -> act` for one new order.
+    """Run `load_order -> score -> assess_order -> decide -> act` for one new order.
 
     Returns what the action branch produced, `{"duplicate": True}` for an order that already has
     a decision, or the result of holding the order for review when the run failed.
@@ -111,9 +111,21 @@ def hold_for_review(order_id: str, pipeline: Pipeline, workflow: str) -> dict:
     if pipeline.store.get(order_id) is None:
         return {"order_id": order_id, "action": None, "reason": "order_not_found"}
     try:
-        doc = lifecycle.hold_for_review(
-            pipeline.store, order_id, now, settings=pipeline.settings, policy=pipeline.policy
+        guard = (
+            {"guard_decision": True, "expected_decision": agent.committed_decision()}
+            if workflow == agent.ON_NEW_ORDER
+            else {}
         )
+        doc = lifecycle.hold_for_review(
+            pipeline.store,
+            order_id,
+            now,
+            settings=pipeline.settings,
+            policy=pipeline.policy,
+            **guard,
+        )
+    except lifecycle.ExistingDecision:
+        return {"order_id": order_id, "action": None, "duplicate": True}
     except Exception:
         log.exception("Could not hold %s for review", order_id)
         return {"order_id": order_id, "action": None, "reason": "pipeline_failed"}

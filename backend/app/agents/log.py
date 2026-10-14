@@ -39,6 +39,8 @@ def entry(doc: dict, decision: Decision, *, workflow: str, step: str) -> dict:
         "block_reason": [r.value for r in decision.block_reasons],
         "propensity": doc.get("action_probability", 1.0),
         "explore": bool(doc.get("random_slice")),
+        "assessment": scoring.get("assessment"),
+        "reasons": scoring.get("reasons", []),
     }
 
 

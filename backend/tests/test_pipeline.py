@@ -35,6 +35,7 @@ def _order(store: FakeStore, order_id: str) -> dict:
 
 @pytest.fixture
 def pipe(monkeypatch):
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
     monkeypatch.setenv("PHONE_HASH_KEY", "test-key")
     monkeypatch.setattr(engine, "score", lambda doc, history: scored_fields())
     store, log = FakeStore(), FakeDecisionLog()

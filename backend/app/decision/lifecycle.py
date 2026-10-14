@@ -1,6 +1,7 @@
 """Order lifecycle (E4.1): shared transitions and transactional order services."""
 
 from collections.abc import Callable
+from copy import deepcopy
 from datetime import UTC, datetime
 
 from app.api.errors import ApiError
@@ -48,6 +49,14 @@ WAITING = frozenset({OrderStatus.AWAITING_CONFIRMATION, OrderStatus.AWAITING_DEP
 
 class InvalidTransition(ValueError):
     """An event cannot be applied in the order's current state."""
+
+
+class ExistingDecision(ValueError):
+    """Another run or a person decided the order while its assessment was running."""
+
+
+class StaleAssessment(ValueError):
+    """The order changed after scoring; its assessment must not authorize a contact."""
 
 
 def transition(
@@ -176,6 +185,19 @@ def _score(
     fields = engine.score(doc, history)
     if fields is None:
         return False
+    _apply_score(doc, fields, now, settings=settings, policy=policy)
+    return True
+
+
+def _apply_score(
+    doc: dict,
+    fields: dict,
+    now: datetime,
+    *,
+    settings: ShopSettings | None,
+    policy: Policy | None,
+) -> None:
+    """Apply deterministic score fields and choose the final action under current guards."""
     previous = doc.get("scoring")
     if previous:
         doc.setdefault("score_history", []).insert(0, previous)
@@ -188,7 +210,7 @@ def _score(
     )
     if staff:
         _set_decision(doc, Decision.model_validate(staff_decision))
-        return True
+        return
     raw = fields["scoring"]
     action = next(a for a, name in engine.ACTION_NAME.items() if name == fields["contact_action"])
     # Model/random choices and hard rules are retained; ordinary tier rules use today's policy.
@@ -206,7 +228,42 @@ def _score(
     _move(doc, "rescored" if previous else "decided", decision.action)
     _set_decision(doc, decision)
     _event(doc, "decided", now, "Đã cập nhật quyết định cho đơn hàng.")
-    return True
+
+
+def prepare_score(store: OrderStore, doc: dict) -> dict | None:
+    """Compute intake scoring outside a transaction, without saving a decision.
+
+    ADK can assess these immutable inputs before the final transaction. Model calls must
+    never run inside a Firestore callback that may be replayed after a conflict.
+    """
+    _editable(doc)
+    history = (
+        store.history(doc["buyer_phone_hash"], doc["placed_at"]) if doc["buyer_phone_hash"] else []
+    )
+    return engine.score(deepcopy(doc), history)
+
+
+def commit_prepared_score(
+    store: OrderStore,
+    before: dict,
+    fields: dict,
+    now: datetime,
+    *,
+    settings: ShopSettings | None = None,
+    policy: Policy | None = None,
+) -> dict:
+    """Validate the assessed snapshot, then save score and deterministic decision atomically."""
+
+    def apply(current):
+        if current.get("decision") is not None:
+            raise ExistingDecision("The order already has a decision")
+        if current != before:
+            raise StaleAssessment("The order changed during assessment")
+        _editable(current)
+        _apply_score(current, deepcopy(fields), now, settings=settings, policy=policy)
+        return current
+
+    return _transact(store, before["order_id"], apply)
 
 
 def score_order(
@@ -534,6 +591,8 @@ def hold_for_review(
     *,
     settings: ShopSettings | None = None,
     policy: Policy | None = None,
+    guard_decision: bool = False,
+    expected_decision: dict | None = None,
 ) -> dict:
     """Put an unshipped order in the seller's review queue; a shipped or finished one is left
     alone. The ADK pipeline (E4.7) calls this when a run fails, so a broken model or a storage
@@ -541,6 +600,8 @@ def hold_for_review(
     """
 
     def apply(doc):
+        if guard_decision and doc.get("decision") != expected_decision:
+            raise ExistingDecision("A different invocation or a person decided this order")
         if doc["status"] not in EDITABLE:
             return doc
         decision = decisions.decide(

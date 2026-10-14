@@ -28,7 +28,7 @@ api/            OpenAPI contract (generated from backend/, used by frontend/)
 backend/        Python service on Cloud Run: API, decision engine, ADK agents
   app/          FastAPI app: routes (api/v1/) and request/response schemas (schemas/)
     decision/   order lifecycle, rescoring, confirmed-order guard (E4.1) and tier policy (E4.2)
-    agents/     ADK orchestration (E4.7): the two workflows and the decision log
+    agents/     ADK workflows (E4.7), advisory assessment and the decision log
   config/       rule set YAML; only `tier_policy` is read by the code so far
   scoring/      hard rules, expected loss, model calls
   voice/        Gemini Live session handling
@@ -112,7 +112,7 @@ These rules come from the README and the epics. Code and tests must enforce them
 
 - Order states: Mới, Được gửi, Chờ xác nhận, Chờ cọc, Chờ duyệt, Đã hủy, Đã gửi, Giao thành công, Giao thất bại.
 - Editing an order before it ships triggers a rescore. A confirmed order is never contacted again.
-- A new order runs the pipeline at intake, with no one pressing anything: `load_order → score → decide → act`. Only the deterministic engine in `app/decision` picks the action; an LLM may write the wording of a message but never decides.
+- A new order runs the pipeline at intake, with no one pressing anything: `load_order → score → assess_order → decide → act`. The assessment uses two advisory agents when `GEMINI_MODEL` is set; it validates evidence-backed reasons before the decision is saved. Only the deterministic engine in `app/decision` picks the action; an LLM may write the wording of a message but never decides.
 - Every way out of the pipeline that is not a decision ends in review: a run that still fails after its retries, an action with no branch of its own, and an event the L4 table does not know. Nothing reaches the buyer on an error.
 - A send is claimed before it happens, so a retry, a redelivered webhook or a rerun never contacts the buyer twice. A confirmation link or deposit request is claimed under `order_id + action`. Each of the two AI call attempts has its own claim (`order_id:ai_call:1`, `:2`) tied to the decision it carries out, and the attempt is recorded on the order (`attempts.ai_call`) so the no-response timer moves on to the second call or to review.
 - A policy change applies only to decisions made after the change.

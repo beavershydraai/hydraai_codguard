@@ -2,14 +2,14 @@
 
 Two workflows instead of one, because a buyer may answer hours later:
 
-- `on_new_order`: load_order -> score -> decide -> one action branch. It ends as soon as the
-  buyer has been contacted, so nothing holds state while waiting.
+- `on_new_order`: load_order -> score -> assess_order -> decide -> one action branch.
+  It ends after the action, so nothing holds state while waiting for a buyer.
 - `on_contact_event`: load_event -> post_interaction -> one action branch. It runs the rule set's
-  L4 table on what the buyer or the call reported and never scores the order again.
+  L4 table on what the buyer or the call reported; buyer edits retain lifecycle rescoring.
 
 Only `decide` and `post_interaction` choose a branch, and both read the action from the
-deterministic engine in app/decision. An LLM never decides: a Gemini step may write the wording
-of a message (E5), which keeps every decision testable and explainable.
+deterministic engine in app/decision. Two advisory agents assess evidence before the initial
+decision is saved; their validated explanations never change score, tier or action.
 
 Written for google-adk 2.x. The 1.x pattern (`SequentialAgent`, subclassing `BaseAgent` and
 overriding `_run_async_impl`) is silently ignored by this version.
@@ -17,6 +17,7 @@ overriding `_run_async_impl`) is silently ignored by this version.
 
 import json
 from contextvars import ContextVar
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -25,7 +26,8 @@ from google.adk.workflow import DEFAULT_ROUTE, RetryConfig, node
 from google.api_core import exceptions as gcp
 from google.genai import types
 
-from app.agents import contact, routes
+from app.agents import assessment, contact, routes
+from app.agents.assessment import AssessmentResult
 from app.agents.log import DecisionLog, entry
 from app.data.store import OrderStore
 from app.decision import lifecycle
@@ -60,12 +62,20 @@ class Pipeline:
     now: datetime | None = None
 
 
-_current: ContextVar[Pipeline] = ContextVar("pipeline")
+@dataclass
+class _Run:
+    """Shared by ADK child tasks for one invocation; never shared between intake requests."""
+
+    pipeline: Pipeline
+    committed_decision: dict | None = None
+
+
+_current: ContextVar[_Run] = ContextVar("pipeline")
 
 
 def use(pipeline: Pipeline):
     """Make `pipeline` the one the nodes of the current run use. Returns the context token."""
-    return _current.set(pipeline)
+    return _current.set(_Run(pipeline))
 
 
 def reset(token) -> None:
@@ -73,7 +83,12 @@ def reset(token) -> None:
 
 
 def current() -> Pipeline:
-    return _current.get()
+    return _current.get().pipeline
+
+
+def committed_decision() -> dict | None:
+    """The decision this invocation saved, used to guard its error fallback atomically."""
+    return _current.get().committed_decision
 
 
 class MissingOrder(LookupError):
@@ -99,44 +114,71 @@ def load_order(node_input: types.Content) -> dict:
 
 @node(retry_config=SCORE_RETRY)
 def score(node_input: dict):
-    """Score the order and save the decision the rule engine makes for it, in one transaction
-    (E2.4 scoring, E4.2 tier policy).
+    """Prepare deterministic scoring without saving an action before advisory assessment.
 
     A transient model or storage failure is raised so ADK retries it up to three times. Catching
     it here would stop that, so nothing in this node is wrapped in `except`.
     """
     pipe = current()
-    doc = lifecycle.score_order(
-        pipe.store, node_input, pipe.now, settings=pipe.settings, policy=pipe.policy
-    )
-    scoring = doc.get("scoring") or {}
+    fields = lifecycle.prepare_score(pipe.store, node_input)
+    scoring = (fields or {}).get("scoring") or {}
     yield Event(
         state={
             "risk": {
-                "tier": doc.get("tier"),
+                "tier": (fields or {}).get("tier"),
                 "failure_probability": scoring.get("probability"),
                 "expected_loss_vnd": scoring.get("expected_loss_vnd"),
                 "probs": scoring.get("outcome_probabilities") or {},
             }
         }
     )
-    yield Event(output=doc)
+    yield Event(output={"order": node_input, "fields": fields})
+
+
+async def assess_order(node_input: dict) -> dict:
+    """Assess a copy of the score and context; advisory code cannot mutate decision inputs."""
+    fields = node_input["fields"]
+    if fields is None:
+        return node_input
+    pipe = current()
+    now = pipe.now or datetime.now(UTC)
+    result = AssessmentResult.model_validate(
+        await assessment.assess(deepcopy(node_input["order"] | fields), log=pipe.log, now=now)
+    )
+    if result.status == "quota_exhausted":
+        raise ValueError("Assessment budget exhausted")
+    fields = deepcopy(fields)
+    fields["scoring"]["reasons"] = [reason.model_dump() for reason in result.reasons]
+    fields["scoring"]["assessment"] = result.model_dump(exclude={"reasons"}, exclude_none=True)
+    return node_input | {"fields": fields}
 
 
 def decide(node_input: dict):
-    """Append the engine's decision to the decision log and branch on it. This node chooses
-    nothing itself: `score` already applied the rule set through app/decision/policy.py."""
+    """Commit the assessed score with deterministic policy guards, then log and route it."""
     pipe = current()
-    raw = node_input.get("decision")
-    if raw is None:  # no model is trained yet (E2.4): the order waits, unscored
+    fields = node_input["fields"]
+    if fields is None:  # no model is trained yet (E2.4): the order waits, unscored
         yield Event(state={"decision": None})
-        yield Event(output=node_input, route=UNSCORED)
+        yield Event(output=node_input["order"], route=UNSCORED)
         return
+    try:
+        doc = lifecycle.commit_prepared_score(
+            pipe.store,
+            node_input["order"],
+            fields,
+            pipe.now or datetime.now(UTC),
+            settings=pipe.settings,
+            policy=pipe.policy,
+        )
+    except lifecycle.ExistingDecision as error:
+        raise AlreadyDecided from error
+    raw = doc["decision"]
+    _current.get().committed_decision = deepcopy(raw)
     decision = Decision.model_validate(raw)
-    row = entry(node_input, decision, workflow=ON_NEW_ORDER, step="L3_initial_action")
+    row = entry(doc, decision, workflow=ON_NEW_ORDER, step="L3_initial_action")
     pipe.log.write(row)
     yield Event(state={"decision": _state(row)})
-    yield Event(output=node_input, route=routes.route_for(decision.action))
+    yield Event(output=doc, route=routes.route_for(decision.action))
 
 
 def load_event(node_input: types.Content) -> dict:
@@ -292,7 +334,7 @@ on_new_order = Workflow(
     name=ON_NEW_ORDER,
     description="Score a new COD order, apply the tier policy and carry out the chosen action.",
     edges=[
-        ("START", load_order, score, decide),
+        ("START", load_order, score, assess_order, decide),
         (decide, _ACTION_BRANCHES | {UNSCORED: unscored}),
     ],
 )

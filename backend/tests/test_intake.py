@@ -74,6 +74,7 @@ class FakeDecisionLog:
 
 @pytest.fixture
 def api(monkeypatch, tmp_path):
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
     monkeypatch.setenv("INTAKE_API_KEYS", "key-a:shop_a,key-b:shop_b")
     monkeypatch.setenv("PHONE_HASH_KEY", "test-key")
     monkeypatch.setenv("MODEL_DIR", str(tmp_path))  # no model yet

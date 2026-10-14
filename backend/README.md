@@ -28,9 +28,9 @@ with tags `sha-<commit>` and `main`.
 | `app/api/errors.py` | Problem-details errors and the shared error responses |
 | `app/schemas/` | Request and response models with examples |
 | `app/data/` | Order record (`docs/data-model.md`): phone normalisation and hashing, the Firestore document, the training label and snapshot row |
-| `app/risk/` | Scoring engine (features, Model 1, hard rules, tier, action) and the jobs `jobs/train.py`, `jobs/monitor.py` (`tasks/E2.3-risk-features.md`) |
+| `app/risk/` | Scoring engine (features, Model 1, calibrated-probability SHAP, hard rules, tier, action) and the jobs `jobs/train.py`, `jobs/monitor.py` (`tasks/E2.3-risk-features.md`) |
 | `app/decision/` | Order lifecycle (E4.1): nine statuses, transactional edits and rescoring, buyer/call/delivery outcomes, confirmed-order guard, order-detail view. Policy engine (E4.2): action per tier, expected-loss gate and escalation |
-| `app/agents/` | ADK function-node workflows (E4.7), runners, decision log and contact claims; contact channels return `mock: true` |
+| `app/agents/` | ADK workflows (E4.7), two advisory assessment agents, runners, decision log and contact claims; contact channels return `mock: true` |
 | `config/cod_guard_rules_apac.yaml` | Rule set: the policy engine reads `tier_policy`; the ADK routing and log read `baseline_alignment.api_actions` and `metadata.rule_set_version`. Tests also inspect `enums.outcomes`. The image copies this folder; `tests/test_rules_file.py` checks consistency |
 | `tests/` | Contract and app tests |
 | `Dockerfile` | Production image: uv-built virtualenv, non-root user, listens on `$PORT` |
@@ -39,11 +39,13 @@ See `../api/README.md` for how the frontend uses the contract.
 
 ## Order lifecycle services (E4.1)
 
-`app/decision/lifecycle.py` applies all order transitions through `OrderStore.transact`, so the state
-read, scoring history, current decision and timeline change together. Intake uses `score_order`;
-`edit_order` checks the shop and editable state, then rescores only when a field changes. Buyer and call
-results use `apply_buyer_response` and `apply_call_outcome`. Timers use `on_no_response`; shipping and
-carrier results use `mark_shipped` and `apply_delivery`.
+`app/decision/lifecycle.py` applies order transitions through `OrderStore.transact`, so committed
+scoring history, current decision and timeline change together. Intake uses `prepare_score`
+to compute an uncommitted snapshot, then `commit_prepared_score` to verify the stored order has not
+changed and save its deterministic decision after assessment. `score_order` remains available to
+other callers. `edit_order` checks the shop and editable state, then rescores only when a field
+changes. Buyer and call results use `apply_buyer_response` and `apply_call_outcome`.
+Timers use `on_no_response`; shipping and carrier results use `mark_shipped` and `apply_delivery`.
 
 Confirmation is stored once. A later edit still records a fresh score, but cannot schedule another
 contact for a confirmed order. `app/decision/views.py` exposes the current score and prior runs through
@@ -61,18 +63,52 @@ buyer-page tokens, call sessions, contact limits and timer scheduling belong to 
 
 `app/agents/agent.py` defines two ADK 2.x `Workflow` graphs with Python function nodes:
 
-- `on_new_order`: `load_order → score → decide → act`. A new intake order runs this graph before
-  the API responds, without a manual trigger. The deterministic engine in `app/decision` chooses
-  the action; `decide` logs it and routes to ship, confirmation link, AI call, deposit or review.
+- `on_new_order`: `load_order → score → assess_order → decide → act`. A new intake order runs this
+  graph before the API responds, without a manual trigger. Scoring does not persist a decision.
+  After advisory assessment, `decide` validates the snapshot, saves the deterministic engine's
+  decision, logs it and routes to ship, confirmation link, AI call, deposit or review.
 - `on_contact_event`: `load_event → post_interaction → act`. `run_contact_event` accepts buyer
   responses, call outcomes and no-response events through the lifecycle functions. Confirmation
   and timer decisions use the existing score; buyer edits retain the lifecycle's rescoring rules.
   This runner is not yet wired to an HTTP endpoint or a scheduled timer.
 
-These graphs implement orchestration. They contain no Gemini agents for signal extraction,
-message composition or voice, and no LLM chooses the score, tier or action. Contact branches
-reserve a send and return `mock: true`; the E5 channel integration still needs to perform the contact
-and deliver its result to `run_contact_event`. The graphs do not wait for a buyer to respond.
+`app/agents/assessment.py` runs two real ADK `Agent` roles in sequence: `risk_analyst` selects
+reasons and `evidence_verifier` checks that proposal. They receive only numeric features,
+scoring results, available SHAP contributions and limited order context, without names, phone
+numbers, addresses or free text. They may select at most three canonical Vietnamese reasons
+backed by feature values; validation rejects altered wording, unsupported signals and decision
+fields. The verifier may only keep or remove the analyst's reasons. No LLM chooses or changes
+the score, tier or action. Message composition and voice remain E5 integration work.
+
+`GEMINI_MODEL` selects the assessment model. With it unset, assessment records `disabled` and
+the deterministic pipeline continues. Hard-rule and confirmed orders skip the agents; no
+candidate evidence records `no_evidence`. Without a trained risk model, the order stays new and
+unscored, and no assessment runs. A configured assessment failure, invalid output, timeout,
+exhausted quota or changed order snapshot reaches review before any buyer contact.
+If another run or a staff member has already decided the order, the failed intake preserves
+that decision instead. This check runs inside the fallback transaction, including its retries.
+
+Set `GEMINI_MODEL` in the service process environment to enable assessment, with authenticated
+Vertex AI credentials and the project/location variables documented in `../.env.example`.
+Retrain older risk artifacts to add their SHAP background; until then assessment can use the
+available feature evidence and explicitly reports SHAP unavailable.
+
+The assessment budget uses atomic claims in the shared `DecisionLog`: at most
+`ASSESSMENT_DAILY_LIMIT` assessment runs per UTC day across all shops (default 30, permitted
+range 1–30). A claimed run keeps its quota slot if assessment fails. Each assessment allows
+two LLM requests, one HTTP attempt per request and a 15-second timeout around the agent workflow.
+Assessment failures are not retried. Completed assessment metadata and validated reasons are
+stored with scoring and copied to the decision log.
+
+Model 1 training stores up to four feature rows from the training split as its SHAP background.
+`app/risk/model.py:explain1` uses bounded, approximate permutation SHAP on the complete
+calibrated failure probability, including isotonic calibration. The scoring snapshot carries
+`scoring.shap`; older model artifacts without a background report explanations unavailable.
+These contributions inform assessment and do not change the deterministic decision.
+
+Contact branches reserve a send and return `mock: true`; the E5 channel integration still needs
+to perform the contact and deliver its result to `run_contact_event`. The graphs do not wait for
+a buyer to respond.
 
 The intake route stays synchronous: FastAPI runs it in a worker thread, where `run_new_order_sync`
 uses `asyncio.run` to create a loop for that run. ADK executes synchronous nodes on that loop, and
@@ -93,10 +129,14 @@ same decision.
 
 `tests/test_pipeline.py` runs the real ADK graphs with a fake store, decision log and risk model.
 It covers ship, confirmation, retry and review paths, duplicate sends, decision-log fields,
-contact events and the second call followed by review. `tests/test_intake.py` checks the automatic
-intake trigger and returned decision status. These tests verify orchestration with mock contacts;
-they do not establish live-channel completion, Gemini Live compatibility or Cloud Run cold-start
-performance.
+contact events and the second call followed by review. `tests/test_assessment.py` runs both real
+ADK agent roles with a fake LLM and checks evidence validation, redaction, budget and timeout.
+`tests/test_assessment_pipeline.py` checks assessment before persistence, immutable scoring
+inputs and review without contact on errors or stale snapshots. `tests/test_model_explanations.py`
+checks calibrated SHAP, additivity and unavailable legacy explanations. `tests/test_intake.py`
+checks the automatic intake trigger and returned decision status. These tests use mock contacts
+and model responses; they do not establish live Gemini calls, live-channel completion, Gemini
+Live compatibility or Cloud Run cold-start performance.
 
 ## ADK dependency constraints
 
@@ -108,6 +148,8 @@ The resolved `google-genai` 2.30.1 also requires `tenacity<9.2.0`. These upstrea
 even with the wider ADK version range. The compatible locked set includes `websockets` 15.0.1,
 `opentelemetry-api` 1.42.1, `tenacity` 9.1.4, `fastapi` 0.141.1 and `google-api-core` 2.34.0;
 changing the ADK requirement alone does not restore the newer versions displaced during resolution.
+
+The manifest also allows `shap>=0.48,<1`; the lock resolves SHAP 0.53.0 for the risk explanations.
 
 The E5 Gemini Live client must be tested with this locked set, including `websockets` 15.x, before
 claiming compatibility. See `../docs/gemini-live.md` for the Live API configuration requirements.
