@@ -51,8 +51,8 @@ export function CreateOrderSheet({
   const mutation = useMutation({
     ...createOrderMutation(),
     onSuccess: (order) => {
-      toast.success(`Đã tạo đơn ${order.external_id ?? order.id}`, {
-        description: order.tier ? `Rủi ro: ${order.risk_score}/100` : 'Đang chấm điểm…',
+      toast.success(`Order ${order.external_id ?? order.id} created`, {
+        description: order.tier ? `Risk score: ${order.risk_score}/100` : 'Scoring…',
       })
       void invalidate(queryClient, 'listOrders', 'getDashboardSummary')
       onOpenChange(false)
@@ -91,8 +91,10 @@ export function CreateOrderSheet({
     >
       <SheetContent className="flex w-full flex-col sm:max-w-lg">
         <SheetHeader>
-          <SheetTitle>Tạo đơn</SheetTitle>
-          <SheetDescription>Đơn được chấm điểm và quyết định ngay sau khi tạo.</SheetDescription>
+          <SheetTitle>Create order</SheetTitle>
+          <SheetDescription>
+            The order is scored and a decision is made right after it is created.
+          </SheetDescription>
         </SheetHeader>
         <form
           id="create-order-form"
@@ -120,7 +122,7 @@ export function CreateOrderSheet({
           <FieldGroup className="gap-4">
             <div className="grid grid-cols-2 gap-3">
               <Field>
-                <FieldLabel htmlFor="new-channel">Kênh bán</FieldLabel>
+                <FieldLabel htmlFor="new-channel">Sales channel</FieldLabel>
                 <Select
                   value={form.channel}
                   onValueChange={(value) => setForm((f) => ({ ...f, channel: value as SalesChannel }))}
@@ -140,7 +142,7 @@ export function CreateOrderSheet({
                 </Select>
               </Field>
               <Field>
-                <FieldLabel htmlFor="new-external">Mã đơn của shop</FieldLabel>
+                <FieldLabel htmlFor="new-external">Shop's order ID</FieldLabel>
                 <Input
                   id="new-external"
                   value={form.externalId}
@@ -150,11 +152,11 @@ export function CreateOrderSheet({
               </Field>
             </div>
             <Field>
-              <FieldLabel htmlFor="new-buyer">Tên người mua</FieldLabel>
+              <FieldLabel htmlFor="new-buyer">Buyer name</FieldLabel>
               <Input id="new-buyer" value={form.buyerName} onChange={set('buyerName')} required />
             </Field>
             <Field>
-              <FieldLabel htmlFor="new-phone">Số điện thoại</FieldLabel>
+              <FieldLabel htmlFor="new-phone">Phone number</FieldLabel>
               <Input
                 id="new-phone"
                 value={form.buyerPhone}
@@ -165,7 +167,7 @@ export function CreateOrderSheet({
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="new-address">Địa chỉ giao</FieldLabel>
+              <FieldLabel htmlFor="new-address">Delivery address</FieldLabel>
               <Textarea
                 id="new-address"
                 value={form.address}
@@ -179,14 +181,14 @@ export function CreateOrderSheet({
                 checked={form.gift}
                 onCheckedChange={(checked) => setForm((f) => ({ ...f, gift: checked === true }))}
               />
-              Đơn quà tặng (người nhận khác người mua)
+              Gift order (recipient is not the buyer)
             </Label>
             {form.gift && (
               <Field>
-                <FieldLabel htmlFor="new-recipient">Tên người nhận</FieldLabel>
+                <FieldLabel htmlFor="new-recipient">Recipient name</FieldLabel>
                 <Input id="new-recipient" value={form.recipientName} onChange={set('recipientName')} />
                 <FieldDescription>
-                  COD Guard chỉ xác minh với người mua, không liên hệ người nhận.
+                  COD Guard verifies with the buyer only and never contacts the recipient.
                 </FieldDescription>
               </Field>
             )}
@@ -196,29 +198,29 @@ export function CreateOrderSheet({
               {lines.map((line, i) => (
                 <div key={i} className="grid grid-cols-[1fr_5rem] gap-2 rounded-lg border p-3">
                   <Input
-                    aria-label={`Sản phẩm ${i + 1}`}
-                    placeholder="Tên sản phẩm"
+                    aria-label={`Item ${i + 1}`}
+                    placeholder="Item name"
                     value={line.name}
                     onChange={setLine(i, 'name')}
                     required={i === 0}
                   />
                   <Input
-                    aria-label={`Số lượng ${i + 1}`}
+                    aria-label={`Quantity ${i + 1}`}
                     inputMode="numeric"
                     value={line.quantity}
                     onChange={setLine(i, 'quantity')}
                   />
                   <Input
-                    aria-label={`Phân loại ${i + 1}`}
-                    placeholder="Màu / size"
+                    aria-label={`Variant ${i + 1}`}
+                    placeholder="Color / size"
                     value={line.variant}
                     onChange={setLine(i, 'variant')}
                   />
                   <div className="flex gap-1">
                     <Input
-                      aria-label={`Đơn giá ${i + 1}`}
+                      aria-label={`Unit price ${i + 1}`}
                       inputMode="numeric"
-                      placeholder="Giá"
+                      placeholder="Price"
                       value={line.price}
                       onChange={setLine(i, 'price')}
                       required={i === 0}
@@ -228,7 +230,7 @@ export function CreateOrderSheet({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        aria-label={`Bỏ sản phẩm ${i + 1}`}
+                        aria-label={`Remove item ${i + 1}`}
                         onClick={() => setLines((c) => c.filter((_, j) => j !== i))}
                       >
                         <Trash2Icon />
@@ -245,12 +247,12 @@ export function CreateOrderSheet({
                 onClick={() => setLines((c) => [...c, { ...EMPTY_LINE }])}
               >
                 <PlusIcon aria-hidden="true" />
-                Thêm sản phẩm
+                Add item
               </Button>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field>
-                <FieldLabel htmlFor="new-shipping">Phí ship (₫)</FieldLabel>
+                <FieldLabel htmlFor="new-shipping">Shipping fee (₫)</FieldLabel>
                 <Input
                   id="new-shipping"
                   inputMode="numeric"
@@ -259,12 +261,12 @@ export function CreateOrderSheet({
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor="new-prepaid">Đã trả trước (₫)</FieldLabel>
+                <FieldLabel htmlFor="new-prepaid">Prepaid (₫)</FieldLabel>
                 <Input id="new-prepaid" inputMode="numeric" value={form.prepaid} onChange={set('prepaid')} />
               </Field>
             </div>
             <Field>
-              <FieldLabel htmlFor="new-note">Ghi chú</FieldLabel>
+              <FieldLabel htmlFor="new-note">Note</FieldLabel>
               <Textarea id="new-note" value={form.note} onChange={set('note')} />
             </Field>
           </FieldGroup>
@@ -276,11 +278,11 @@ export function CreateOrderSheet({
         </form>
         <SheetFooter className="flex-row items-center justify-between">
           <span className="text-sm text-muted-foreground tabular-nums">
-            Thu hộ: {formatVnd(Math.max(total - num(form.prepaid), 0))}
+            To collect: {formatVnd(Math.max(total - num(form.prepaid), 0))}
           </span>
           <Button type="submit" form="create-order-form" disabled={mutation.isPending || items.length === 0}>
             {mutation.isPending && <Spinner data-icon="inline-start" />}
-            Tạo và chấm điểm
+            Create and score
           </Button>
         </SheetFooter>
       </SheetContent>

@@ -49,7 +49,7 @@ const ORDER_TEMPLATE = [
     'Nguyễn Văn Mẫu',
     '0000000001',
     'Số 1 ngõ 2, phường Cầu Giấy, Hà Nội',
-    'Áo thun cotton',
+    'Cotton T-shirt',
     '1',
     '189000',
     '30000',
@@ -67,7 +67,7 @@ const DELIVERY_TEMPLATE = [
 const LIST_QUERY = { sort: '-placed_at', limit: 100 } as const
 
 export const Route = createFileRoute('/_shop/orders/')({
-  staticData: { crumb: 'Đơn hàng' },
+  staticData: { crumb: 'Orders' },
   validateSearch: (search: Record<string, unknown>): OrdersSearch => ({
     tier: pick(search.tier, TIERS),
     status: pick(search.status, STATUSES),
@@ -103,15 +103,15 @@ function OrdersPage() {
           <>
             <Button variant="outline" size="sm" onClick={() => setPanel('delivery')}>
               <TruckIcon aria-hidden="true" />
-              Nhập kết quả giao
+              Import delivery results
             </Button>
             <Button variant="outline" size="sm" onClick={() => setPanel('import')}>
               <UploadIcon aria-hidden="true" />
-              Nhập đơn
+              Import orders
             </Button>
             <Button size="sm" onClick={() => setPanel('create')}>
               <PlusIcon aria-hidden="true" />
-              Tạo đơn
+              Create order
             </Button>
           </>
         }
@@ -127,19 +127,19 @@ function OrdersPage() {
       <CsvImportDialog
         open={panel === 'import'}
         onOpenChange={close}
-        title="Nhập đơn từ file"
-        description="Mỗi dòng một đơn. Đơn trùng mã đơn của shop được bỏ qua; đơn mới được chấm điểm ngay."
-        templateName="mau-nhap-don.csv"
+        title="Import orders from a file"
+        description="One order per row. Rows whose shop order ID already exists are skipped; new orders are scored right away."
+        templateName="order-import-template.csv"
         template={ORDER_TEMPLATE}
         onImport={async (file) => {
           const { data } = await importOrders({ body: { file }, throwOnError: true })
           void invalidate(queryClient, 'listOrders', 'getDashboardSummary')
           return {
             counts: [
-              ['Số dòng', data.received],
-              ['Đã nhập', data.imported],
-              ['Trùng', data.duplicates],
-              ['Lỗi', data.rejected?.length ?? 0],
+              ['Rows', data.received],
+              ['Imported', data.imported],
+              ['Duplicates', data.duplicates],
+              ['Errors', data.rejected?.length ?? 0],
             ],
             rejected: data.rejected ?? [],
           }
@@ -148,19 +148,19 @@ function OrdersPage() {
       <CsvImportDialog
         open={panel === 'delivery'}
         onOpenChange={close}
-        title="Nhập kết quả giao hàng"
-        description="Kết quả từ GHN, GHTK… cập nhật trạng thái đơn và lịch sử SĐT. Chỉ từ chối nhận và không liên lạc được mới tính là lỗi của người mua."
-        templateName="mau-ket-qua-giao.csv"
+        title="Import delivery results"
+        description="Results from GHN, GHTK… update order statuses and phone history. Only refused deliveries and unreachable buyers count as buyer-caused failures."
+        templateName="delivery-results-template.csv"
         template={DELIVERY_TEMPLATE}
         onImport={async (file) => {
           const { data } = await importDeliveryOutcomes({ body: { file }, throwOnError: true })
           void invalidate(queryClient, 'listOrders', 'getOrder', 'getDashboardSummary')
           return {
             counts: [
-              ['Số dòng', data.received],
-              ['Đã cập nhật', data.applied],
-              ['Không rõ đơn', data.unknown_orders],
-              ['Lỗi', data.rejected?.length ?? 0],
+              ['Rows', data.received],
+              ['Updated', data.applied],
+              ['Unknown orders', data.unknown_orders],
+              ['Errors', data.rejected?.length ?? 0],
             ],
             rejected: data.rejected ?? [],
           }

@@ -31,7 +31,7 @@ import { type Period, PERIODS } from './data'
 
 // ROI dashboard (E7.5), built with the grammar of ReUI dashboard-1: a header with the period
 // switch, KPI cards in a Frame with gradient icon tiles, then chart cards. Predicted figures carry
-// the "ước tính" label.
+// the "estimated" label.
 
 type Kpi = {
   title: string
@@ -62,9 +62,10 @@ export function RoiDashboard({
         {/* Header */}
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Tổng quan</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              COD Guard đã giúp shop thế nào trong {PERIODS.find((p) => p.value === period)!.label} qua.
+              How COD Guard has helped your shop over the last{' '}
+              {PERIODS.find((p) => p.value === period)!.label}.
             </p>
           </div>
           <Tabs value={period} onValueChange={(value) => onPeriodChange(value as Period)}>
@@ -84,11 +85,11 @@ export function RoiDashboard({
           <EmptyDashboard />
         ) : (
           <>
-            <section aria-label="Chỉ số chính">
+            <section aria-label="Key figures">
               <KpiCards summary={summary} isLoading={isLoading} />
             </section>
             <section
-              aria-label="Hành động và kết quả giao"
+              aria-label="Actions and delivery outcomes"
               className="grid min-w-0 items-stretch gap-3 @5xl:grid-cols-2"
             >
               <ActionsChart summary={summary} isLoading={isLoading} />
@@ -109,48 +110,48 @@ function KpiCards({ summary, isLoading }: { summary?: DashboardSummary; isLoadin
   const kpis: Kpi[] = summary
     ? [
         {
-          title: 'Đơn đã sàng lọc',
+          title: 'Orders screened',
           icon: FilterIcon,
           iconBg: 'bg-sky-500',
-          value: summary.orders_screened.toLocaleString('vi-VN'),
-          note: `${contacted ?? 0} đơn cần liên hệ người mua`,
-          help: 'Số đơn được chấm điểm rủi ro trong kỳ.',
+          value: summary.orders_screened.toLocaleString('en-US'),
+          note: `${contacted ?? 0} needed buyer contact`,
+          help: 'Orders scored for risk in this period.',
         },
         {
-          title: 'Hủy trước khi gửi',
+          title: 'Cancelled before shipping',
           icon: BanIcon,
           iconBg: 'bg-amber-500',
-          value: summary.cancelled_before_ship.toLocaleString('vi-VN'),
-          note: 'Không tốn phí ship hai chiều',
-          help: 'Đơn bị hủy (người mua hủy, báo "không đặt", hoặc shop hủy) trước khi giao cho đơn vị vận chuyển.',
+          value: summary.cancelled_before_ship.toLocaleString('en-US'),
+          note: 'No round-trip shipping fees',
+          help: 'Orders cancelled (by the buyer, reported as "I didn\'t order this", or by the shop) before they reached the carrier.',
         },
         {
-          title: 'Giao thất bại',
+          title: 'Failed deliveries',
           icon: PackageXIcon,
           iconBg: 'bg-rose-500',
-          value: summary.delivery_failed.toLocaleString('vi-VN'),
+          value: summary.delivery_failed.toLocaleString('en-US'),
           note: finished
-            ? `${formatPercent(summary.delivery_failed / finished, 1)} số đơn đã có kết quả giao`
-            : 'Chưa có kết quả giao',
-          help: 'Chỉ tính lỗi do người mua: từ chối nhận, không liên lạc được.',
+            ? `${formatPercent(summary.delivery_failed / finished, 1)} of orders with a delivery outcome`
+            : 'No delivery outcomes yet',
+          help: 'Buyer-caused failures only: refused or unreachable.',
         },
         {
-          title: 'Tiền tiết kiệm',
+          title: 'Savings',
           icon: PiggyBankIcon,
           iconBg: 'bg-emerald-500',
           value: formatVnd(summary.estimated_savings_vnd),
-          note: 'So với không dùng COD Guard',
+          note: 'Compared with not using COD Guard',
           estimated: true,
-          help: 'Phí giao hỏng tránh được trừ chi phí liên hệ, theo chi phí giao thất bại trong Cài đặt.',
+          help: 'Failed-delivery costs avoided minus contact costs, using the failed delivery cost in Settings.',
         },
         {
-          title: 'Đơn tốt bị làm phiền',
+          title: 'Good orders contacted',
           icon: PhoneOffIcon,
           iconBg: 'bg-violet-500',
           value: formatPercent(summary.good_orders_contacted_rate, 1),
-          note: 'Đơn giao thành công nhưng vẫn bị liên hệ',
+          note: 'Delivered orders that were still contacted',
           estimated: true,
-          help: 'Tỷ lệ đơn tốt mà shop vẫn gọi hoặc gửi link. Càng thấp càng ít làm phiền khách thật.',
+          help: 'Share of good orders that still got a call or a link. Lower means fewer genuine buyers bothered.',
         },
       ]
     : []
@@ -194,7 +195,7 @@ function KpiCard({ kpi }: { kpi: Kpi }) {
               <button
                 type="button"
                 className="inline-flex shrink-0 rounded-full p-0.5 text-muted-foreground/70 hover:text-foreground"
-                aria-label={`Giải thích: ${kpi.title}`}
+                aria-label={`Explain: ${kpi.title}`}
               >
                 <InfoIcon className="size-3.5" aria-hidden="true" />
               </button>
@@ -210,7 +211,7 @@ function KpiCard({ kpi }: { kpi: Kpi }) {
           <span className="text-xl font-medium tracking-tight tabular-nums">{kpi.value}</span>
           {kpi.estimated && (
             <Badge variant="info-light" size="sm">
-              ước tính
+              estimated
             </Badge>
           )}
         </div>
@@ -220,7 +221,7 @@ function KpiCard({ kpi }: { kpi: Kpi }) {
   )
 }
 
-const actionsConfig = { count: { label: 'Số đơn', color: 'var(--color-sky-500)' } } satisfies ChartConfig
+const actionsConfig = { count: { label: 'Orders', color: 'var(--color-sky-500)' } } satisfies ChartConfig
 
 function ActionsChart({ summary, isLoading }: { summary?: DashboardSummary; isLoading: boolean }) {
   const data = (summary?.actions ?? []).map((a) => ({
@@ -231,8 +232,8 @@ function ActionsChart({ summary, isLoading }: { summary?: DashboardSummary; isLo
     <Frame className="@container h-full w-full">
       <FramePanel className="flex h-full flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-medium">Hành động theo loại</h2>
-          <span className="text-xs text-muted-foreground">Theo quyết định hiện tại của mỗi đơn</span>
+          <h2 className="text-sm font-medium">Actions by type</h2>
+          <span className="text-xs text-muted-foreground">By each order's current decision</span>
         </div>
         {isLoading ? (
           <Skeleton className="h-56 w-full" />
@@ -255,9 +256,9 @@ function ActionsChart({ summary, isLoading }: { summary?: DashboardSummary; isLo
 function OutcomesCard({ summary, isLoading }: { summary?: DashboardSummary; isLoading: boolean }) {
   const rows = summary
     ? [
-        { label: 'Giao thành công', value: summary.delivered, tone: 'bg-success' },
-        { label: 'Hủy trước khi gửi', value: summary.cancelled_before_ship, tone: 'bg-warning' },
-        { label: 'Giao thất bại', value: summary.delivery_failed, tone: 'bg-destructive' },
+        { label: 'Delivered', value: summary.delivered, tone: 'bg-success' },
+        { label: 'Cancelled before shipping', value: summary.cancelled_before_ship, tone: 'bg-warning' },
+        { label: 'Delivery failed', value: summary.delivery_failed, tone: 'bg-destructive' },
       ]
     : []
   const total = rows.reduce((sum, r) => sum + r.value, 0)
@@ -266,9 +267,9 @@ function OutcomesCard({ summary, isLoading }: { summary?: DashboardSummary; isLo
     <Frame className="@container h-full w-full">
       <FramePanel className="flex h-full flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-medium">Kết quả cuối của đơn</h2>
+          <h2 className="text-sm font-medium">Final order outcomes</h2>
           <Button variant="link" size="sm" className="h-auto p-0" asChild>
-            <Link to="/backtest">Xem backtest mô hình</Link>
+            <Link to="/backtest">View model backtest</Link>
           </Button>
         </div>
         {isLoading || !summary ? (
@@ -278,7 +279,7 @@ function OutcomesCard({ summary, isLoading }: { summary?: DashboardSummary; isLo
             <div
               className="flex h-3 w-full overflow-hidden rounded-full bg-muted"
               role="img"
-              aria-label="Tỷ lệ kết quả giao"
+              aria-label="Delivery outcome shares"
             >
               {rows.map((r) => (
                 <div
@@ -296,7 +297,7 @@ function OutcomesCard({ summary, isLoading }: { summary?: DashboardSummary; isLo
                     {r.label}
                   </span>
                   <span className="tabular-nums">
-                    {r.value.toLocaleString('vi-VN')}
+                    {r.value.toLocaleString('en-US')}
                     <span className="ms-2 text-xs text-muted-foreground">
                       {total ? formatPercent(r.value / total) : '—'}
                     </span>
@@ -305,7 +306,7 @@ function OutcomesCard({ summary, isLoading }: { summary?: DashboardSummary; isLo
               ))}
             </ul>
             <p className="mt-auto text-xs text-muted-foreground">
-              Đơn còn đang xử lý (chờ xác nhận, chờ cọc, đang giao) chưa được tính.
+              Orders still in progress (awaiting confirmation, awaiting deposit, in transit) are not counted.
             </p>
           </>
         )}
@@ -324,14 +325,14 @@ function EmptyDashboard() {
           </ItemMedia>
         </Item>
         <div className="max-w-sm space-y-1">
-          <h2 className="font-medium">Chưa có đơn nào trong kỳ này</h2>
+          <h2 className="font-medium">No orders in this period yet</h2>
           <p className="text-sm text-muted-foreground">
-            Nhập đơn từ file hoặc kết nối công cụ bán hàng. Số liệu sẽ hiện ngay khi đơn đầu tiên được chấm
-            điểm.
+            Import orders from a file or connect your sales tool. Figures appear as soon as the first order is
+            scored.
           </p>
         </div>
         <Button asChild>
-          <Link to="/orders">Đi tới Đơn hàng</Link>
+          <Link to="/orders">Go to Orders</Link>
         </Button>
       </FramePanel>
     </Frame>
@@ -349,14 +350,14 @@ function SetupBanner() {
         <div className="flex items-center gap-3">
           <SparklesIcon className="size-5 text-primary" aria-hidden="true" />
           <div>
-            <p className="text-sm font-medium">Thiết lập shop trong 1 phút</p>
+            <p className="text-sm font-medium">Set up your shop in 1 minute</p>
             <p className="text-xs text-muted-foreground">
-              Chi phí giao thất bại, giờ liên hệ và policy mặc định.
+              Failed delivery cost, contact hours and the default policy.
             </p>
           </div>
         </div>
         <Button size="sm" asChild>
-          <Link to="/onboarding">Bắt đầu</Link>
+          <Link to="/onboarding">Get started</Link>
         </Button>
       </FramePanel>
     </Frame>

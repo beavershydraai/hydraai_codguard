@@ -22,6 +22,7 @@ import type {
   Shop,
   Signal,
 } from '@/api/gen'
+import { CALL_OUTCOME_LABELS, DECISION_ACTION_LABELS, formatVnd, RISK_TIER_LABELS } from '@/lib/labels'
 
 export const SHOP_ID = 'shop_demo'
 export const FAILED_DELIVERY_COST = 60_000
@@ -80,13 +81,6 @@ type Rng = ReturnType<typeof rng>
 
 export function tierFor(probability: number): RiskTier {
   return probability < 0.08 ? 'low' : probability < 0.2 ? 'medium' : probability < 0.4 ? 'high' : 'very_high'
-}
-
-const TIER_VI: Record<RiskTier, string> = {
-  low: 'thấp',
-  medium: 'trung bình',
-  high: 'cao',
-  very_high: 'rất cao',
 }
 
 export const TIER_ACTION: Record<RiskTier, DecisionAction> = {
@@ -165,13 +159,13 @@ const PLACES = [
 ]
 
 const PRODUCTS: { sku: string; name: string; variants: string[]; price: number }[] = [
-  { sku: 'AT-01', name: 'Áo thun cotton', variants: ['Trắng / M', 'Đen / L', 'Be / S'], price: 189_000 },
-  { sku: 'VH-02', name: 'Váy hoa nhí', variants: ['Xanh / M', 'Hồng / S'], price: 329_000 },
-  { sku: 'QJ-03', name: 'Quần jean ống rộng', variants: ['28', '30', '32'], price: 359_000 },
-  { sku: 'AK-04', name: 'Áo khoác gió', variants: ['Đen / L', 'Xám / XL'], price: 429_000 },
-  { sku: 'TT-05', name: 'Túi tote canvas', variants: ['Kem', 'Đen'], price: 159_000 },
-  { sku: 'GS-06', name: 'Giày sneaker trắng', variants: ['38', '39', '40', '41'], price: 549_000 },
-  { sku: 'DN-07', name: 'Set đồ ngủ lụa', variants: ['Hồng / M', 'Xanh / L'], price: 279_000 },
+  { sku: 'AT-01', name: 'Cotton T-shirt', variants: ['White / M', 'Black / L', 'Beige / S'], price: 189_000 },
+  { sku: 'VH-02', name: 'Floral dress', variants: ['Blue / M', 'Pink / S'], price: 329_000 },
+  { sku: 'QJ-03', name: 'Wide-leg jeans', variants: ['28', '30', '32'], price: 359_000 },
+  { sku: 'AK-04', name: 'Windbreaker jacket', variants: ['Black / L', 'Grey / XL'], price: 429_000 },
+  { sku: 'TT-05', name: 'Canvas tote bag', variants: ['Cream', 'Black'], price: 159_000 },
+  { sku: 'GS-06', name: 'White sneakers', variants: ['38', '39', '40', '41'], price: 549_000 },
+  { sku: 'DN-07', name: 'Silk pyjama set', variants: ['Pink / M', 'Blue / L'], price: 279_000 },
 ]
 
 const CHANNEL_NAME: Record<SalesChannel, string> = {
@@ -179,7 +173,7 @@ const CHANNEL_NAME: Record<SalesChannel, string> = {
   tiktok: 'TikTok',
   zalo: 'Zalo',
   website: 'website',
-  other: 'kênh khác',
+  other: 'another channel',
 }
 
 const CHANNEL_PREFIX: Record<SalesChannel, string> = {
@@ -202,74 +196,74 @@ const RISK_SIGNALS: SignalSpec[] = [
   {
     key: 'phone_return_rate',
     group: 'phone_history',
-    label_vi: 'Tỷ lệ hoàn của SĐT',
-    value: (r) => `${r.int(2, 4)}/${r.int(4, 5)} đơn`,
+    label_vi: 'Phone return rate',
+    value: (r) => `${r.int(2, 4)}/${r.int(4, 5)} orders`,
     contribution: 0.22,
-    reason: (v) => `SĐT này đã hoàn ${v} gần nhất.`,
+    reason: (v) => `This phone had ${v} returned recently.`,
   },
   {
     key: 'velocity_same_phone',
     group: 'velocity',
-    label_vi: 'Đơn cùng SĐT trong 24 giờ',
+    label_vi: 'Orders from the same phone in 24 hours',
     value: (r) => r.int(2, 4),
     contribution: 0.16,
-    reason: (v) => `Có ${v} đơn cùng SĐT trong 24 giờ qua.`,
+    reason: (v) => `${v} orders from the same phone in the last 24 hours.`,
   },
   {
     key: 'address_vague',
     group: 'address_quality',
-    label_vi: 'Địa chỉ thiếu số nhà hoặc ngõ',
+    label_vi: 'Address missing house number or alley',
     value: () => true,
     contribution: 0.12,
-    reason: () => 'Địa chỉ thiếu số nhà, shipper khó tìm.',
+    reason: () => 'The address has no house number, so the courier may struggle to find it.',
   },
   {
     key: 'phone_first_order',
     group: 'phone_history',
-    label_vi: 'SĐT mua lần đầu',
+    label_vi: 'First order from this phone',
     value: () => true,
     contribution: 0.05,
-    reason: () => 'Đây là đơn đầu tiên của số điện thoại này.',
+    reason: () => 'This is the first order from this phone number.',
   },
   {
     key: 'order_night',
     group: 'order_behavior',
-    label_vi: 'Đặt hàng lúc nửa đêm',
+    label_vi: 'Ordered late at night',
     value: (r) => `0${r.int(0, 3)}:${r.int(10, 59)}`,
     contribution: 0.05,
-    reason: (v) => `Đơn đặt lúc ${v}, khung giờ có tỷ lệ bom cao.`,
+    reason: (v) => `Ordered at ${v}, a time slot with a high refusal rate.`,
   },
   {
     key: 'cod_high',
     group: 'payment',
-    label_vi: 'Giá trị thu hộ cao',
+    label_vi: 'High COD amount',
     value: (_r, o) => o.cod,
     contribution: 0.07,
-    reason: (v) => `Giá trị thu hộ cao (${Number(v).toLocaleString('vi-VN')} ₫).`,
+    reason: (v) => `High COD amount (${formatVnd(Number(v))}).`,
   },
   {
     key: 'rushed_chat',
     group: 'conversation',
-    label_vi: 'Chốt đơn vội, không hỏi size hay giá',
+    label_vi: 'Rushed order, no questions about size or price',
     value: () => true,
     contribution: 0.06,
-    reason: () => 'Khách chốt rất nhanh, không hỏi size hay giá.',
+    reason: () => 'The buyer ordered very quickly without asking about size or price.',
   },
   {
     key: 'livestream',
     group: 'context',
-    label_vi: 'Chốt đơn trong livestream',
+    label_vi: 'Ordered during a livestream',
     value: () => true,
     contribution: 0.04,
-    reason: () => 'Đơn chốt trong livestream, nhóm có tỷ lệ bom cao hơn.',
+    reason: () => 'Ordered during a livestream, where refusal rates are higher.',
   },
   {
     key: 'name_mismatch',
     group: 'conversation',
-    label_vi: 'Tên người nhận khác tên tài khoản chat',
+    label_vi: 'Recipient name differs from the chat account name',
     value: () => true,
     contribution: 0.05,
-    reason: () => 'Tên người nhận khác tên tài khoản đặt hàng.',
+    reason: () => 'The recipient name differs from the name on the ordering account.',
   },
 ]
 
@@ -277,22 +271,22 @@ const SAFE_SIGNALS: SignalSpec[] = [
   {
     key: 'phone_delivered',
     group: 'phone_history',
-    label_vi: 'Đơn giao thành công trước đó',
+    label_vi: 'Earlier orders delivered',
     value: (r) => r.int(2, 9),
     contribution: -0.1,
-    reason: (v) => `Khách quen: ${v} đơn trước đều giao thành công.`,
+    reason: (v) => `Returning buyer: all ${v} earlier orders were delivered.`,
   },
   {
     key: 'address_complete',
     group: 'address_quality',
-    label_vi: 'Địa chỉ đầy đủ số nhà, phường',
+    label_vi: 'Full address with house number and ward',
     value: () => true,
     contribution: -0.04,
   },
   {
     key: 'asked_details',
     group: 'conversation',
-    label_vi: 'Hỏi kỹ size và màu trước khi chốt',
+    label_vi: 'Asked about size and color before ordering',
     value: () => true,
     contribution: -0.03,
   },
@@ -401,13 +395,15 @@ const SCENARIO_MIX: [Scenario, number][] = [
 ]
 
 const CALL_SUMMARY: Record<CallOutcome, string> = {
-  confirmed: 'Khách xác nhận đúng sản phẩm, size và địa chỉ; hẹn nhận hàng giờ hành chính.',
-  edited: 'Khách xác nhận đơn và đổi địa chỉ giao sang chỗ làm; AI đã đọc lại địa chỉ mới.',
-  cancelled: 'Khách đổi ý, không muốn nhận hàng nữa và xác nhận hủy đơn.',
-  not_ordered: 'Người nghe máy nói không đặt đơn này. Số điện thoại đã bị chặn liên hệ 30 ngày.',
-  no_answer: 'Không nghe máy.',
-  wrong_person: 'Người nghe máy không phải người đặt hàng.',
-  unclear: 'Cuộc gọi bị ngắt giữa chừng, chưa rõ khách có nhận hàng không.',
+  confirmed: 'The buyer confirmed the product, size and address, and will receive it during office hours.',
+  edited:
+    'The buyer confirmed the order and moved delivery to their workplace; the AI read the new address back.',
+  cancelled: 'The buyer changed their mind, no longer wants the order and confirmed the cancellation.',
+  not_ordered:
+    'The person who answered said they did not place this order. The phone number is blocked from contact for 30 days.',
+  no_answer: 'No answer.',
+  wrong_person: 'The person who answered is not the buyer.',
+  unclear: 'The call dropped midway; it is unclear whether the buyer will accept the order.',
 }
 
 export type MockOrder = OrderDetail & {
@@ -503,7 +499,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
         at: iso(placed),
         type: 'created',
         actor: 'system',
-        message_vi: `Nhận đơn từ ${CHANNEL_NAME[channel]}.`,
+        message_vi: `Order received from ${CHANNEL_NAME[channel]}.`,
       },
     ]
     let status: OrderStatus = 'new'
@@ -528,7 +524,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
         scenario === 'invalid_phone'
           ? [
               {
-                text_vi: 'Số điện thoại không đúng định dạng nên không liên hệ được.',
+                text_vi: 'The phone number format is invalid, so the buyer cannot be contacted.',
                 signal_keys: ['phone_invalid'],
               },
             ]
@@ -539,7 +535,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
               {
                 key: 'phone_invalid',
                 group: 'phone_history',
-                label_vi: 'SĐT không hợp lệ',
+                label_vi: 'Invalid phone number',
                 value: phone,
                 contribution: 0,
               },
@@ -565,8 +561,8 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
         type: 'scored',
         actor: 'engine',
         message_vi: skipped
-          ? 'Đơn đã trả trước toàn bộ: bỏ qua chấm điểm.'
-          : `Chấm điểm rủi ro ${score.risk_score}/100 (${TIER_VI[tier!]}).`,
+          ? 'Order fully prepaid: scoring skipped.'
+          : `Risk score ${score.risk_score}/100 (${RISK_TIER_LABELS[tier!]}).`,
       })
 
       const action: DecisionAction =
@@ -619,9 +615,10 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
                   },
                 ]
               : [],
-          cancel_reason: outcome === 'cancelled' ? 'Khách đổi ý, không cần nữa.' : null,
+          cancel_reason:
+            outcome === 'cancelled' ? 'The buyer changed their mind and no longer needs it.' : null,
           human_callback_requested: false,
-          buyer_requests: outcome === 'confirmed' && r.chance(0.4) ? 'Giao giờ hành chính' : null,
+          buyer_requests: outcome === 'confirmed' && r.chance(0.4) ? 'Deliver during office hours' : null,
           summary_vi: outcome ? CALL_SUMMARY[outcome] : null,
         }
         orderCalls.push(c)
@@ -637,14 +634,14 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
           at: queuedAt,
           type: 'contact_started',
           actor: 'engine',
-          message_vi: `AI gọi xác nhận (lần ${attempt}).`,
+          message_vi: `AI confirmation call (attempt ${attempt}).`,
         })
         if (outcome) {
           timeline.push({
             at: ended!,
             type: 'call_completed',
             actor: 'ai_call',
-            message_vi: `Kết quả cuộc gọi: ${CALL_OUTCOME_VI[outcome]}.`,
+            message_vi: `Call outcome: ${CALL_OUTCOME_LABELS[outcome]}.`,
           })
         }
         return c
@@ -664,14 +661,14 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
           at: sentAt,
           type: 'contact_started',
           actor: 'engine',
-          message_vi: 'Gửi link xác nhận qua Zalo ZNS (mock).',
+          message_vi: 'Confirmation link sent via Zalo ZNS (mock).',
         })
         if (responded) {
           timeline.push({
             at: at(0),
             type: 'buyer_responded',
             actor: 'buyer',
-            message_vi: 'Người mua xác nhận đơn trên trang xác nhận.',
+            message_vi: 'The buyer confirmed the order on the confirmation page.',
           })
         }
       }
@@ -690,7 +687,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
           at: sentAt,
           type: 'contact_started',
           actor: 'engine',
-          message_vi: 'Gửi yêu cầu đặt cọc (mock).',
+          message_vi: 'Deposit request sent (mock).',
         })
       }
       const ship = (delivered: boolean | null) => {
@@ -699,7 +696,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
           at: at(r.int(5, 60)),
           type: 'status_changed',
           actor: 'system',
-          message_vi: 'Đơn được gửi đi.',
+          message_vi: 'Order cleared to ship.',
         })
         if (delivered === null) return
         status = 'shipped'
@@ -707,7 +704,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
           at: at(r.int(60, 600)),
           type: 'status_changed',
           actor: 'carrier',
-          message_vi: 'Đã bàn giao cho GHN.',
+          message_vi: 'Handed over to GHN.',
         })
         if (!delivered && !['shipped'].includes(scenario)) {
           status = 'delivery_failed'
@@ -715,7 +712,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
             at: at(r.int(1_000, 3_000)),
             type: 'delivery_result',
             actor: 'carrier',
-            message_vi: 'Giao thất bại: người mua từ chối nhận.',
+            message_vi: 'Delivery failed: the buyer refused the parcel.',
           })
         } else if (delivered) {
           status = 'delivered'
@@ -723,7 +720,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
             at: at(r.int(1_000, 3_000)),
             type: 'delivery_result',
             actor: 'carrier',
-            message_vi: 'Giao thành công, đã thu hộ.',
+            message_vi: 'Delivered, COD collected.',
           })
         }
       }
@@ -740,7 +737,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
             at: at(r.int(60, 600)),
             type: 'status_changed',
             actor: 'carrier',
-            message_vi: 'Đã bàn giao cho GHN.',
+            message_vi: 'Handed over to GHN.',
           })
           break
         case 'delivered':
@@ -765,7 +762,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
             at: at(120),
             type: 'status_changed',
             actor: 'engine',
-            message_vi: 'Không phản hồi sau 2 giờ: chuyển sang AI gọi.',
+            message_vi: 'No response after 2 hours: moved to an AI call.',
           })
           call('confirmed')
           ship(null)
@@ -784,7 +781,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
             at: at(1),
             type: 'edited',
             actor: 'ai_call',
-            message_vi: 'Cập nhật địa chỉ theo cuộc gọi; chấm lại điểm.',
+            message_vi: 'Address updated from the call; order rescored.',
           })
           ship(null)
           break
@@ -795,7 +792,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
             at: at(1),
             type: 'status_changed',
             actor: 'buyer',
-            message_vi: 'Đơn bị hủy theo yêu cầu của người mua.',
+            message_vi: "Order cancelled at the buyer's request.",
           })
           break
         case 'call_not_ordered':
@@ -805,7 +802,8 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
             at: at(1),
             type: 'status_changed',
             actor: 'buyer',
-            message_vi: 'Người nghe máy báo không đặt: hủy đơn, chặn SĐT 30 ngày.',
+            message_vi:
+              'The person who answered did not place the order: order cancelled, phone blocked for 30 days.',
           })
           break
         case 'call_no_answer_review':
@@ -818,7 +816,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
             at: at(1),
             type: 'status_changed',
             actor: 'engine',
-            message_vi: 'Gọi 2 lần không nghe máy: chuyển chờ duyệt.',
+            message_vi: 'No answer after 2 calls: moved to pending review.',
           })
           break
         case 'deposit_waiting':
@@ -834,7 +832,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
             at: at(1440),
             type: 'status_changed',
             actor: 'engine',
-            message_vi: 'Chưa đặt cọc sau 24 giờ: chuyển chờ duyệt.',
+            message_vi: 'No deposit after 24 hours: moved to pending review.',
           })
           break
         case 'deposit_paid':
@@ -843,7 +841,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
             at: at(1),
             type: 'buyer_responded',
             actor: 'buyer',
-            message_vi: 'Người mua đã đặt cọc 30%.',
+            message_vi: 'The buyer paid a 30% deposit.',
           })
           ship(null)
           break
@@ -859,8 +857,8 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
             at: overrideAt,
             type: 'override',
             actor: 'admin@gmail.com',
-            message_vi: 'Nhân viên chọn: Gửi ngay.',
-            reason: 'Khách quen, đã gọi lại xác nhận qua Zalo.',
+            message_vi: `Staff chose: ${DECISION_ACTION_LABELS.ship_now}.`,
+            reason: 'Returning buyer, confirmed again over Zalo.',
           })
           ship(null)
           break
@@ -898,7 +896,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
       shipping_fee_vnd: shipping,
       discount_vnd: discount,
       prepaid_vnd: prepaid,
-      note: r.chance(0.15) ? 'Gọi trước khi giao' : null,
+      note: r.chance(0.15) ? 'Call before delivery' : null,
       current_score: score,
       score_history: score ? [score] : [],
       decision,
@@ -917,7 +915,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
     calls,
     shop: {
       id: SHOP_ID,
-      name: 'Shop Thời Trang Mẫu',
+      name: 'Sample Fashion Shop',
       created_at: policyStart,
       settings: DEFAULT_SETTINGS,
       intake_api_key_last4: 'demo',
@@ -935,29 +933,19 @@ export const ALL_ACTIONS: DecisionAction[] = [
   'cancel',
 ]
 
-export const CALL_OUTCOME_VI: Record<CallOutcome, string> = {
-  confirmed: 'Xác nhận',
-  edited: 'Đã sửa',
-  cancelled: 'Hủy',
-  not_ordered: 'Không đặt',
-  no_answer: 'Không nghe máy',
-  wrong_person: 'Nhầm người',
-  unclear: 'Không rõ',
-}
-
 export function decisionMessage(action: DecisionAction): string {
   switch (action) {
     case 'ship_now':
-      return 'Quyết định: gửi ngay.'
+      return 'Decision: ship now.'
     case 'send_confirmation_link':
-      return 'Quyết định: gửi link xác nhận, gọi AI nếu 2 giờ không phản hồi.'
+      return 'Decision: send a confirmation link, AI call if there is no response in 2 hours.'
     case 'ai_call':
-      return 'Quyết định: AI gọi xác nhận.'
+      return 'Decision: AI confirmation call.'
     case 'require_deposit':
-      return 'Quyết định: yêu cầu đặt cọc.'
+      return 'Decision: require a deposit.'
     case 'hold_for_review':
-      return 'Quyết định: chờ shop duyệt.'
+      return 'Decision: hold for shop review.'
     case 'cancel':
-      return 'Quyết định: hủy đơn.'
+      return 'Decision: cancel the order.'
   }
 }

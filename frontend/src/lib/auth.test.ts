@@ -40,10 +40,10 @@ describe('signIn', () => {
     expect(await request.json()).toEqual({ username: 'admin@gmail.com', password: 'admin12345' })
   })
 
-  it('reports wrong credentials in Vietnamese and stores nothing', async () => {
+  it('reports wrong credentials in English and stores nothing', async () => {
     respond(401, { type: 'about:blank', title: 'Unauthorized', status: 401, code: 'unauthorized' })
     await expect(signIn({ email: 'admin@gmail.com', password: 'nope' })).rejects.toThrow(
-      new SignInError('Sai email hoặc mật khẩu.'),
+      new SignInError('Wrong email or password.'),
     )
     expect(useAuthStore.getState().token).toBeNull()
   })

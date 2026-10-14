@@ -3,16 +3,16 @@ import type { OrderSummary } from '@/api/gen'
 import { DECISION_ACTION_LABELS, ORDER_STATUS_LABELS, RISK_TIER_LABELS, SALES_CHANNEL_LABELS } from './labels'
 
 const HEADER = [
-  'Mã đơn',
-  'Kênh',
-  'Người mua',
-  'SĐT',
-  'Thu hộ (VND)',
-  'Rủi ro',
-  'Điểm',
-  'Hành động',
-  'Trạng thái',
-  'Đặt lúc',
+  'Order ID',
+  'Channel',
+  'Buyer',
+  'Phone',
+  'COD (VND)',
+  'Risk tier',
+  'Score',
+  'Action',
+  'Status',
+  'Placed at',
 ]
 
 function cell(value: string | number | null | undefined): string {
@@ -20,7 +20,7 @@ function cell(value: string | number | null | undefined): string {
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
 }
 
-/** CSV of the given orders, with a BOM so Excel reads the Vietnamese text as UTF-8. */
+/** CSV of the given orders, with a BOM so Excel reads non-ASCII text (such as Vietnamese names) as UTF-8. */
 export function ordersToCsv(orders: OrderSummary[]): string {
   const rows = orders.map((o) => [
     o.external_id ?? o.id,

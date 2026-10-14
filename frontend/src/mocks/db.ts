@@ -31,9 +31,10 @@ import type {
   SpamSimulationResult,
 } from '@/api/gen'
 
+import { BUYER_ACTION_LABELS, CALL_OUTCOME_LABELS, DECISION_ACTION_LABELS } from '@/lib/labels'
+
 import {
   ALL_ACTIONS,
-  CALL_OUTCOME_VI,
   decisionMessage,
   FAILED_DELIVERY_COST,
   maskPhone,
@@ -290,12 +291,13 @@ export class MockDb {
       order,
       'scored',
       actor,
-      prepaidAll ? 'Đơn đã trả trước: bỏ qua chấm điểm.' : `Chấm lại: ${order.risk_score}/100.`,
+      prepaidAll ? 'Order prepaid: scoring skipped.' : `Rescored: ${order.risk_score}/100.`,
     )
 
     const confirmed = order.timeline?.some(
       (e) =>
-        e.type === 'buyer_responded' || (e.type === 'call_completed' && /Xác nhận|Đã sửa/.test(e.message_vi)),
+        e.type === 'buyer_responded' ||
+        (e.type === 'call_completed' && /Confirmed|Edited/.test(e.message_vi)),
     )
     const policyAction = invalidPhone
       ? 'hold_for_review'
@@ -359,7 +361,12 @@ export class MockDb {
       contacts: [],
       calls: [],
       timeline: [
-        { at: nowIso(), type: 'created', actor: 'admin@gmail.com', message_vi: 'Shop tạo đơn thủ công.' },
+        {
+          at: nowIso(),
+          type: 'created',
+          actor: 'admin@gmail.com',
+          message_vi: 'Shop created the order manually.',
+        },
       ],
       allowed_overrides: [],
     }
@@ -385,7 +392,7 @@ export class MockDb {
       order.discount_vnd +
       order.shipping_fee_vnd
     order.cod_amount_vnd = Math.max(order.total_vnd - order.prepaid_vnd, 0)
-    this.event(order, 'edited', actor, 'Shop sửa đơn trước khi gửi: chấm lại điểm.')
+    this.event(order, 'edited', actor, 'Shop edited the order before shipping: order rescored.')
     this.score(order)
     return publicDetail(order)
   }
@@ -404,9 +411,9 @@ export class MockDb {
       next_action_at: null,
     }
     order.current_action = action
-    this.event(order, 'override', actor, `Nhân viên chọn: ${ACTION_VI[action]}.`, reason)
+    this.event(order, 'override', actor, `Staff chose: ${DECISION_ACTION_LABELS[action]}.`, reason)
     this.setStatus(order, statusFor(action))
-    if (action === 'cancel') this.event(order, 'status_changed', actor, 'Đơn bị hủy bởi shop.')
+    if (action === 'cancel') this.event(order, 'status_changed', actor, 'Order cancelled by the shop.')
     return publicDetail(order)
   }
 
@@ -429,17 +436,17 @@ export class MockDb {
       const price = Number(get('unit_price_vnd'))
       const phone = toE164(get('buyer_phone'))
       if (!get('buyer_name'))
-        return rejected.push({ row: index + 1, field: 'buyer_name', message: 'Thiếu tên người mua.' })
+        return rejected.push({ row: index + 1, field: 'buyer_name', message: 'Buyer name is missing.' })
       if (!phone)
-        return rejected.push({ row: index + 1, field: 'buyer_phone', message: 'Số điện thoại không hợp lệ.' })
+        return rejected.push({ row: index + 1, field: 'buyer_phone', message: 'Invalid phone number.' })
       if (!Number.isInteger(quantity) || quantity < 1)
         return rejected.push({
           row: index + 1,
           field: 'quantity',
-          message: 'Số lượng phải là số nguyên dương.',
+          message: 'Quantity must be a positive whole number.',
         })
       if (!Number.isFinite(price) || price < 0)
-        return rejected.push({ row: index + 1, field: 'unit_price_vnd', message: 'Đơn giá không hợp lệ.' })
+        return rejected.push({ row: index + 1, field: 'unit_price_vnd', message: 'Invalid unit price.' })
       const channel =
         (['facebook', 'tiktok', 'zalo', 'website', 'other'] as const).find((c) => c === get('channel')) ??
         'other'
@@ -509,7 +516,12 @@ export class MockDb {
       },
     ]
     this.setStatus(order, 'awaiting_confirmation')
-    this.event(order, 'contact_started', 'admin@gmail.com', `Shop yêu cầu AI gọi xác nhận (lần ${attempt}).`)
+    this.event(
+      order,
+      'contact_started',
+      'admin@gmail.com',
+      `Shop requested an AI confirmation call (attempt ${attempt}).`,
+    )
     return structuredClone(call)
   }
 
@@ -550,10 +562,10 @@ export class MockDb {
             ? { ...c, responded_at: outcome === 'no_answer' ? null : now, result: outcome }
             : c,
         )
-        this.event(order, 'call_completed', 'ai_call', `Kết quả cuộc gọi: ${CALL_OUTCOME_VI[outcome]}.`)
+        this.event(order, 'call_completed', 'ai_call', `Call outcome: ${CALL_OUTCOME_LABELS[outcome]}.`)
         if (outcome === 'edited' && newAddress) {
           order.address = { raw: newAddress }
-          this.event(order, 'edited', 'ai_call', 'Cập nhật địa chỉ theo cuộc gọi.')
+          this.event(order, 'edited', 'ai_call', 'Address updated from the call.')
         }
         if (outcome === 'confirmed' || outcome === 'edited') this.setStatus(order, 'cleared_to_ship')
         if (outcome === 'cancelled') this.setStatus(order, 'cancelled')
@@ -609,20 +621,20 @@ export class MockDb {
       throw new MockError(409, 'link_already_used', 'This order has already been answered.')
     }
     const message: Record<BuyerAction, string> = {
-      confirm: 'Cảm ơn bạn! Đơn hàng đã được xác nhận và sẽ sớm được gửi đi.',
-      edit_address: 'Đã cập nhật địa chỉ giao hàng. Shop sẽ gửi đơn tới địa chỉ mới.',
-      cancel: 'Đơn hàng đã được hủy. Cảm ơn bạn đã báo cho shop.',
+      confirm: 'Thank you! Your order is confirmed and will ship soon.',
+      edit_address: 'Your delivery address is updated. The shop will ship to the new address.',
+      cancel: 'Your order is cancelled. Thank you for letting the shop know.',
       not_ordered:
-        'Cảm ơn bạn đã báo. Đơn đã được hủy và số điện thoại này sẽ không bị liên hệ trong 30 ngày.',
+        'Thank you for letting us know. The order is cancelled and this phone number will not be contacted for 30 days.',
     }
     order.contacts = order.contacts?.map((c) =>
       c.channel !== 'ai_call' ? { ...c, responded_at: nowIso(), result: body.action } : c,
     )
-    this.event(order, 'buyer_responded', 'buyer', `Người mua chọn: ${BUYER_ACTION_VI[body.action]}.`)
+    this.event(order, 'buyer_responded', 'buyer', `Buyer chose: ${BUYER_ACTION_LABELS[body.action]}.`)
     if (body.action === 'confirm') this.setStatus(order, 'cleared_to_ship')
     if (body.action === 'edit_address' && body.new_address) {
       order.address = body.new_address
-      this.event(order, 'edited', 'buyer', 'Người mua sửa địa chỉ: chấm lại điểm.')
+      this.event(order, 'edited', 'buyer', 'Buyer changed the address: order rescored.')
       this.setStatus(order, 'cleared_to_ship')
     }
     if (body.action === 'cancel') this.setStatus(order, 'cancelled')
@@ -653,14 +665,14 @@ export class MockDb {
       const order = [...this.orders.values()].find((o) => o.id === ref || o.external_id === ref)
       if (!order) return void unknown++
       if (!['delivered', 'refused', 'unreachable', 'carrier_issue', 'shop_issue'].includes(result ?? '')) {
-        return void rejected.push({ row: index + 1, field: 'result', message: 'Kết quả giao không hợp lệ.' })
+        return void rejected.push({ row: index + 1, field: 'result', message: 'Invalid delivery result.' })
       }
       this.setStatus(order, result === 'delivered' ? 'delivered' : 'delivery_failed')
       this.event(
         order,
         'delivery_result',
         'carrier',
-        result === 'delivered' ? 'Giao thành công, đã thu hộ.' : `Giao thất bại: ${result}.`,
+        result === 'delivered' ? 'Delivered, COD collected.' : `Delivery failed: ${result}.`,
       )
       applied++
     })
@@ -683,7 +695,9 @@ export class MockDb {
     const delivered = inRange.filter((o) => o.status === 'delivered').length
     const failed = inRange.filter((o) => o.status === 'delivery_failed').length
     const good = inRange.filter(
-      (o) => o.status === 'delivered' || o.timeline?.some((e) => /Xác nhận/.test(e.message_vi)),
+      (o) =>
+        o.status === 'delivered' ||
+        o.timeline?.some((e) => /^(Call outcome: Confirmed|Buyer chose: Confirm)\./.test(e.message_vi)),
     )
     const goodContacted = good.filter((o) => (o.contacts?.length ?? 0) > 0)
     const cost = this.shop.settings.failed_delivery_cost_vnd ?? FAILED_DELIVERY_COST
@@ -712,7 +726,7 @@ export class MockDb {
       })
     return {
       generated_at: '2026-10-12T09:00:00+07:00',
-      dataset: 'Dữ liệu mô phỏng 12.000 đơn (synthetic, 90 ngày)',
+      dataset: 'Simulated data, 12,000 orders (synthetic, 90 days)',
       orders: 12_000,
       orders_per_day: 300,
       failed_delivery_cost_vnd: this.shop.settings.failed_delivery_cost_vnd ?? FAILED_DELIVERY_COST,
@@ -759,7 +773,7 @@ export class MockDb {
         ...base,
         id,
         external_id: `SPAM-${now % 10_000}-${i + 1}`,
-        buyer_name: `Tài khoản ${(i % 20) + 1}`,
+        buyer_name: `Account ${(i % 20) + 1}`,
         buyer_phone: phone,
         status: i === 0 ? 'cancelled' : 'pending_review',
         tier: 'very_high',
@@ -781,8 +795,8 @@ export class MockDb {
             actor: 'engine',
             message_vi:
               i === 0
-                ? 'AI gọi xác nhận (gộp 15 phút).'
-                : 'Không liên hệ: SĐT đã gộp liên hệ rồi bị chặn sau "Tôi không đặt".',
+                ? 'AI confirmation call (orders batched within 15 minutes).'
+                : 'Not contacted: the phone was batched into one contact, then blocked after "I didn\'t order this".',
           },
         ],
         allowed_overrides: ALL_ACTIONS,
@@ -801,22 +815,6 @@ export class MockDb {
 }
 
 // ── Helpers ──
-
-export const ACTION_VI: Record<DecisionAction, string> = {
-  ship_now: 'Gửi ngay',
-  send_confirmation_link: 'Gửi link xác nhận',
-  ai_call: 'AI gọi',
-  require_deposit: 'Yêu cầu cọc',
-  hold_for_review: 'Chờ duyệt',
-  cancel: 'Hủy đơn',
-}
-
-const BUYER_ACTION_VI: Record<BuyerAction, string> = {
-  confirm: 'Xác nhận',
-  edit_address: 'Sửa địa chỉ',
-  cancel: 'Hủy',
-  not_ordered: 'Tôi không đặt',
-}
 
 function statusFor(action: DecisionAction): OrderStatus {
   switch (action) {

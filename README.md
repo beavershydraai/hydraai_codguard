@@ -49,7 +49,7 @@ COD Guard targets **social-commerce and website sellers** (Facebook, TikTok live
 
 1. **Order in:** a COD order arrives by file import or through the order intake API.
 2. **Score:** COD Guard estimates the probability of failed delivery, assigns a risk tier and calculates the expected loss in VND.
-3. **Explain:** Gemini writes up to 3 short reasons in Vietnamese, based only on signals actually present on the order.
+3. **Explain:** Gemini writes up to 3 short reasons in plain English, based only on signals actually present on the order.
 4. **Act:** the decision engine picks the cheapest action worth taking, based on the shop's policy and the expected loss.
 5. **Verify:** if needed, an AI voice assistant (Gemini Live) or a confirmation page lets the buyer confirm, edit or cancel the order.
 6. **Learn:** delivery outcomes flow back to update phone history and improve the model.
@@ -60,12 +60,12 @@ COD Guard targets **social-commerce and website sellers** (Facebook, TikTok live
 
 - **Risk score and tier** (0–100; Low / Medium / High / Very High) for every COD order, with plain-language reasons
 - **Expected-loss decisions:** contacts the buyer only when it is worth the cost, so genuine buyers are rarely disturbed
-- **AI confirmation call** in natural Vietnamese:
+- **AI confirmation call** in natural English (Vietnamese available):
   - discloses that it is an AI and names the shop;
   - lets the buyer confirm, edit or cancel;
   - reads changes back before ending;
   - records exactly one of 7 outcomes.
-- **Buyer confirmation page** (no login): Confirm / Edit address / Cancel / *"I did not place this order"*
+- **Buyer confirmation page** (no login): Confirm / Change address / Cancel / *"I didn't order this"*
 - **Anti-abuse protection:** contact limits per phone number, order batching, quiet hours, and automatic blocking when someone reports fake orders
 - **Gift-order handling:** verifies with the buyer, never the recipient
 - **Review queue and overrides** for staff, with an audit log

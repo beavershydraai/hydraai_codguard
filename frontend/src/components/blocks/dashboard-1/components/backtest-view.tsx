@@ -48,10 +48,10 @@ export function BacktestView({ result, isLoading }: { result?: BacktestResult; i
   return (
     <div className="@container mx-auto flex w-full max-w-7xl flex-col gap-3">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Backtest mô hình</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Model backtest</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {result.dataset} · {result.orders.toLocaleString('vi-VN')} đơn · giả định {result.orders_per_day}{' '}
-          đơn/ngày, {formatVnd(result.failed_delivery_cost_vnd)} mỗi lần giao hỏng · chạy lúc{' '}
+          {result.dataset} · {result.orders.toLocaleString('en-US')} orders · assumes {result.orders_per_day}{' '}
+          orders/day, {formatVnd(result.failed_delivery_cost_vnd)} per failed delivery · run at{' '}
           {formatDateTime(result.generated_at)}
         </p>
       </div>
@@ -60,9 +60,9 @@ export function BacktestView({ result, isLoading }: { result?: BacktestResult; i
         <Frame className="@container h-full w-full">
           <FramePanel className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-medium">Bắt được bao nhiêu đơn bom khi liên hệ bao nhiêu đơn</h2>
+              <h2 className="text-sm font-medium">Failed deliveries caught vs. orders contacted</h2>
               <Badge variant="info-light" size="sm">
-                ước tính
+                estimated
               </Badge>
             </div>
             <ChartContainer config={liftConfig} className="aspect-auto h-72 w-full">
@@ -87,7 +87,7 @@ export function BacktestView({ result, isLoading }: { result?: BacktestResult; i
                   content={
                     <ChartTooltipContent
                       labelFormatter={(_, payload) =>
-                        `Liên hệ ${formatPercent(Number(payload?.[0]?.payload?.contacted ?? 0))} số đơn`
+                        `${formatPercent(Number(payload?.[0]?.payload?.contacted ?? 0))} of orders contacted`
                       }
                       formatter={(value, name) => (
                         <span className="flex w-full justify-between gap-3">
@@ -113,7 +113,7 @@ export function BacktestView({ result, isLoading }: { result?: BacktestResult; i
               </LineChart>
             </ChartContainer>
             <p className="text-xs text-muted-foreground">
-              Đường càng cao bên trái càng tốt: bắt được nhiều đơn bom mà chỉ cần liên hệ ít đơn.
+              Higher on the left is better: more failed deliveries caught while contacting fewer orders.
             </p>
           </FramePanel>
         </Frame>
@@ -121,9 +121,9 @@ export function BacktestView({ result, isLoading }: { result?: BacktestResult; i
         <Frame className="@container h-full w-full">
           <FramePanel className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-medium">So sánh 5 chính sách</h2>
+              <h2 className="text-sm font-medium">5 policies compared</h2>
               <Badge variant="info-light" size="sm">
-                ước tính
+                estimated
               </Badge>
             </div>
             <ul className="flex flex-col divide-y">
@@ -139,12 +139,12 @@ export function BacktestView({ result, isLoading }: { result?: BacktestResult; i
                         row.policy === 'cod_guard' && 'font-semibold text-success',
                       )}
                     >
-                      {formatVnd(row.monthly_savings_vnd)}/tháng
+                      {formatVnd(row.monthly_savings_vnd)}/month
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground tabular-nums">
-                    <span>Liên hệ {formatPercent(row.contact_rate)} số đơn</span>
-                    <span>Bắt {formatPercent(row.failures_caught_rate)} đơn bom</span>
+                    <span>Contacts {formatPercent(row.contact_rate)} of orders</span>
+                    <span>Catches {formatPercent(row.failures_caught_rate)} of failed deliveries</span>
                   </div>
                 </li>
               ))}

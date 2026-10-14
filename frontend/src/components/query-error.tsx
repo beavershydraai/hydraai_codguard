@@ -19,10 +19,10 @@ export function QueryError({ error }: { error: unknown }) {
   return (
     <Alert variant="destructive">
       <AlertCircle />
-      <AlertTitle>{notBuilt ? 'API chưa sẵn sàng' : 'Không tải được dữ liệu'}</AlertTitle>
+      <AlertTitle>{notBuilt ? 'API not ready yet' : 'Could not load data'}</AlertTitle>
       <AlertDescription>
         {notBuilt
-          ? 'Backend chưa triển khai endpoint này. Chạy mock server (xem frontend/README.md).'
+          ? 'The backend has not implemented this endpoint yet. Run the mock server (see frontend/README.md).'
           : message}
       </AlertDescription>
     </Alert>

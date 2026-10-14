@@ -35,8 +35,8 @@ export function EditOrderSheet({
   const mutation = useMutation({
     ...updateOrderMutation(),
     onSuccess: (updated) => {
-      toast.success('Đã lưu và chấm lại điểm', {
-        description: updated.risk_score != null ? `Điểm mới: ${updated.risk_score}/100` : undefined,
+      toast.success('Saved and rescored', {
+        description: updated.risk_score != null ? `New score: ${updated.risk_score}/100` : undefined,
       })
       void invalidate(queryClient, 'getOrder', 'listOrders')
       onOpenChange(false)
@@ -55,9 +55,9 @@ export function EditOrderSheet({
     >
       <SheetContent className="flex w-full flex-col sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>Sửa đơn {order.external_id ?? order.id}</SheetTitle>
+          <SheetTitle>Edit order {order.external_id ?? order.id}</SheetTitle>
           <SheetDescription>
-            Lưu thay đổi sẽ chấm lại điểm rủi ro. Đơn đã gửi đi thì không sửa được.
+            Saving rescores the order. Orders that have shipped can no longer be edited.
           </SheetDescription>
         </SheetHeader>
         <form
@@ -80,11 +80,11 @@ export function EditOrderSheet({
         >
           <FieldGroup className="gap-4">
             <Field>
-              <FieldLabel htmlFor="edit-buyer">Tên người mua</FieldLabel>
+              <FieldLabel htmlFor="edit-buyer">Buyer name</FieldLabel>
               <Input id="edit-buyer" value={form.buyer_name} onChange={set('buyer_name')} required />
             </Field>
             <Field>
-              <FieldLabel htmlFor="edit-phone">Số điện thoại</FieldLabel>
+              <FieldLabel htmlFor="edit-phone">Phone number</FieldLabel>
               <Input
                 id="edit-phone"
                 value={form.buyer_phone}
@@ -94,12 +94,12 @@ export function EditOrderSheet({
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="edit-recipient">Người nhận</FieldLabel>
+              <FieldLabel htmlFor="edit-recipient">Recipient</FieldLabel>
               <Input id="edit-recipient" value={form.recipient_name} onChange={set('recipient_name')} />
-              <FieldDescription>Để trống nếu người mua tự nhận.</FieldDescription>
+              <FieldDescription>Leave empty if the buyer receives the order.</FieldDescription>
             </Field>
             <Field>
-              <FieldLabel htmlFor="edit-address">Địa chỉ giao</FieldLabel>
+              <FieldLabel htmlFor="edit-address">Delivery address</FieldLabel>
               <Textarea
                 id="edit-address"
                 value={form.address}
@@ -109,12 +109,14 @@ export function EditOrderSheet({
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="edit-prepaid">Đã trả trước (₫)</FieldLabel>
+              <FieldLabel htmlFor="edit-prepaid">Prepaid (₫)</FieldLabel>
               <Input id="edit-prepaid" value={form.prepaid} onChange={set('prepaid')} inputMode="numeric" />
-              <FieldDescription>Tăng số trả trước sẽ giảm số tiền còn phải thu.</FieldDescription>
+              <FieldDescription>
+                Raising the prepaid amount lowers the amount left to collect.
+              </FieldDescription>
             </Field>
             <Field>
-              <FieldLabel htmlFor="edit-note">Ghi chú</FieldLabel>
+              <FieldLabel htmlFor="edit-note">Note</FieldLabel>
               <Textarea id="edit-note" value={form.note} onChange={set('note')} />
             </Field>
           </FieldGroup>
@@ -126,11 +128,11 @@ export function EditOrderSheet({
         </form>
         <SheetFooter className="flex-row justify-end">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Hủy bỏ
+            Cancel
           </Button>
           <Button type="submit" form="edit-order-form" disabled={mutation.isPending}>
             {mutation.isPending && <Spinner data-icon="inline-start" />}
-            Lưu và chấm lại
+            Save and rescore
           </Button>
         </SheetFooter>
       </SheetContent>

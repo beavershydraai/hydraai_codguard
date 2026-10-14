@@ -31,19 +31,19 @@ import { failedDeliveryCost, initialOnboardingValues, money, type OnboardingValu
 
 const STEPS = [
   { id: 'shop', step: 1, title: 'Shop' },
-  { id: 'costs', step: 2, title: 'Chi phí & giờ liên hệ' },
-  { id: 'policy', step: 3, title: 'Policy & xác nhận' },
+  { id: 'costs', step: 2, title: 'Costs & contact hours' },
+  { id: 'policy', step: 3, title: 'Policy & review' },
 ] as const
 
 type Errors = Partial<Record<keyof OnboardingValues, string>>
 
 function stepErrors(step: number, v: OnboardingValues): Errors {
   const errors: Errors = {}
-  if (step === 1 && v.name.trim().length < 2) errors.name = 'Nhập tên shop (ít nhất 2 ký tự).'
+  if (step === 1 && v.name.trim().length < 2) errors.name = 'Enter the shop name (at least 2 characters).'
   if (step === 2) {
-    if (money(v.shipping) <= 0) errors.shipping = 'Nhập phí ship trung bình của một đơn.'
+    if (money(v.shipping) <= 0) errors.shipping = 'Enter the average shipping fee for one order.'
     if (!(v.start >= '08:00' && v.end <= '21:00' && v.start < v.end))
-      errors.end = 'Giờ liên hệ phải nằm trong 08:00–21:00.'
+      errors.end = 'Contact hours must be within 08:00–21:00.'
   }
   return errors
 }
@@ -87,7 +87,7 @@ export function OnboardingWizard({
   const isLast = current === STEPS.length
 
   return (
-    <form onSubmit={handleSubmit} className="flex w-full max-w-xl flex-col" aria-label="Thiết lập shop">
+    <form onSubmit={handleSubmit} className="flex w-full max-w-xl flex-col" aria-label="Shop setup">
       <Card>
         <Stepper
           value={current}
@@ -99,7 +99,7 @@ export function OnboardingWizard({
           className="w-full space-y-3"
         >
           <CardHeader className="flex items-center py-1">
-            <StepperNav aria-label="Các bước thiết lập" className="items-center">
+            <StepperNav aria-label="Setup steps" className="items-center">
               {STEPS.map((step, index) => (
                 <StepperItem
                   key={step.id}
@@ -129,7 +129,7 @@ export function OnboardingWizard({
               <StepperContent value={1}>
                 <FieldGroup className="gap-4">
                   <Field data-invalid={!!errors.name}>
-                    <FieldLabel htmlFor="onb-name">Tên shop</FieldLabel>
+                    <FieldLabel htmlFor="onb-name">Shop name</FieldLabel>
                     <Input
                       id="onb-name"
                       value={values.name}
@@ -138,14 +138,14 @@ export function OnboardingWizard({
                       autoFocus
                     />
                     <FieldDescription>
-                      AI tự giới thiệu là trợ lý của shop này khi gọi khách.
+                      The AI introduces itself as this shop's assistant when it calls buyers.
                     </FieldDescription>
                     {errors.name && <FieldError>{errors.name}</FieldError>}
                   </Field>
                   <p className="rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
-                    Đơn mới vào bằng file CSV, công cụ bán hàng (API key{' '}
-                    {shop.intake_api_key_last4 ? `••••${shop.intake_api_key_last4}` : 'tạo sau'}) hoặc tạo
-                    tay. Mỗi đơn được chấm điểm rủi ro ngay khi vào.
+                    New orders come in by CSV file, from a sales tool (API key{' '}
+                    {shop.intake_api_key_last4 ? `••••${shop.intake_api_key_last4}` : 'created later'}) or by
+                    hand. Each order gets a risk score as soon as it arrives.
                   </p>
                 </FieldGroup>
               </StepperContent>
@@ -154,33 +154,33 @@ export function OnboardingWizard({
                 <FieldGroup className="gap-4">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Field data-invalid={!!errors.shipping}>
-                      <FieldLabel htmlFor="onb-ship">Phí ship trung bình một chiều</FieldLabel>
+                      <FieldLabel htmlFor="onb-ship">Average one-way shipping fee</FieldLabel>
                       <Money id="onb-ship" value={values.shipping} onChange={set('shipping')} />
                       {errors.shipping && <FieldError>{errors.shipping}</FieldError>}
                     </Field>
                     <Field>
-                      <FieldLabel htmlFor="onb-handling">Chi phí xử lý hàng hoàn</FieldLabel>
+                      <FieldLabel htmlFor="onb-handling">Return handling cost</FieldLabel>
                       <Money id="onb-handling" value={values.handling} onChange={set('handling')} />
                     </Field>
                   </div>
                   <p className="text-sm">
-                    Một lần giao thất bại tốn khoảng{' '}
+                    One failed delivery costs about{' '}
                     <span className="font-semibold tabular-nums">
                       {formatVnd(failedDeliveryCost(values))}
                     </span>{' '}
                     <Badge variant="info-light" size="sm">
-                      ước tính
+                      estimated
                     </Badge>
                   </p>
                   <Field>
-                    <FieldLabel htmlFor="onb-call">Chi phí một cuộc gọi AI</FieldLabel>
+                    <FieldLabel htmlFor="onb-call">Cost of one AI call</FieldLabel>
                     <Money id="onb-call" value={values.callCost} onChange={set('callCost')} />
                     <FieldDescription>
-                      Chỉ gọi khi thiệt hại dự kiến của đơn lớn hơn chi phí này.
+                      Calls are placed only when an order's expected loss is higher than this cost.
                     </FieldDescription>
                   </Field>
                   <Field data-invalid={!!errors.end}>
-                    <FieldLabel htmlFor="onb-start">Giờ được liên hệ khách</FieldLabel>
+                    <FieldLabel htmlFor="onb-start">Hours when buyers may be contacted</FieldLabel>
                     <div className="flex items-center gap-2">
                       <Input
                         id="onb-start"
@@ -192,7 +192,7 @@ export function OnboardingWizard({
                       />
                       <span className="text-muted-foreground">–</span>
                       <Input
-                        aria-label="Đến"
+                        aria-label="Until"
                         type="time"
                         value={values.end}
                         onChange={set('end')}
@@ -208,7 +208,7 @@ export function OnboardingWizard({
               <StepperContent value={3}>
                 <div className="flex flex-col gap-4">
                   <p className="text-muted-foreground">
-                    Policy mặc định dưới đây dùng được ngay; đổi lúc nào cũng được trong Cài đặt.
+                    The default policy below works out of the box; change it any time in Settings.
                   </p>
                   <ul className="flex flex-col divide-y rounded-lg border">
                     {policy.tiers.map((t) => (
@@ -221,7 +221,7 @@ export function OnboardingWizard({
                           {DECISION_ACTION_LABELS[t.action]}
                           {t.if_no_response && (
                             <span className="block text-xs text-muted-foreground">
-                              Không phản hồi sau {t.no_response_after_minutes} phút →{' '}
+                              No response after {t.no_response_after_minutes} min →{' '}
                               {DECISION_ACTION_LABELS[t.if_no_response]}
                             </span>
                           )}
@@ -235,15 +235,15 @@ export function OnboardingWizard({
                       <dd className="font-medium">{values.name}</dd>
                     </div>
                     <div>
-                      <dt className="text-muted-foreground">Giao thất bại</dt>
+                      <dt className="text-muted-foreground">Failed delivery</dt>
                       <dd className="font-medium tabular-nums">{formatVnd(failedDeliveryCost(values))}</dd>
                     </div>
                     <div>
-                      <dt className="text-muted-foreground">Cuộc gọi AI</dt>
+                      <dt className="text-muted-foreground">AI call</dt>
                       <dd className="font-medium tabular-nums">{formatVnd(money(values.callCost))}</dd>
                     </div>
                     <div>
-                      <dt className="text-muted-foreground">Giờ liên hệ</dt>
+                      <dt className="text-muted-foreground">Contact hours</dt>
                       <dd className="font-medium tabular-nums">
                         {values.start}–{values.end}
                       </dd>
@@ -257,11 +257,11 @@ export function OnboardingWizard({
             {current > 1 && (
               <Button type="button" variant="outline" onClick={() => setCurrent((c) => Math.max(1, c - 1))}>
                 <ArrowLeftIcon data-icon="inline-start" aria-hidden="true" />
-                Quay lại
+                Back
               </Button>
             )}
             <Button type="submit" disabled={submitting}>
-              {isLast ? 'Bắt đầu dùng COD Guard' : 'Tiếp tục'}
+              {isLast ? 'Start using COD Guard' : 'Continue'}
               {!isLast && <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />}
             </Button>
           </CardFooter>

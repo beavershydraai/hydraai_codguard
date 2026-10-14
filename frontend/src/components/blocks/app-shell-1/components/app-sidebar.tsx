@@ -20,7 +20,7 @@ function SidebarRailToggle() {
   return (
     <button
       type="button"
-      aria-label={isExpanded ? 'Thu gọn thanh bên' : 'Mở rộng thanh bên'}
+      aria-label={isExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
       onClick={toggleSidebar}
       style={{
         left: isExpanded ? 'var(--sidebar-width)' : 'var(--sidebar-width-icon)',
@@ -64,7 +64,7 @@ function SidebarRailToggle() {
           'group-hover/rail:translate-x-0 group-hover/rail:opacity-100',
         )}
       >
-        {isExpanded ? 'Thu gọn' : 'Mở rộng'}
+        {isExpanded ? 'Collapse' : 'Expand'}
       </span>
     </button>
   )

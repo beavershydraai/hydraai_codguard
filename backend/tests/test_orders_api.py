@@ -19,7 +19,7 @@ def make(
     *,
     shop_id="shop_a",
     minutes=0,
-    name="Khách demo",
+    name="Demo buyer",
     phone="+84000000001",
     external_id=None,
     price=300_000,
@@ -33,7 +33,7 @@ def make(
         buyer_name=name,
         buyer_phone=phone,
         address={"raw": "Số 1 đường mẫu, phường mẫu, tỉnh mẫu"},
-        items=[{"name": "Sản phẩm mẫu", "quantity": 1, "unit_price_vnd": price}],
+        items=[{"name": "Sample product", "quantity": 1, "unit_price_vnd": price}],
         placed_at=T0 + timedelta(minutes=minutes),
     )
     doc = order_document(

@@ -35,7 +35,7 @@ Conventions:
 
 - Money is integer VND in fields ending `_vnd`.
 - Times are ISO 8601 with offset; shops operate in Vietnam time (`+07:00`).
-- Enum values are English snake_case. Each enum's description lists its Vietnamese UI labels.
+- Enum values are English snake_case. Each enum's description lists its English UI labels.
 - Errors use `application/problem+json` (RFC 9457) with a machine-readable `code`.
 - Lists use cursor pagination: pass `next_cursor` back as `cursor`.
 """

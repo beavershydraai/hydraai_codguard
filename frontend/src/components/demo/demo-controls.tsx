@@ -39,10 +39,10 @@ export function DemoControls() {
     ...resetDemoMutation(),
     onSuccess: (result) => {
       setSpam(null)
-      toast.success('Đã đặt lại dữ liệu demo', { description: `${result.orders} đơn, seed ${result.seed}` })
+      toast.success('Demo data reset', { description: `${result.orders} orders, seed ${result.seed}` })
       void refreshAll()
     },
-    onError: (error) => toast.error('Không đặt lại được', { description: problemMessage(error) }),
+    onError: (error) => toast.error('Could not reset', { description: problemMessage(error) }),
   })
   const simulate = useMutation({
     ...runSpamSimulationMutation(),
@@ -50,7 +50,7 @@ export function DemoControls() {
       setSpam(result)
       void refreshAll()
     },
-    onError: (error) => toast.error('Không chạy được mô phỏng', { description: problemMessage(error) }),
+    onError: (error) => toast.error('Could not run the simulation', { description: problemMessage(error) }),
   })
 
   return (
@@ -58,23 +58,23 @@ export function DemoControls() {
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
           Demo
-          {mockMode === 'all' && <Badge variant="warning-light">Dữ liệu mẫu</Badge>}
+          {mockMode === 'all' && <Badge variant="warning-light">Sample data</Badge>}
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">Công cụ cho buổi demo. Không dùng cho shop thật.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Tools for the demo. Not for real shops.</p>
       </div>
 
       <Frame className="w-full">
         <FrameHeader className="px-2! py-2.5!">
-          <FrameTitle>Kịch bản demo</FrameTitle>
+          <FrameTitle>Demo script</FrameTitle>
           <FrameDescription>
-            Chạy lại cho ra cùng kết quả: dữ liệu sinh từ seed cố định, không có SĐT thật.
+            Every run gives the same result: data comes from a fixed seed, with no real phone numbers.
           </FrameDescription>
         </FrameHeader>
         <FramePanel className="p-0">
           <FieldGroup className="gap-0">
             <SettingField
-              title="Đặt lại dữ liệu demo"
-              description="Xóa thay đổi trong phiên và nạp lại bộ đơn mẫu cố định."
+              title="Reset demo data"
+              description="Discards this session's changes and reloads the fixed set of sample orders."
             >
               <Button variant="outline" onClick={() => reset.mutate({})} disabled={reset.isPending}>
                 {reset.isPending ? (
@@ -82,12 +82,12 @@ export function DemoControls() {
                 ) : (
                   <RotateCcwIcon aria-hidden="true" />
                 )}
-                Đặt lại
+                Reset
               </Button>
             </SettingField>
             <SettingField
-              title="Mô phỏng tấn công spam"
-              description="50 đơn từ 20 tài khoản cùng 1 SĐT. COD Guard gộp và chỉ liên hệ đúng 1 lần, rồi chặn SĐT."
+              title="Simulate a spam attack"
+              description="50 orders from 20 accounts with the same phone number. COD Guard batches them, makes exactly 1 contact, then blocks the phone."
               badge={{ label: 'E9.4', variant: 'info-light' }}
             >
               <Button onClick={() => simulate.mutate({})} disabled={simulate.isPending}>
@@ -96,22 +96,22 @@ export function DemoControls() {
                 ) : (
                   <ShieldAlertIcon aria-hidden="true" />
                 )}
-                Chạy mô phỏng
+                Run simulation
               </Button>
             </SettingField>
             {spam && (
               <div className="grid grid-cols-2 gap-3 px-4 py-4 sm:grid-cols-4">
-                <Stat label="Đơn spam" value={spam.orders_created} />
-                <Stat label="Tài khoản" value={spam.accounts} />
-                <Stat label="Lần liên hệ" value={spam.contacts_made} highlight />
+                <Stat label="Spam orders" value={spam.orders_created} />
+                <Stat label="Accounts" value={spam.accounts} />
+                <Stat label="Contacts made" value={spam.contacts_made} highlight />
                 <Stat
-                  label={`SĐT ${spam.phone_masked}`}
-                  value={spam.phone_blocked ? 'Đã chặn' : 'Chưa chặn'}
+                  label={`Phone ${spam.phone_masked}`}
+                  value={spam.phone_blocked ? 'Blocked' : 'Not blocked'}
                   highlight
                 />
                 <Button variant="link" size="sm" className="col-span-full justify-start p-0" asChild>
                   <Link to="/orders" search={{ status: ['pending_review'] }}>
-                    Xem các đơn spam trong hàng chờ duyệt
+                    View the spam orders in the review queue
                   </Link>
                 </Button>
               </div>
@@ -151,8 +151,8 @@ function RoleSwitch() {
   if (mockMode === 'off') return null
   return (
     <SettingField
-      title="Vai trò đang xem"
-      description="Nhân viên không sửa được chi phí và policy."
+      title="Viewing as"
+      description="Staff cannot change costs or policy."
       badge={{ label: 'mock', variant: 'warning-light' }}
     >
       <Select
@@ -161,16 +161,16 @@ function RoleSwitch() {
           const { mockDb } = await import('@/mocks/db')
           mockDb.role = role as 'owner' | 'staff'
           await queryClient.invalidateQueries()
-          toast.info(role === 'owner' ? 'Đang xem với quyền chủ shop' : 'Đang xem với quyền nhân viên')
+          toast.info(role === 'owner' ? 'Viewing as the shop owner' : 'Viewing as staff')
         }}
       >
-        <SelectTrigger className="w-full" aria-label="Vai trò">
+        <SelectTrigger className="w-full" aria-label="Role">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
-            <SelectItem value="owner">Chủ shop</SelectItem>
-            <SelectItem value="staff">Nhân viên</SelectItem>
+            <SelectItem value="owner">Shop owner</SelectItem>
+            <SelectItem value="staff">Staff</SelectItem>
           </SelectGroup>
         </SelectContent>
       </Select>
@@ -197,8 +197,8 @@ function BuyerLinks() {
   if (links.length === 0) return null
   return (
     <SettingField
-      title="Trang xác nhận của người mua"
-      description="Mở như người mua nhận link qua Zalo ZNS / SMS. Không cần đăng nhập."
+      title="Buyer confirmation page"
+      description="Opens as the buyer would from a Zalo ZNS / SMS link. No sign-in needed."
       badge={{ label: 'mock', variant: 'warning-light' }}
       last
     >

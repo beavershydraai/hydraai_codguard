@@ -18,7 +18,7 @@ export const columns: ColumnDef<DataGridFeatures, OrderSummary>[] = [
     enableSorting: true,
     enableHiding: false,
     enableResizing: true,
-    meta: { headerTitle: 'Mã đơn', headerClassName: 'ps-4!', cellClassName: 'ps-4!' },
+    meta: { headerTitle: 'Order ID', headerClassName: 'ps-4!', cellClassName: 'ps-4!' },
   },
   {
     id: 'buyer',
@@ -30,7 +30,7 @@ export const columns: ColumnDef<DataGridFeatures, OrderSummary>[] = [
     enableSorting: true,
     enableHiding: false,
     enableResizing: true,
-    meta: { headerTitle: 'Người mua', autoSize: true },
+    meta: { headerTitle: 'Buyer', autoSize: true },
   },
   {
     id: 'cod_amount_vnd',
@@ -41,7 +41,7 @@ export const columns: ColumnDef<DataGridFeatures, OrderSummary>[] = [
     enableSorting: true,
     enableHiding: true,
     enableResizing: true,
-    meta: { headerTitle: 'Thu hộ' },
+    meta: { headerTitle: 'COD' },
   },
   {
     id: 'risk_score',
@@ -52,7 +52,7 @@ export const columns: ColumnDef<DataGridFeatures, OrderSummary>[] = [
     enableSorting: true,
     enableHiding: true,
     enableResizing: true,
-    meta: { headerTitle: 'Rủi ro' },
+    meta: { headerTitle: 'Risk' },
   },
   {
     id: 'current_action',
@@ -63,7 +63,7 @@ export const columns: ColumnDef<DataGridFeatures, OrderSummary>[] = [
     enableSorting: true,
     enableHiding: true,
     enableResizing: true,
-    meta: { headerTitle: 'Hành động' },
+    meta: { headerTitle: 'Action' },
   },
   {
     id: 'status',
@@ -74,7 +74,7 @@ export const columns: ColumnDef<DataGridFeatures, OrderSummary>[] = [
     enableSorting: true,
     enableHiding: true,
     enableResizing: true,
-    meta: { headerTitle: 'Trạng thái' },
+    meta: { headerTitle: 'Status' },
   },
   {
     id: 'placed_at',
@@ -87,7 +87,7 @@ export const columns: ColumnDef<DataGridFeatures, OrderSummary>[] = [
     enableSorting: true,
     enableHiding: true,
     enableResizing: true,
-    meta: { headerTitle: 'Đặt lúc' },
+    meta: { headerTitle: 'Placed at' },
   },
   {
     id: 'actions',

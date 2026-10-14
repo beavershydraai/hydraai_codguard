@@ -18,7 +18,7 @@ import { problemMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 export type ImportSummary = {
-  /** Label and count pairs, e.g. ["Đã nhập", 120]. */
+  /** Label and count pairs, e.g. ["Imported", 120]. */
   counts: [string, number][]
   rejected: ImportRowError[]
 }
@@ -96,19 +96,21 @@ export function CsvImportDialog({
               {summary.counts.map(([label, value]) => (
                 <div key={label} className="rounded-lg border p-3">
                   <dt className="text-xs text-muted-foreground">{label}</dt>
-                  <dd className="text-xl font-semibold tabular-nums">{value.toLocaleString('vi-VN')}</dd>
+                  <dd className="text-xl font-semibold tabular-nums">{value.toLocaleString('en-US')}</dd>
                 </div>
               ))}
             </dl>
             {summary.rejected.length > 0 && (
               <Alert variant="destructive">
                 <CircleAlertIcon />
-                <AlertTitle>{summary.rejected.length} dòng bị bỏ qua</AlertTitle>
+                <AlertTitle>
+                  {summary.rejected.length} {summary.rejected.length === 1 ? 'row' : 'rows'} skipped
+                </AlertTitle>
                 <AlertDescription>
                   <ul className="max-h-40 overflow-y-auto">
                     {summary.rejected.slice(0, 50).map((r) => (
                       <li key={`${r.row}-${r.field}`}>
-                        Dòng {r.row}
+                        Row {r.row}
                         {r.field && ` (${r.field})`}: {r.message}
                       </li>
                     ))}
@@ -131,7 +133,7 @@ export function CsvImportDialog({
               onDragOver={actions.handleDragOver}
               onDrop={actions.handleDrop}
             >
-              <input {...actions.getInputProps()} className="sr-only" aria-label="Chọn file CSV" />
+              <input {...actions.getInputProps()} className="sr-only" aria-label="Choose a CSV file" />
               <FileSpreadsheetIcon className="size-8 text-muted-foreground" aria-hidden="true" />
               {file ? (
                 <div className="flex items-center gap-2 text-sm">
@@ -140,23 +142,23 @@ export function CsvImportDialog({
                   <Button
                     size="icon-xs"
                     variant="ghost"
-                    aria-label="Bỏ file"
+                    aria-label="Remove file"
                     onClick={() => actions.clearFiles()}
                   >
                     <XIcon />
                   </Button>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">Kéo thả file CSV vào đây, hoặc</p>
+                <p className="text-sm text-muted-foreground">Drag and drop a CSV file here, or</p>
               )}
               <Button size="sm" variant={file ? 'outline' : 'default'} onClick={actions.openFileDialog}>
                 <UploadIcon aria-hidden="true" />
-                {file ? 'Chọn file khác' : 'Chọn file'}
+                {file ? 'Choose another file' : 'Choose file'}
               </Button>
             </div>
             <Button variant="link" size="sm" className="self-start p-0" onClick={downloadTemplate}>
               <DownloadIcon aria-hidden="true" />
-              Tải file mẫu ({template[0]!.length} cột)
+              Download template ({template[0]!.length} columns)
             </Button>
             {(errors.length > 0 || error) && (
               <Alert variant="destructive">
@@ -171,9 +173,9 @@ export function CsvImportDialog({
           {summary ? (
             <>
               <Button variant="outline" onClick={reset}>
-                Nhập file khác
+                Import another file
               </Button>
-              <Button onClick={() => onOpenChange(false)}>Xong</Button>
+              <Button onClick={() => onOpenChange(false)}>Done</Button>
             </>
           ) : (
             <Button
@@ -185,14 +187,14 @@ export function CsvImportDialog({
                 try {
                   setSummary(await onImport(file))
                 } catch (err) {
-                  setError(problemMessage(err, 'Không đọc được file. Kiểm tra lại định dạng CSV.'))
+                  setError(problemMessage(err, 'Could not read the file. Check that it is a valid CSV.'))
                 } finally {
                   setPending(false)
                 }
               }}
             >
               {pending && <Spinner data-icon="inline-start" />}
-              Nhập
+              Import
             </Button>
           )}
         </DialogFooter>

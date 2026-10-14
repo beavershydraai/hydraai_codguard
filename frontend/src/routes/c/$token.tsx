@@ -41,11 +41,11 @@ function ConfirmationRoute() {
             ) : (
               <SearchXIcon className="size-8 text-muted-foreground" aria-hidden="true" />
             )}
-            <p className="font-medium">{expired ? 'Link đã hết hạn' : 'Không tìm thấy đơn hàng'}</p>
+            <p className="font-medium">{expired ? 'This link has expired' : 'Order not found'}</p>
             <p className="max-w-sm text-sm text-muted-foreground">
               {expired
-                ? 'Link xác nhận chỉ dùng được trong 48 giờ. Vui lòng liên hệ shop nếu bạn vẫn muốn nhận hàng.'
-                : 'Link không đúng hoặc đơn đã bị xóa. Hãy kiểm tra lại tin nhắn từ shop.'}
+                ? 'A confirmation link works for 48 hours only. Please contact the shop if you still want the order.'
+                : 'The link is wrong or the order was deleted. Please check the message from the shop.'}
             </p>
           </CardContent>
         </Card>

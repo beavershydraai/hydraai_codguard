@@ -27,7 +27,7 @@ export function Auth({ onSignedIn }: { onSignedIn: () => void }) {
       await signIn(credentials)
       onSignedIn()
     } catch (err) {
-      setError(err instanceof SignInError ? err.message : 'Không đăng nhập được. Vui lòng thử lại.')
+      setError(err instanceof SignInError ? err.message : 'Could not sign in. Please try again.')
     } finally {
       setPending(false)
     }
@@ -49,9 +49,9 @@ export function Auth({ onSignedIn }: { onSignedIn: () => void }) {
                 <AuthLogo className="size-9" />
 
                 <div className="flex max-w-xs flex-col gap-1.5">
-                  <FrameTitle className="text-2xl tracking-tight sm:text-[1.75rem]">Đăng nhập</FrameTitle>
+                  <FrameTitle className="text-2xl tracking-tight sm:text-[1.75rem]">Sign in</FrameTitle>
                   <FrameDescription className="text-sm text-pretty">
-                    Vào COD Guard để sàng lọc đơn COD của shop.
+                    Sign in to COD Guard to screen your shop's COD orders.
                   </FrameDescription>
                 </div>
               </div>
@@ -65,13 +65,13 @@ export function Auth({ onSignedIn }: { onSignedIn: () => void }) {
                       name="email"
                       type="email"
                       autoComplete="username"
-                      placeholder="ban@shop.vn"
+                      placeholder="you@shop.vn"
                       required
                     />
                   </Field>
 
                   <Field className="gap-2">
-                    <FieldLabel htmlFor="login-password">Mật khẩu</FieldLabel>
+                    <FieldLabel htmlFor="login-password">Password</FieldLabel>
 
                     <InputGroup className="w-full">
                       <InputGroupInput
@@ -79,7 +79,7 @@ export function Auth({ onSignedIn }: { onSignedIn: () => void }) {
                         name="password"
                         type={showPassword ? 'text' : 'password'}
                         autoComplete="current-password"
-                        placeholder="Nhập mật khẩu"
+                        placeholder="Enter your password"
                         required
                       />
                       <InputGroupAddon align="inline-end">
@@ -87,7 +87,7 @@ export function Auth({ onSignedIn }: { onSignedIn: () => void }) {
                           type="button"
                           size="icon-xs"
                           className="text-muted-foreground hover:text-foreground"
-                          aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
                           aria-pressed={showPassword}
                           onClick={() => setShowPassword((value) => !value)}
                         >
@@ -111,7 +111,7 @@ export function Auth({ onSignedIn }: { onSignedIn: () => void }) {
 
                 <Button type="submit" className="w-full" disabled={pending}>
                   {pending && <Spinner data-icon="inline-start" />}
-                  Đăng nhập
+                  Sign in
                 </Button>
               </form>
             </FramePanel>

@@ -80,7 +80,7 @@ export function OrderDetailView({ order, actions }: { order: OrderDetail; action
         <Button variant="ghost" size="sm" asChild className="-ms-2 text-muted-foreground">
           <Link to="/orders">
             <ArrowLeftIcon aria-hidden="true" />
-            Đơn hàng
+            Orders
           </Link>
         </Button>
 
@@ -93,15 +93,15 @@ export function OrderDetailView({ order, actions }: { order: OrderDetail; action
             title={actions.callDisabledReason ?? undefined}
           >
             <PhoneCallIcon aria-hidden="true" />
-            AI gọi xác nhận
+            AI confirmation call
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={actions.onEdit} disabled={!editable}>
             <PencilIcon aria-hidden="true" />
-            Sửa đơn
+            Edit order
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={actions.onOverride} disabled={!editable}>
             <ScaleIcon aria-hidden="true" />
-            Quyết định thay
+            Override
           </Button>
         </div>
       </header>
@@ -117,15 +117,15 @@ export function OrderDetailView({ order, actions }: { order: OrderDetail; action
                 {order.is_gift && (
                   <Badge variant="info-light">
                     <GiftIcon aria-hidden="true" className="size-3" />
-                    Đơn quà tặng
+                    Gift order
                   </Badge>
                 )}
                 <span className="text-xs text-muted-foreground">
-                  Đặt {formatRelative(order.placed_at)} · {SALES_CHANNEL_LABELS[order.channel]}
+                  Placed {formatRelative(order.placed_at)} · {SALES_CHANNEL_LABELS[order.channel]}
                 </span>
               </div>
               <FrameTitle id="order-heading" className="text-xl tracking-tight md:text-2xl">
-                Đơn {code}
+                Order {code}
               </FrameTitle>
               <p className="text-sm leading-snug text-muted-foreground">
                 {order.buyer_name} · <span className="tabular-nums">{order.buyer_phone}</span>
@@ -136,14 +136,14 @@ export function OrderDetailView({ order, actions }: { order: OrderDetail; action
 
             <div className="flex flex-col gap-1 md:items-end">
               <span className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
-                Còn phải thu
+                Left to collect
               </span>
               <span className="text-2xl leading-none font-semibold tracking-tight tabular-nums md:text-3xl">
                 {formatVnd(order.cod_amount_vnd)}
               </span>
               <span className="text-xs text-muted-foreground tabular-nums">
-                Tổng {formatVnd(order.total_vnd)}
-                {order.prepaid_vnd > 0 && ` · Trả trước ${formatVnd(order.prepaid_vnd)}`}
+                Total {formatVnd(order.total_vnd)}
+                {order.prepaid_vnd > 0 && ` · Prepaid ${formatVnd(order.prepaid_vnd)}`}
               </span>
             </div>
           </div>
@@ -175,11 +175,11 @@ function JourneyPanel({ order }: { order: OrderDetail }) {
   return (
     <Frame className="self-start lg:sticky lg:top-6">
       <FrameHeader>
-        <FrameTitle className="text-base">Hành trình đơn</FrameTitle>
+        <FrameTitle className="text-base">Order journey</FrameTitle>
       </FrameHeader>
       <FramePanel className="flex flex-col gap-5">
         {events.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Chưa có sự kiện nào.</p>
+          <p className="text-sm text-muted-foreground">No events yet.</p>
         ) : (
           <Timeline defaultValue={events.length} className="gap-0">
             {events.map((event, index) => {
@@ -199,7 +199,7 @@ function JourneyPanel({ order }: { order: OrderDetail }) {
                       <span className="text-sm leading-snug font-medium">{event.message_vi}</span>
                       {event.reason && (
                         <span className="text-xs leading-snug text-muted-foreground">
-                          Lý do: {event.reason}
+                          Reason: {event.reason}
                         </span>
                       )}
                       <time className="text-xs text-muted-foreground tabular-nums" dateTime={event.at}>
@@ -216,7 +216,7 @@ function JourneyPanel({ order }: { order: OrderDetail }) {
         {next && (
           <div className="flex flex-col gap-2 border-t pt-4">
             <span className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
-              Bước tiếp theo
+              Next step
             </span>
             <p className="flex items-center gap-1.5 text-sm">
               <ArrowRightIcon className="size-3.5 text-muted-foreground" aria-hidden="true" />
@@ -224,7 +224,7 @@ function JourneyPanel({ order }: { order: OrderDetail }) {
               {order.decision?.next_action_at && (
                 <span className="text-muted-foreground">
                   {' '}
-                  nếu chưa phản hồi trước {formatDateTime(order.decision.next_action_at)}
+                  if no response by {formatDateTime(order.decision.next_action_at)}
                 </span>
               )}
             </p>
@@ -237,11 +237,11 @@ function JourneyPanel({ order }: { order: OrderDetail }) {
 
 function actorLabel(actor: string): string {
   const known: Record<string, string> = {
-    system: 'Hệ thống',
+    system: 'System',
     engine: 'Decision engine',
-    ai_call: 'AI gọi',
-    buyer: 'Người mua',
-    carrier: 'Đơn vị vận chuyển',
+    ai_call: 'AI call',
+    buyer: 'Buyer',
+    carrier: 'Carrier',
   }
   return known[actor] ?? actor
 }
@@ -251,17 +251,17 @@ function actorLabel(actor: string): string {
 function RiskPanel({ score }: { score: RiskScore | null }) {
   if (!score) {
     return (
-      <PanelFrame eyebrow="Rủi ro bom hàng" title="Chưa chấm điểm">
-        <p className="text-sm text-muted-foreground">Đơn mới vào, hệ thống đang chấm điểm.</p>
+      <PanelFrame eyebrow="Delivery refusal risk" title="Not scored yet">
+        <p className="text-sm text-muted-foreground">New order: scoring in progress.</p>
       </PanelFrame>
     )
   }
   if (score.status === 'skipped') {
     return (
-      <PanelFrame eyebrow="Rủi ro bom hàng" title="Bỏ qua chấm điểm">
+      <PanelFrame eyebrow="Delivery refusal risk" title="Scoring skipped">
         <p className="text-sm text-muted-foreground">
-          {score.skipped_reason ? HARD_RULE_LABELS[score.skipped_reason] : 'Đơn không cần chấm điểm'}: không
-          liên hệ người mua.
+          {score.skipped_reason ? HARD_RULE_LABELS[score.skipped_reason] : 'Order needs no scoring'}: the
+          buyer is not contacted.
         </p>
       </PanelFrame>
     )
@@ -272,7 +272,7 @@ function RiskPanel({ score }: { score: RiskScore | null }) {
 
   return (
     <PanelFrame
-      eyebrow="Rủi ro bom hàng"
+      eyebrow="Delivery refusal risk"
       title={
         <span className="flex flex-wrap items-center gap-2">
           <span className="tabular-nums">{score.risk_score}/100</span>
@@ -282,16 +282,16 @@ function RiskPanel({ score }: { score: RiskScore | null }) {
     >
       <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         <Metric
-          label="Xác suất bom hàng"
+          label="Failed delivery probability"
           value={score.probability != null ? formatPercent(score.probability, 1) : '—'}
           estimated
         />
         <Metric
-          label="Thiệt hại dự kiến"
+          label="Expected loss"
           value={score.expected_loss_vnd != null ? formatVnd(score.expected_loss_vnd) : '—'}
           estimated
         />
-        <Metric label="Chi phí 1 lần giao hỏng" value={formatVnd(score.failed_delivery_cost_vnd)} />
+        <Metric label="Cost of one failed delivery" value={formatVnd(score.failed_delivery_cost_vnd)} />
       </dl>
 
       {(score.hard_rules?.length ?? 0) > 0 && (
@@ -307,7 +307,7 @@ function RiskPanel({ score }: { score: RiskScore | null }) {
 
       {(score.reasons?.length ?? 0) > 0 && (
         <div className="flex flex-col gap-2">
-          <h3 className="text-sm font-medium">Lý do</h3>
+          <h3 className="text-sm font-medium">Reasons</h3>
           <ol className="flex flex-col gap-1.5">
             {score.reasons!.map((reason, i) => (
               <li key={reason.text_vi} className="flex gap-2 text-sm">
@@ -323,7 +323,7 @@ function RiskPanel({ score }: { score: RiskScore | null }) {
 
       {signals.length > 0 && (
         <div className="flex flex-col gap-2">
-          <h3 className="text-sm font-medium">Tín hiệu đóng góp nhiều nhất</h3>
+          <h3 className="text-sm font-medium">Top contributing signals</h3>
           <ul className="flex flex-col gap-2.5">
             {signals.map((signal) => (
               <SignalRow key={signal.key} signal={signal} max={maxContribution} />
@@ -333,8 +333,8 @@ function RiskPanel({ score }: { score: RiskScore | null }) {
       )}
 
       <p className="text-xs text-muted-foreground">
-        Mô hình {score.model_version ?? '—'} · chấm lúc {formatDateTime(score.scored_at)}. Điểm và hành động
-        do mô hình và decision engine quyết định; Gemini chỉ viết lý do.
+        Model {score.model_version ?? '—'} · scored {formatDateTime(score.scored_at)}. The model and the
+        decision engine set the score and the action; Gemini only writes the reasons.
       </p>
     </PanelFrame>
   )
@@ -360,13 +360,13 @@ function SignalRow({ signal, max }: { signal: Signal; max: number }) {
           style={{ width }}
         />
       </div>
-      <span className="sr-only">{raises ? 'Làm tăng rủi ro' : 'Làm giảm rủi ro'}</span>
+      <span className="sr-only">{raises ? 'Raises risk' : 'Lowers risk'}</span>
     </li>
   )
 }
 
 function formatSignalValue(value: Signal['value']): string {
-  if (typeof value === 'boolean') return value ? 'Có' : 'Không'
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
   if (typeof value === 'number' && value >= 10_000) return formatVnd(value)
   return String(value)
 }
@@ -377,28 +377,28 @@ function DecisionPanel({ order }: { order: OrderDetail }) {
   const decision = order.decision
   if (!decision) {
     return (
-      <PanelFrame eyebrow="Quyết định" title="Chưa có quyết định">
-        <p className="text-sm text-muted-foreground">Quyết định được đưa ra ngay sau khi chấm điểm.</p>
+      <PanelFrame eyebrow="Decision" title="No decision yet">
+        <p className="text-sm text-muted-foreground">The decision is made right after scoring.</p>
       </PanelFrame>
     )
   }
   return (
     <PanelFrame
-      eyebrow="Quyết định"
+      eyebrow="Decision"
       title={
         <span className="flex flex-wrap items-center gap-2">
           {DECISION_ACTION_LABELS[decision.action]}
           <Badge variant={decision.decided_by === 'staff' ? 'warning-outline' : 'outline'}>
-            {decision.decided_by === 'staff' ? 'Nhân viên quyết định' : 'Decision engine'}
+            {decision.decided_by === 'staff' ? 'Staff decision' : 'Decision engine'}
           </Badge>
         </span>
       }
     >
       <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <Metric label="Thời điểm" value={formatDateTime(decision.decided_at)} />
-        <Metric label="Policy" value={`Phiên bản ${decision.policy_version}`} />
+        <Metric label="Decided at" value={formatDateTime(decision.decided_at)} />
+        <Metric label="Policy" value={`Version ${decision.policy_version}`} />
         <Metric
-          label="Thiệt hại dự kiến / chi phí liên hệ"
+          label="Expected loss / contact cost"
           value={`${decision.expected_loss_vnd != null ? formatVnd(decision.expected_loss_vnd) : '—'} / ${
             decision.contact_cost_vnd != null ? formatVnd(decision.contact_cost_vnd) : '—'
           }`}
@@ -407,7 +407,7 @@ function DecisionPanel({ order }: { order: OrderDetail }) {
       </dl>
       {(decision.block_reasons?.length ?? 0) > 0 && (
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-sm font-medium">Không liên hệ vì</h3>
+          <h3 className="text-sm font-medium">Not contacted because</h3>
           <div className="flex flex-wrap gap-2">
             {decision.block_reasons!.map((reason) => (
               <Badge key={reason} variant="secondary">
@@ -434,9 +434,12 @@ function ContactsPanel({
   const calls = new Map((order.calls ?? []).map((call) => [call.id, call]))
 
   return (
-    <PanelFrame eyebrow="Lịch sử liên hệ" title={`${contacts.length} lần liên hệ`}>
+    <PanelFrame
+      eyebrow="Contact history"
+      title={`${contacts.length} ${contacts.length === 1 ? 'contact' : 'contacts'}`}
+    >
       {contacts.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Chưa liên hệ người mua.</p>
+        <p className="text-sm text-muted-foreground">Buyer not contacted yet.</p>
       ) : (
         <ul className="flex flex-col divide-y">
           {contacts.map((contact) => {
@@ -460,7 +463,7 @@ function ContactsPanel({
                     <div className="flex flex-col">
                       <span className="text-sm font-medium">
                         {CONTACT_CHANNEL_LABELS[contact.channel]}
-                        {call && ` · lần ${call.attempt}`}
+                        {call && ` · attempt ${call.attempt}`}
                       </span>
                       <span className="text-xs text-muted-foreground tabular-nums">
                         {formatDateTime(contact.created_at)}
@@ -474,7 +477,7 @@ function ContactsPanel({
                   <div className="flex flex-wrap items-center gap-2">
                     {contact.link_expires_at && (
                       <span className="text-xs text-muted-foreground">
-                        Link hết hạn {formatDateTime(contact.link_expires_at)}
+                        Link expires {formatDateTime(contact.link_expires_at)}
                       </span>
                     )}
                     <Button
@@ -483,7 +486,7 @@ function ContactsPanel({
                       className="h-auto p-0"
                       onClick={() => onPreviewMessage(contact)}
                     >
-                      Xem tin nhắn đã gửi
+                      View sent message
                     </Button>
                   </div>
                 )}
@@ -508,8 +511,8 @@ function ContactResult({ contact, call }: { contact: ContactAttempt; call?: Call
     }
     return <Badge variant="info-outline">{CALL_STATUS_LABELS[call.status]}</Badge>
   }
-  if (contact.responded_at) return <Badge variant="success-outline">Đã phản hồi</Badge>
-  return <Badge variant="outline">Chưa phản hồi</Badge>
+  if (contact.responded_at) return <Badge variant="success-outline">Responded</Badge>
+  return <Badge variant="outline">No response yet</Badge>
 }
 
 function CallSummary({ call }: { call: Call }) {
@@ -519,11 +522,11 @@ function CallSummary({ call }: { call: Call }) {
       {(call.changes?.length ?? 0) > 0 && (
         <ul className="text-xs text-muted-foreground">
           {call.changes!.map((change) => (
-            <li key={`${change.field}-${change.new_value}`}>Thay đổi: {change.new_value}</li>
+            <li key={`${change.field}-${change.new_value}`}>Change: {change.new_value}</li>
           ))}
         </ul>
       )}
-      {call.buyer_requests && <p className="text-xs text-muted-foreground">Yêu cầu: {call.buyer_requests}</p>}
+      {call.buyer_requests && <p className="text-xs text-muted-foreground">Request: {call.buyer_requests}</p>}
       {call.duration_seconds != null && (
         <p className="text-xs text-muted-foreground tabular-nums">
           {call.phone_masked} · {Math.floor(call.duration_seconds / 60)}:
@@ -541,27 +544,25 @@ function DetailsPanel({ order }: { order: OrderDetail }) {
   return (
     <Frame>
       <FrameHeader className="gap-1">
-        <span className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
-          Sản phẩm
-        </span>
-        <FrameTitle className="text-base">{order.items.length} sản phẩm</FrameTitle>
+        <span className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">Items</span>
+        <FrameTitle className="text-base">
+          {order.items.length} {order.items.length === 1 ? 'item' : 'items'}
+        </FrameTitle>
       </FrameHeader>
       <FramePanel className="flex flex-col gap-6">
-        <div role="list" aria-label="Sản phẩm trong đơn" className="flex flex-col gap-3">
+        <div role="list" aria-label="Items in the order" className="flex flex-col gap-3">
           {order.items.map((item, i) => (
             <article key={`${item.name}-${i}`} role="listitem" className="flex min-w-0 items-start gap-3">
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <h3 className="min-w-0 truncate text-sm leading-snug font-medium">{item.name}</h3>
                 <p className="text-xs text-muted-foreground">
-                  {[item.variant, `SL ${item.quantity}`, item.sku].filter(Boolean).join(' · ')}
+                  {[item.variant, `Qty ${item.quantity}`, item.sku].filter(Boolean).join(' · ')}
                 </p>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-0.5 text-sm tabular-nums">
                 <span className="font-semibold">{formatVnd(item.quantity * item.unit_price_vnd)}</span>
                 {item.quantity > 1 && (
-                  <span className="text-xs text-muted-foreground">
-                    {formatVnd(item.unit_price_vnd)} / cái
-                  </span>
+                  <span className="text-xs text-muted-foreground">{formatVnd(item.unit_price_vnd)} each</span>
                 )}
               </div>
             </article>
@@ -571,17 +572,17 @@ function DetailsPanel({ order }: { order: OrderDetail }) {
         <Separator />
 
         <dl className="flex flex-col gap-1.5 self-end sm:min-w-72">
-          <SummaryRow label="Tạm tính" value={formatVnd(subtotal)} />
-          <SummaryRow label="Phí ship" value={formatVnd(order.shipping_fee_vnd)} />
+          <SummaryRow label="Subtotal" value={formatVnd(subtotal)} />
+          <SummaryRow label="Shipping" value={formatVnd(order.shipping_fee_vnd)} />
           {order.discount_vnd > 0 && (
-            <SummaryRow label="Giảm giá" value={`-${formatVnd(order.discount_vnd)}`} tone="success" />
+            <SummaryRow label="Discount" value={`-${formatVnd(order.discount_vnd)}`} tone="success" />
           )}
-          <SummaryRow label="Tổng" value={formatVnd(order.total_vnd)} />
+          <SummaryRow label="Total" value={formatVnd(order.total_vnd)} />
           {order.prepaid_vnd > 0 && (
-            <SummaryRow label="Đã trả trước" value={`-${formatVnd(order.prepaid_vnd)}`} tone="success" />
+            <SummaryRow label="Prepaid" value={`-${formatVnd(order.prepaid_vnd)}`} tone="success" />
           )}
           <Separator className="my-1" />
-          <SummaryRow label="Thu hộ (COD)" value={formatVnd(order.cod_amount_vnd)} strong />
+          <SummaryRow label="COD to collect" value={formatVnd(order.cod_amount_vnd)} strong />
         </dl>
       </FramePanel>
     </Frame>
@@ -592,21 +593,21 @@ function PartiesPanel({ order }: { order: OrderDetail }) {
   return (
     <Frame>
       <FramePanel className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-        <PartyBlock label="Người mua">
+        <PartyBlock label="Buyer">
           <p className="font-medium">{order.buyer_name}</p>
           <p className="text-muted-foreground tabular-nums">{order.buyer_phone}</p>
         </PartyBlock>
-        <PartyBlock label={order.is_gift ? 'Người nhận (quà tặng)' : 'Người nhận'}>
+        <PartyBlock label={order.is_gift ? 'Recipient (gift order)' : 'Recipient'}>
           <p className="font-medium">{order.recipient_name ?? order.buyer_name}</p>
           {order.is_gift && (
             <p className="text-xs text-muted-foreground">
-              Chỉ xác minh với người mua, không liên hệ người nhận.
+              Verified with the buyer only; the recipient is never contacted.
             </p>
           )}
         </PartyBlock>
-        <PartyBlock label="Giao tới">
+        <PartyBlock label="Deliver to">
           <p className="text-muted-foreground">{order.address.raw}</p>
-          {order.note && <p className="text-xs text-muted-foreground">Ghi chú: {order.note}</p>}
+          {order.note && <p className="text-xs text-muted-foreground">Note: {order.note}</p>}
         </PartyBlock>
       </FramePanel>
     </Frame>
@@ -625,14 +626,14 @@ function PartyBlock({ label, children }: { label: string; children: ReactNode })
 function ScoreHistoryPanel({ runs }: { runs: RiskScore[] }) {
   if (runs.length === 0) return null
   return (
-    <PanelFrame eyebrow="Lịch sử điểm" title={`${runs.length} lần chấm`}>
+    <PanelFrame eyebrow="Score history" title={`${runs.length} ${runs.length === 1 ? 'run' : 'runs'}`}>
       <ul className="flex flex-col divide-y text-sm">
         {runs.map((run) => (
           <li key={run.id} className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
             <span className="text-muted-foreground tabular-nums">{formatDateTime(run.scored_at)}</span>
             <span className="flex items-center gap-2">
               {run.status === 'skipped' ? (
-                <span className="text-muted-foreground">Bỏ qua</span>
+                <span className="text-muted-foreground">Skipped</span>
               ) : (
                 <>
                   <span className="tabular-nums">{run.risk_score}/100</span>
@@ -676,7 +677,7 @@ function Metric({ label, value, estimated = false }: { label: string; value: str
     <div className="flex min-w-0 flex-col gap-1">
       <dt className="text-xs text-muted-foreground">
         {label}
-        {estimated && <span className="ms-1 text-[10px] tracking-wide uppercase">(ước tính)</span>}
+        {estimated && <span className="ms-1 text-[10px] tracking-wide uppercase">(estimated)</span>}
       </dt>
       <dd className="text-sm font-medium tabular-nums">{value}</dd>
     </div>

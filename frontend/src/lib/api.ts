@@ -3,22 +3,22 @@ import type { QueryClient } from '@tanstack/react-query'
 import type { ProblemDetail } from '@/api/gen'
 
 const MESSAGES: Partial<Record<string, string>> = {
-  order_not_editable: 'Đơn đã gửi đi nên không sửa được nữa.',
-  contact_blocked: 'Không liên hệ được với người mua lúc này.',
-  link_expired: 'Link xác nhận đã hết hạn.',
-  link_already_used: 'Đơn này đã được phản hồi.',
-  not_found: 'Không tìm thấy dữ liệu.',
-  unauthorized: 'Phiên đăng nhập đã hết hạn.',
-  forbidden: 'Bạn không có quyền thực hiện thao tác này.',
-  rate_limited: 'Thao tác quá nhanh, vui lòng thử lại sau ít phút.',
+  order_not_editable: 'The order has already shipped, so it can no longer be edited.',
+  contact_blocked: 'The buyer cannot be contacted right now.',
+  link_expired: 'The confirmation link has expired.',
+  link_already_used: 'This order has already been answered.',
+  not_found: 'Not found.',
+  unauthorized: 'Your session has expired.',
+  forbidden: 'You do not have permission to do this.',
+  rate_limited: 'Too many requests. Please try again in a few minutes.',
 }
 
 export function isProblem(error: unknown): error is ProblemDetail {
   return typeof error === 'object' && error !== null && 'status' in error && 'code' in error
 }
 
-/** A Vietnamese message for an API error, for toasts and inline alerts. */
-export function problemMessage(error: unknown, fallback = 'Có lỗi xảy ra, vui lòng thử lại.'): string {
+/** An English message for an API error, for toasts and inline alerts. */
+export function problemMessage(error: unknown, fallback = 'Something went wrong. Please try again.'): string {
   if (isProblem(error)) return MESSAGES[error.code] ?? error.detail ?? fallback
   return fallback
 }

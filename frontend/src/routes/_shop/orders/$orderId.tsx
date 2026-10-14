@@ -15,7 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { problemMessage } from '@/lib/api'
 
 export const Route = createFileRoute('/_shop/orders/$orderId')({
-  staticData: { crumb: 'Chi tiết đơn' },
+  staticData: { crumb: 'Order details' },
   // Not awaited: the page renders its skeleton while the data loads.
   loader: ({ context, params }) => {
     void context.queryClient.prefetchQuery(getOrderOptions({ path: { order_id: params.orderId } }))
@@ -33,7 +33,7 @@ function OrderDetailPage() {
   const startCall = useMutation({
     ...startCallMutation(),
     onSuccess: setCall,
-    onError: (err) => toast.error('Không gọi được', { description: problemMessage(err) }),
+    onError: (err) => toast.error('Could not start the call', { description: problemMessage(err) }),
   })
 
   if (error) return <QueryError error={error} />
@@ -43,13 +43,13 @@ function OrderDetailPage() {
   const confirmed = order.timeline?.some((e) => e.type === 'buyer_responded')
   const callDisabledReason =
     (order.allowed_overrides?.length ?? 0) === 0
-      ? 'Đơn đã gửi đi hoặc đã đóng.'
+      ? 'The order has shipped or is closed.'
       : order.current_score?.hard_rules?.includes('invalid_phone')
-        ? 'Số điện thoại không hợp lệ.'
+        ? 'Invalid phone number.'
         : confirmed
-          ? 'Đơn đã được xác nhận nên không liên hệ lại.'
+          ? 'The order is confirmed, so the buyer is not contacted again.'
           : (order.calls?.length ?? 0) >= 2
-            ? 'Đã gọi đủ 2 lần.'
+            ? 'Both call attempts have been used.'
             : null
 
   return (
@@ -58,7 +58,7 @@ function OrderDetailPage() {
         order={order}
         actions={{
           onCall: () => startCall.mutate({ path: { order_id: order.id } }),
-          callDisabledReason: startCall.isPending ? 'Đang gọi…' : callDisabledReason,
+          callDisabledReason: startCall.isPending ? 'Calling…' : callDisabledReason,
           onEdit: () => setPanel('edit'),
           onOverride: () => setPanel('override'),
           onPreviewMessage: setMessage,

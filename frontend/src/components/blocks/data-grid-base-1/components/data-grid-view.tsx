@@ -159,14 +159,14 @@ function Toolbar({
             <SearchIcon aria-hidden="true" />
           </InputGroupAddon>
           <InputGroupInput
-            placeholder="Tìm mã đơn, tên, SĐT…"
-            aria-label="Tìm đơn hàng"
+            placeholder="Search order ID, name, phone…"
+            aria-label="Search orders"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
           />
           {searchQuery.length > 0 && (
             <InputGroupAddon align="inline-end">
-              <InputGroupButton aria-label="Xóa tìm kiếm" size="icon-xs" onClick={() => onSearchChange('')}>
+              <InputGroupButton aria-label="Clear search" size="icon-xs" onClick={() => onSearchChange('')}>
                 <XIcon aria-hidden="true" />
               </InputGroupButton>
             </InputGroupAddon>
@@ -174,8 +174,8 @@ function Toolbar({
         </InputGroup>
 
         <FilterPopover
-          label="Rủi ro"
-          heading="Lọc theo mức rủi ro"
+          label="Risk"
+          heading="Filter by risk tier"
           options={TIER_ORDER}
           selected={filters.tiers}
           counts={tierCounts}
@@ -184,8 +184,8 @@ function Toolbar({
         />
 
         <FilterPopover
-          label="Trạng thái"
-          heading="Lọc theo trạng thái"
+          label="Status"
+          heading="Filter by status"
           options={STATUS_ORDER}
           selected={filters.statuses}
           counts={statusCounts}
@@ -204,27 +204,27 @@ function Toolbar({
               onFiltersChange({ tiers: [], statuses: [] })
             }}
           >
-            Xóa bộ lọc
+            Clear filters
           </Button>
         )}
       </div>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" aria-label="Thao tác với bảng">
+          <Button variant="outline" aria-label="Table actions">
             <MoreHorizontalIcon aria-hidden="true" />
-            Thao tác
+            Actions
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-40">
           <DropdownMenuGroup>
             <DropdownMenuItem onClick={onExport}>
               <FileDownIcon aria-hidden="true" />
-              Xuất CSV
+              Export CSV
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onRefresh}>
               <RefreshCwIcon aria-hidden="true" />
-              Làm mới
+              Refresh
             </DropdownMenuItem>
           </DropdownMenuGroup>
         </DropdownMenuContent>
@@ -300,10 +300,10 @@ export function OrdersDataGrid({
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `don-hang-${new Date().toISOString().slice(0, 10)}.csv`
+    link.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`
     link.click()
     URL.revokeObjectURL(url)
-    toast.success('Đã xuất CSV', { description: `${filteredData.length} đơn` })
+    toast.success('CSV exported', { description: `${filteredData.length} orders` })
   }
 
   return (
@@ -314,8 +314,8 @@ export function OrdersDataGrid({
         isLoading={isLoading}
         emptyMessage={
           orders.length === 0
-            ? 'Chưa có đơn nào.'
-            : 'Không có đơn khớp với tìm kiếm hoặc bộ lọc. Xóa bộ lọc để xem tất cả.'
+            ? 'No orders yet.'
+            : 'No orders match the search or filters. Clear the filters to see all orders.'
         }
         tableLayout={{
           columnsPinnable: true,
@@ -328,9 +328,9 @@ export function OrdersDataGrid({
         <Frame variant="default" spacing="sm" className="w-full">
           <FrameHeader className="flex-row items-center justify-between gap-3">
             <div className="flex flex-col gap-0.5">
-              <FrameTitle className="text-balance">Đơn hàng</FrameTitle>
+              <FrameTitle className="text-balance">Orders</FrameTitle>
               <FrameDescription className="text-xs text-pretty">
-                {filteredData.length} / {total} đơn đã chấm điểm rủi ro bom hàng
+                {filteredData.length} / {total} orders scored for failed-delivery risk
               </FrameDescription>
             </div>
             {headerActions && <div className="flex flex-wrap items-center gap-2">{headerActions}</div>}
@@ -355,10 +355,10 @@ export function OrdersDataGrid({
           </FramePanel>
           <FrameFooter>
             <DataGridPagination
-              info="{from} - {to} trên {count} đơn"
-              rowsPerPageLabel="Số đơn mỗi trang"
-              previousPageLabel="Trang trước"
-              nextPageLabel="Trang sau"
+              info="{from}–{to} of {count} orders"
+              rowsPerPageLabel="Orders per page"
+              previousPageLabel="Previous page"
+              nextPageLabel="Next page"
             />
           </FrameFooter>
         </Frame>

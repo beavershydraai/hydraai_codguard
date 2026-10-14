@@ -31,7 +31,7 @@
             },
             "new_value": {
               "type": "STRING",
-              "description": "The new value as read back and confirmed by the buyer. For cancel_order, write \"hủy\"."
+              "description": "The new value as read back and confirmed by the buyer. For cancel_order, write \"cancel\"."
             }
           },
           "required": ["order_ref", "field", "new_value"]
@@ -47,11 +47,11 @@
       },
       "buyer_requests": {
         "type": "STRING",
-        "description": "Questions or requests you could not handle on the call, in Vietnamese, for the shop to follow up."
+        "description": "Questions or requests you could not handle on the call, in English, for the shop to follow up."
       },
       "summary": {
         "type": "STRING",
-        "description": "One or two short Vietnamese sentences for the shop: who answered, what they said and what they decided. Only facts from this call."
+        "description": "One or two short English sentences for the shop: who answered, what they said and what they decided. Only facts from this call."
       }
     },
     "required": ["outcome", "summary"]

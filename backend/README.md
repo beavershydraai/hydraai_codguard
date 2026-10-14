@@ -126,7 +126,7 @@ buyer-page tokens, call sessions, contact limits and timer scheduling belong to 
 `app/agents/assessment.py` runs two real ADK `Agent` roles in sequence: `risk_analyst` selects
 reasons and `evidence_verifier` checks that proposal. They receive only numeric features,
 scoring results, available SHAP contributions and limited order context, without names, phone
-numbers, addresses or free text. They may select at most three canonical Vietnamese reasons
+numbers, addresses or free text. They may select at most three canonical English reasons
 backed by feature values; validation rejects altered wording, unsupported signals and decision
 fields. The verifier may only keep or remove the analyst's reasons. No LLM chooses or changes
 the score, tier or action. Message composition and voice remain E5 integration work.

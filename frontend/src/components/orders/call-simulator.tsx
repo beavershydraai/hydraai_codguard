@@ -22,13 +22,15 @@ type Line = { from: 'ai' | 'buyer'; text: string }
 type Stage = 'ringing' | 'verify' | 'summary' | 'edit' | 'confirm_edit' | 'confirm_cancel' | 'done'
 
 const OUTCOME_SUMMARY: Record<CallOutcome, (change?: string) => string> = {
-  confirmed: () => 'Người mua xác nhận đơn, đúng sản phẩm và địa chỉ.',
-  edited: (change) => `Người mua xác nhận đơn và đổi địa chỉ giao: ${change}. AI đã đọc lại địa chỉ mới.`,
-  cancelled: () => 'Người mua không muốn nhận hàng nữa và xác nhận hủy đơn.',
-  not_ordered: () => 'Người nghe máy nói không đặt đơn này. SĐT bị chặn liên hệ 30 ngày.',
-  no_answer: () => 'Không nghe máy.',
-  wrong_person: () => 'Người nghe máy không phải người đặt hàng; AI không đọc thông tin đơn.',
-  unclear: () => 'Cuộc gọi bị ngắt giữa chừng, chưa rõ người mua có nhận hàng không.',
+  confirmed: () => 'The buyer confirmed the order, with the right items and address.',
+  edited: (change) =>
+    `The buyer confirmed the order and changed the delivery address: ${change}. The AI read the new address back.`,
+  cancelled: () => 'The buyer no longer wants the order and confirmed the cancellation.',
+  not_ordered: () =>
+    'The person who answered says they did not place this order. The phone is blocked from contact for 30 days.',
+  no_answer: () => 'No answer.',
+  wrong_person: () => 'The person who answered is not the buyer; the AI gave no order details.',
+  unclear: () => 'The call dropped midway; it is unclear whether the buyer will accept the order.',
 }
 
 export function CallSimulator({
@@ -60,13 +62,13 @@ export function CallSimulator({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            AI gọi xác nhận
+            AI confirmation call
             {simulated && <Badge variant="warning-light">mock</Badge>}
           </DialogTitle>
           <DialogDescription>
             {simulated
-              ? 'Điện thoại giả lập: bạn đóng vai người mua và chọn câu trả lời.'
-              : 'Cuộc gọi do backend thực hiện; trạng thái cập nhật tự động.'}
+              ? 'Simulated phone: you play the buyer and pick the replies.'
+              : 'The backend places the call; the status updates automatically.'}
           </DialogDescription>
         </DialogHeader>
         {call && simulated === true && <ScriptedCall order={order} call={call} shopName={shopName} />}
@@ -86,7 +88,7 @@ function LiveCallStatus({ call }: { call: Call }) {
       <PhoneIcon className="size-8 text-muted-foreground" aria-hidden="true" />
       <p className="font-medium">{data.phone_masked}</p>
       <Badge variant="info-outline">{CALL_STATUS_LABELS[data.status]}</Badge>
-      {data.outcome && <p className="text-sm">Kết quả: {CALL_OUTCOME_LABELS[data.outcome]}</p>}
+      {data.outcome && <p className="text-sm">Outcome: {CALL_OUTCOME_LABELS[data.outcome]}</p>}
       {data.summary_vi && <p className="text-sm text-muted-foreground">{data.summary_vi}</p>}
     </div>
   )
@@ -136,7 +138,7 @@ function ScriptedCall({ order, call, shopName }: { order: OrderDetail; call: Cal
     void progress()
     say({
       from: 'ai',
-      text: `Xin chào, đây là trợ lý tự động của ${shopName}. Cho tôi hỏi có phải anh/chị ${name} không ạ?`,
+      text: `Hello, this is the automated assistant for ${shopName}. Am I speaking with ${name}?`,
     })
   }
 
@@ -147,8 +149,8 @@ function ScriptedCall({ order, call, shopName }: { order: OrderDetail; call: Cal
         <div className="flex flex-col">
           <span className="text-sm font-medium tabular-nums">{call.phone_masked}</span>
           <span className="text-xs text-muted-foreground">
-            Lần gọi {call.attempt} ·{' '}
-            {stage === 'ringing' ? 'Đang đổ chuông…' : stage === 'done' ? 'Đã kết thúc' : 'Đang nói chuyện'}
+            Attempt {call.attempt} ·{' '}
+            {stage === 'ringing' ? 'Ringing…' : stage === 'done' ? 'Ended' : 'In call'}
           </span>
         </div>
         <span className="font-mono text-sm tabular-nums">
@@ -163,7 +165,7 @@ function ScriptedCall({ order, call, shopName }: { order: OrderDetail; call: Cal
         aria-live="polite"
       >
         {lines.length === 0 && (
-          <p className="m-auto text-sm text-muted-foreground">Người mua chưa nghe máy.</p>
+          <p className="m-auto text-sm text-muted-foreground">The buyer has not answered yet.</p>
         )}
         {lines.map((line, i) => (
           <div key={i} className={cn('flex items-end gap-2', line.from === 'buyer' && 'flex-row-reverse')}>
@@ -184,7 +186,7 @@ function ScriptedCall({ order, call, shopName }: { order: OrderDetail; call: Cal
                   : 'rounded-br-sm bg-primary text-primary-foreground',
               )}
             >
-              <span className="sr-only">{line.from === 'ai' ? 'AI: ' : 'Người mua: '}</span>
+              <span className="sr-only">{line.from === 'ai' ? 'AI: ' : 'Buyer: '}</span>
               {line.text}
             </p>
           </div>
@@ -197,11 +199,11 @@ function ScriptedCall({ order, call, shopName }: { order: OrderDetail; call: Cal
           <>
             <Button onClick={answer}>
               <PhoneIcon aria-hidden="true" />
-              Nghe máy
+              Answer
             </Button>
-            <Button variant="outline" onClick={() => finish('no_answer', null, '(Không ai nghe máy.)')}>
+            <Button variant="outline" onClick={() => finish('no_answer', null, '(No one answered.)')}>
               <PhoneOffIcon aria-hidden="true" />
-              Không nghe máy
+              Don't answer
             </Button>
           </>
         )}
@@ -210,28 +212,28 @@ function ScriptedCall({ order, call, shopName }: { order: OrderDetail; call: Cal
             <Button
               onClick={() => {
                 say(
-                  { from: 'buyer', text: 'Đúng rồi, tôi đây.' },
+                  { from: 'buyer', text: 'Yes, speaking.' },
                   {
                     from: 'ai',
-                    text: `Dạ, ${shopName} gọi xác nhận đơn ${order.external_id ?? ''} gồm ${items}, giao tới ${order.address.raw}, thu hộ ${formatVnd(order.cod_amount_vnd)}. Anh/chị xác nhận nhận hàng chứ ạ?`,
+                    text: `Thank you. ${shopName} is calling to confirm order ${order.external_id ?? ''}: ${items}, delivered to ${order.address.raw}, with ${formatVnd(order.cod_amount_vnd)} to pay on delivery. Can you confirm you will accept it?`,
                   },
                 )
                 setStage('summary')
               }}
             >
-              Đúng, tôi đây
+              Yes, speaking
             </Button>
             <Button
               variant="outline"
               onClick={() =>
                 finish(
                   'wrong_person',
-                  'Không phải, chắc nhầm số rồi.',
-                  'Dạ, xin lỗi đã làm phiền anh/chị. Chúc anh/chị một ngày tốt lành.',
+                  'No, I think you have the wrong number.',
+                  'Sorry to have bothered you. Have a nice day.',
                 )
               }
             >
-              Không phải tôi
+              Not me
             </Button>
           </>
         )}
@@ -241,54 +243,54 @@ function ScriptedCall({ order, call, shopName }: { order: OrderDetail; call: Cal
               onClick={() =>
                 finish(
                   'confirmed',
-                  'Đúng rồi, em giao giúp chị nhé.',
-                  'Dạ, shop sẽ gửi hàng sớm. Cảm ơn anh/chị!',
+                  'Yes, please go ahead and deliver it.',
+                  'Thank you. The shop will ship your order soon.',
                 )
               }
             >
-              Xác nhận
+              Confirm
             </Button>
             <Button
               variant="outline"
               onClick={() => {
                 say(
-                  { from: 'buyer', text: 'Đổi giúp chị địa chỉ giao nhé.' },
-                  { from: 'ai', text: 'Dạ, anh/chị đọc giúp tôi địa chỉ mới ạ.' },
+                  { from: 'buyer', text: 'Could you change the delivery address, please?' },
+                  { from: 'ai', text: 'Of course. Please tell me the new address.' },
                 )
                 setStage('edit')
               }}
             >
-              Đổi địa chỉ
+              Change address
             </Button>
             <Button
               variant="outline"
               onClick={() => {
                 say(
-                  { from: 'buyer', text: 'Thôi chị không lấy nữa.' },
-                  { from: 'ai', text: 'Dạ, anh/chị muốn hủy đơn này đúng không ạ?' },
+                  { from: 'buyer', text: "Actually, I don't want it any more." },
+                  { from: 'ai', text: 'Just to check: you want to cancel this order?' },
                 )
                 setStage('confirm_cancel')
               }}
             >
-              Hủy đơn
+              Cancel order
             </Button>
             <Button
               variant="outline"
               onClick={() =>
                 finish(
                   'not_ordered',
-                  'Tôi không đặt đơn nào cả.',
-                  'Dạ, xin lỗi anh/chị. Shop sẽ hủy đơn và không liên hệ số này nữa.',
+                  "I didn't order anything.",
+                  "I'm sorry for the trouble. The shop will cancel the order and won't contact this number again.",
                 )
               }
             >
-              Tôi không đặt
+              I didn't order this
             </Button>
             <Button
               variant="ghost"
-              onClick={() => finish('unclear', '(Ngắt máy giữa chừng.)', '(Cuộc gọi bị ngắt.)')}
+              onClick={() => finish('unclear', '(Hangs up midway.)', '(The call dropped.)')}
             >
-              Ngắt máy
+              Hang up
             </Button>
           </>
         )}
@@ -300,7 +302,10 @@ function ScriptedCall({ order, call, shopName }: { order: OrderDetail; call: Cal
               if (newAddress.trim().length < 5) return
               say(
                 { from: 'buyer', text: newAddress.trim() },
-                { from: 'ai', text: `Tôi đọc lại địa chỉ mới: ${newAddress.trim()}. Đúng chưa ạ?` },
+                {
+                  from: 'ai',
+                  text: `Let me read the new address back: ${newAddress.trim()}. Is that correct?`,
+                },
               )
               setStage('confirm_edit')
             }}
@@ -309,10 +314,10 @@ function ScriptedCall({ order, call, shopName }: { order: OrderDetail; call: Cal
               autoFocus
               value={newAddress}
               onChange={(event) => setNewAddress(event.target.value)}
-              placeholder="Địa chỉ mới"
-              aria-label="Địa chỉ mới"
+              placeholder="New address"
+              aria-label="New address"
             />
-            <Button type="submit">Gửi</Button>
+            <Button type="submit">Send</Button>
           </form>
         )}
         {stage === 'confirm_edit' && (
@@ -320,13 +325,13 @@ function ScriptedCall({ order, call, shopName }: { order: OrderDetail; call: Cal
             onClick={() =>
               finish(
                 'edited',
-                'Đúng rồi.',
-                'Dạ, shop đã cập nhật địa chỉ và sẽ gửi hàng. Cảm ơn anh/chị!',
+                "Yes, that's right.",
+                'Thank you. The shop has updated the address and will ship your order.',
                 newAddress.trim(),
               )
             }
           >
-            Đúng rồi
+            That's right
           </Button>
         )}
         {stage === 'confirm_cancel' && (
@@ -334,28 +339,32 @@ function ScriptedCall({ order, call, shopName }: { order: OrderDetail; call: Cal
             <Button
               variant="destructive"
               onClick={() =>
-                finish('cancelled', 'Ừ, hủy giúp chị.', 'Dạ, shop đã hủy đơn. Cảm ơn anh/chị đã báo.')
+                finish(
+                  'cancelled',
+                  'Yes, please cancel it.',
+                  'The shop has cancelled the order. Thank you for letting us know.',
+                )
               }
             >
-              Có, hủy đơn
+              Yes, cancel order
             </Button>
             <Button
               variant="outline"
               onClick={() =>
                 finish(
                   'confirmed',
-                  'À thôi, chị vẫn lấy.',
-                  'Dạ, shop giữ đơn và gửi hàng sớm. Cảm ơn anh/chị!',
+                  "Actually, I'll keep it.",
+                  'The shop will keep the order and ship it soon. Thank you!',
                 )
               }
             >
-              Không, vẫn nhận
+              No, keep order
             </Button>
           </>
         )}
         {stage === 'done' && outcome && (
           <div className="flex w-full flex-col gap-1 rounded-lg border p-3">
-            <span className="text-xs text-muted-foreground">Kết quả đã ghi vào đơn</span>
+            <span className="text-xs text-muted-foreground">Outcome saved to the order</span>
             <span className="font-medium">{CALL_OUTCOME_LABELS[outcome]}</span>
             <span className="text-sm text-muted-foreground">
               {OUTCOME_SUMMARY[outcome](newAddress.trim())}

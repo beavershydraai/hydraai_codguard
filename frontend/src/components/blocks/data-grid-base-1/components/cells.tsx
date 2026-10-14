@@ -57,11 +57,11 @@ export const BuyerCell = memo(function BuyerCell({ row }: { row: OrderRow }) {
           {o.is_gift && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="inline-flex shrink-0 text-muted-foreground" aria-label="Đơn quà tặng">
+                <span className="inline-flex shrink-0 text-muted-foreground" aria-label="Gift order">
                   <GiftIcon className="size-3.5" aria-hidden="true" />
                 </span>
               </TooltipTrigger>
-              <TooltipContent side="top">Đơn quà tặng: chỉ xác minh với người mua</TooltipContent>
+              <TooltipContent side="top">Gift order: verify with the buyer only</TooltipContent>
             </Tooltip>
           )}
         </div>
@@ -78,7 +78,7 @@ export const AmountCell = memo(function AmountCell({ row }: { row: OrderRow }) {
     <div className="flex min-w-0 flex-col gap-0.5">
       <span className="font-medium text-foreground tabular-nums">{formatVnd(o.cod_amount_vnd)}</span>
       {prepaid > 0 && (
-        <span className="text-xs text-muted-foreground tabular-nums">Đã trả trước {formatVnd(prepaid)}</span>
+        <span className="text-xs text-muted-foreground tabular-nums">Prepaid {formatVnd(prepaid)}</span>
       )}
     </div>
   )
@@ -86,7 +86,7 @@ export const AmountCell = memo(function AmountCell({ row }: { row: OrderRow }) {
 
 export const RiskCell = memo(function RiskCell({ row }: { row: OrderRow }) {
   const o = row.original
-  if (!o.tier) return <span className="text-muted-foreground">Chưa chấm</span>
+  if (!o.tier) return <span className="text-muted-foreground">Not scored</span>
   return (
     <div className="flex items-center gap-1.5">
       <TierBadge tier={o.tier} />
@@ -104,13 +104,13 @@ export function ActionsCell({ row }: { row: OrderRow }) {
 
   const handleCopy = () => {
     copyToClipboard(code)
-    toast.success('Đã sao chép mã đơn', { description: code })
+    toast.success('Order ID copied', { description: code })
   }
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button size="icon" variant="ghost" className="size-7" aria-label={`Thao tác cho đơn ${code}`}>
+        <Button size="icon" variant="ghost" className="size-7" aria-label={`Actions for order ${code}`}>
           <MoreHorizontalIcon aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
@@ -120,11 +120,11 @@ export function ActionsCell({ row }: { row: OrderRow }) {
             onClick={() => navigate({ to: '/orders/$orderId', params: { orderId: row.original.id } })}
           >
             <EyeIcon className="size-4" aria-hidden="true" />
-            Xem chi tiết
+            View details
           </DropdownMenuItem>
           <DropdownMenuItem onClick={handleCopy}>
             <CopyIcon className="size-4" aria-hidden="true" />
-            Sao chép mã đơn
+            Copy order ID
           </DropdownMenuItem>
         </DropdownMenuGroup>
       </DropdownMenuContent>

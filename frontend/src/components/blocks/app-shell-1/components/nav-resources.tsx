@@ -21,7 +21,7 @@ function ResourceDot({ color }: { color: string }) {
 function ResourceItem({ shortcut, isActive }: { shortcut: TierShortcut; isActive: boolean }) {
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton tooltip={`Rủi ro ${shortcut.name}`} isActive={isActive} asChild>
+      <SidebarMenuButton tooltip={`${shortcut.name} risk`} isActive={isActive} asChild>
         <Link to="/orders" search={{ tier: [shortcut.tier] }}>
           <ResourceDot color={shortcut.color} />
           <span className="min-w-0 truncate">{shortcut.name}</span>
@@ -61,7 +61,7 @@ export function NavResources() {
           aria-expanded={open}
           aria-controls="tier-shortcuts-list"
         >
-          Đơn theo mức rủi ro
+          Orders by risk tier
           <ChevronDownIcon
             className={cn(
               'ml-auto size-4 shrink-0 opacity-60 transition-transform duration-200',

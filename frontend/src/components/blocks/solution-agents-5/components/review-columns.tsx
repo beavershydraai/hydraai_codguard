@@ -18,9 +18,9 @@ import { cn } from '@/lib/utils'
 export type ReviewDecision = Extract<DecisionAction, 'ship_now' | 'require_deposit' | 'cancel'>
 
 export const REVIEW_DECISIONS: { action: ReviewDecision; label: string; icon: typeof CheckIcon }[] = [
-  { action: 'ship_now', label: 'Duyệt gửi', icon: CheckIcon },
-  { action: 'require_deposit', label: 'Yêu cầu cọc', icon: WalletIcon },
-  { action: 'cancel', label: 'Hủy đơn', icon: BanIcon },
+  { action: 'ship_now', label: 'Approve to ship', icon: CheckIcon },
+  { action: 'require_deposit', label: 'Require deposit', icon: WalletIcon },
+  { action: 'cancel', label: 'Cancel order', icon: BanIcon },
 ]
 
 /** Orders waiting longer than this are flagged, like the block's SLA column. */
@@ -43,7 +43,7 @@ export function createReviewColumns({
     {
       id: 'order',
       accessorFn: (o) => o.external_id ?? o.id,
-      header: ({ column }) => <DataGridColumnHeader column={column} title="Đơn" />,
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Order" />,
       cell: ({ row }) => (
         <div className="flex min-w-0 flex-col gap-0.5">
           <Link
@@ -63,7 +63,7 @@ export function createReviewColumns({
     {
       id: 'risk_score',
       accessorFn: (o) => o.risk_score ?? -1,
-      header: ({ column }) => <DataGridColumnHeader column={column} title="Rủi ro" />,
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Risk" />,
       cell: ({ row }) =>
         row.original.tier ? (
           <div className="flex items-center gap-1.5">
@@ -78,7 +78,7 @@ export function createReviewColumns({
     {
       id: 'cod_amount_vnd',
       accessorKey: 'cod_amount_vnd',
-      header: ({ column }) => <DataGridColumnHeader column={column} title="Thu hộ" />,
+      header: ({ column }) => <DataGridColumnHeader column={column} title="COD" />,
       cell: ({ row }) => (
         <span className="font-medium tabular-nums">{formatVnd(row.original.cod_amount_vnd)}</span>
       ),
@@ -87,7 +87,7 @@ export function createReviewColumns({
     {
       id: 'held_by',
       accessorFn: (o) => o.current_action ?? '',
-      header: ({ column }) => <DataGridColumnHeader column={column} title="Đang ở bước" />,
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Current step" />,
       cell: ({ row }) => (
         <span className="text-sm">
           {row.original.current_action ? DECISION_ACTION_LABELS[row.original.current_action] : '—'}
@@ -98,7 +98,7 @@ export function createReviewColumns({
     {
       id: 'updated_at',
       accessorKey: 'updated_at',
-      header: ({ column }) => <DataGridColumnHeader column={column} title="Chờ từ" />,
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Waiting since" />,
       cell: ({ row }) => {
         const late = Date.now() - Date.parse(row.original.updated_at) > WAIT_WARNING_MS
         return (
@@ -116,7 +116,7 @@ export function createReviewColumns({
     },
     {
       id: 'actions',
-      header: () => <span className="sr-only">Thao tác</span>,
+      header: () => <span className="sr-only">Actions</span>,
       cell: ({ row }) => (
         <div className="flex items-center justify-end gap-1">
           {REVIEW_DECISIONS.map(({ action, label, icon: Icon }) => (
@@ -125,7 +125,7 @@ export function createReviewColumns({
                 <Button
                   size="icon-sm"
                   variant={action === 'cancel' ? 'ghost' : 'outline'}
-                  aria-label={`${label} đơn ${row.original.external_id ?? row.original.id}`}
+                  aria-label={`${label}: ${row.original.external_id ?? row.original.id}`}
                   onClick={() => onDecide(row.original, action)}
                 >
                   <Icon aria-hidden="true" />

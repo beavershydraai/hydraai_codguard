@@ -27,24 +27,26 @@ export function MessagePreviewDialog({
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            Tin Zalo ZNS / SMS
+            Zalo ZNS / SMS message
             <Badge variant="warning-light">mock</Badge>
           </DialogTitle>
-          <DialogDescription>Bản xem trước. Bản demo không gửi Zalo ZNS hay SMS thật.</DialogDescription>
+          <DialogDescription>
+            Preview only. The demo does not send real Zalo ZNS or SMS messages.
+          </DialogDescription>
         </DialogHeader>
         {contact && (
           <div className="rounded-2xl bg-muted p-3">
             <div className="rounded-xl bg-background p-3 text-sm shadow-xs">
               <p className="mb-1 text-xs font-semibold text-primary">{shopName}</p>
               <p>
-                Xin chào {order.buyer_name.split(' ').pop()}, {shopName} nhận được đơn{' '}
-                {order.external_id ?? order.id} ({order.items.map((i) => i.name).join(', ')}), thu hộ{' '}
+                Hello {order.buyer_name.split(' ').pop()}, {shopName} has received order{' '}
+                {order.external_id ?? order.id} ({order.items.map((i) => i.name).join(', ')}), COD{' '}
                 {formatVnd(order.cod_amount_vnd)}.
               </p>
               <p className="mt-2">
                 {deposit
-                  ? 'Vui lòng đặt cọc để shop gửi hàng:'
-                  : 'Vui lòng xác nhận, sửa địa chỉ hoặc hủy đơn tại:'}{' '}
+                  ? 'Please pay a deposit so the shop can ship your order:'
+                  : 'Please confirm, change the address or cancel the order at:'}{' '}
                 {link ? (
                   <Link
                     to="/c/$token"
@@ -60,7 +62,7 @@ export function MessagePreviewDialog({
               </p>
               {contact.link_expires_at && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Link hết hạn lúc {formatDateTime(contact.link_expires_at)}.
+                  The link expires {formatDateTime(contact.link_expires_at)}.
                 </p>
               )}
             </div>

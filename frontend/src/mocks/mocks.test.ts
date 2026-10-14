@@ -68,17 +68,17 @@ describe('MockDb', () => {
 
   it('records who overrode, when and why', () => {
     const order = db.list({ status: ['pending_review'] }).items[0]!
-    const detail = db.override(order.id, 'ship_now', 'Khách quen', 'admin@gmail.com')
+    const detail = db.override(order.id, 'ship_now', 'Returning buyer', 'admin@gmail.com')
     expect(detail.status).toBe('cleared_to_ship')
     expect(detail.decision?.decided_by).toBe('staff')
     expect(detail.timeline?.[0]).toMatchObject({
       type: 'override',
       actor: 'admin@gmail.com',
-      reason: 'Khách quen',
+      reason: 'Returning buyer',
     })
   })
 
-  it('blocks a phone after "Tôi không đặt" on the buyer page', () => {
+  it(`blocks a phone after "I didn't order this" on the buyer page`, () => {
     const order = [...db.orders.values()].find(
       (o) => o.status === 'awaiting_confirmation' && o.confirmation_token,
     )!
@@ -95,7 +95,7 @@ describe('MockDb', () => {
     const rows = Array.from(
       { length: 1000 },
       (_, i) =>
-        `BULK-${i},website,Khách ${i},+84000${String(i).padStart(6, '0')},"Số ${i}, phường Mẫu, Hà Nội",Áo,1,189000`,
+        `BULK-${i},website,Buyer ${i},+84000${String(i).padStart(6, '0')},"Số ${i}, phường Mẫu, Hà Nội",T-shirt,1,189000`,
     )
     const result = db.importOrders([header, ...rows].join('\n'))
     expect(result).toMatchObject({ received: 1000, imported: 1000, duplicates: 0, rejected: [] })
@@ -105,8 +105,8 @@ describe('MockDb', () => {
   it('imports orders from CSV and reports bad rows', () => {
     const csv =
       'external_id,channel,buyer_name,buyer_phone,address,item_name,quantity,unit_price_vnd\n' +
-      'IMP-1,facebook,Khách A,0000000001,"Số 1, phường Mẫu, Hà Nội",Áo,1,100000\n' +
-      'IMP-2,zalo,Khách B,123,"Số 2, phường Mẫu",Áo,1,100000\n'
+      'IMP-1,facebook,Buyer A,0000000001,"Số 1, phường Mẫu, Hà Nội",T-shirt,1,100000\n' +
+      'IMP-2,zalo,Buyer B,123,"Số 2, phường Mẫu",T-shirt,1,100000\n'
     const result = db.importOrders(csv)
     expect(result).toMatchObject({ received: 2, imported: 1, duplicates: 0 })
     expect(result.rejected?.[0]).toMatchObject({ row: 2, field: 'buyer_phone' })

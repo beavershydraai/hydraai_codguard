@@ -78,7 +78,7 @@ def render_instruction(order_context: dict, language: str) -> str:
     )
 
 
-def live_config(order_context: dict, language: str = "VIETNAMESE") -> types.LiveConnectConfig:
+def live_config(order_context: dict, language: str = "ENGLISH") -> types.LiveConnectConfig:
     code = "vi-VN" if language == "VIETNAMESE" else "en-US"
     items = [item["name"] for order in order_context["orders"] for item in order["items"]]
     return types.LiveConnectConfig(
@@ -275,7 +275,7 @@ Writing these rules into the prompt would not enforce them.
 4. Latency from Vietnam to `us-central1`: stream a recorded answer followed by silence, and measure from the last speech chunk sent to the first audio chunk received. Run 20 turns and note p50 and p90.
 5. Noise: repeat step 3 for one speaker with TV or street noise in the background.
 6. Tool: run 10 scripted calls, 2 for each main outcome. Check that `record_call_outcome` is called once, before the goodbye, with the right outcome and changes.
-7. Compare this instruction (English rules, Vietnamese lines) once against a fully Vietnamese translation, judged on how natural the call sounds.
+7. Run the instruction (English rules and lines) once with `call_language` set to `VIETNAMESE` and once against a fully Vietnamese translation, judged on how natural the call sounds.
 
 Proposed go criteria, for the team to agree: the team judges the Vietnamese natural; the facts are right in at least 13 of the 15 accent tests; latency p50 is at most 1.5 s and p90 at most 2.5 s; the tool is right in at least 9 of 10 calls. The no-go fallback from the Scope of Work: demo the AI call in English and send Vietnamese buyers to the confirmation page.
 

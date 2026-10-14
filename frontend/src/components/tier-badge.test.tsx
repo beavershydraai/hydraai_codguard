@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest'
 import { TierBadge } from './tier-badge'
 
 describe('TierBadge', () => {
-  it('shows the Vietnamese tier label', () => {
+  it('shows the English tier label', () => {
     render(<TierBadge tier="very_high" />)
-    expect(screen.getByText('Rất cao')).toBeInTheDocument()
+    expect(screen.getByText('Very high')).toBeInTheDocument()
   })
 })

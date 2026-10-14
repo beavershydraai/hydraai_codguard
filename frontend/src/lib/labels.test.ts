@@ -3,21 +3,21 @@ import { describe, expect, it } from 'vitest'
 import { formatVnd, ORDER_STATUS_LABELS } from './labels'
 
 describe('labels', () => {
-  it('uses the Vietnamese order states from the domain rules', () => {
+  it('names every order state from the domain rules', () => {
     expect(Object.values(ORDER_STATUS_LABELS)).toEqual([
-      'Mới',
-      'Được gửi',
-      'Chờ xác nhận',
-      'Chờ cọc',
-      'Chờ duyệt',
-      'Đã hủy',
-      'Đã gửi',
-      'Giao thành công',
-      'Giao thất bại',
+      'New',
+      'Cleared to ship',
+      'Awaiting confirmation',
+      'Awaiting deposit',
+      'Pending review',
+      'Cancelled',
+      'Shipped',
+      'Delivered',
+      'Delivery failed',
     ])
   })
 
   it('formats integer VND', () => {
-    expect(formatVnd(350000).replace(/\s/g, ' ')).toBe('350.000 ₫')
+    expect(formatVnd(350000)).toBe('₫350,000')
   })
 })

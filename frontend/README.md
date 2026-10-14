@@ -47,7 +47,7 @@ const { data, error } = useQuery(listOrdersOptions({ query: { tier: ['high'], li
 
 Base URL, auth and the mock are set in `src/api/client-config.ts`. The bearer token comes from
 the Zustand auth store, and a 401 signs the user out. Errors are thrown as the parsed
-`ProblemDetail`; `src/lib/api.ts` turns them into Vietnamese messages.
+`ProblemDetail`; `src/lib/api.ts` turns them into English messages.
 
 ### Mock API (`src/mocks/`)
 
@@ -65,7 +65,7 @@ before its backend exists and switches to the backend as soon as the endpoint is
   scores, at most 3 reasons each tied to a signal on the order, decisions, contacts, AI calls and
   timelines. Names are generated and phones use the invalid `+84000…` prefix.
 - `db.ts` keeps state for the session and follows the domain rules: overrides need a reason, a
-  confirmed or shipped order is never contacted again, "Tôi không đặt" blocks the phone, two call
+  confirmed or shipped order is never contacted again, "I didn't order this" blocks the phone, two call
   attempts at most. The inbox filters, searches and pages like the backend.
 - The header shows a "Dữ liệu mẫu" badge whenever data comes from the mock, listing which
   endpoints. Simulated Zalo ZNS / SMS and the browser phone are labelled "mock".
@@ -77,14 +77,14 @@ before its backend exists and switches to the backend as soon as the endpoint is
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ---------------------- |
 | `/login`           | Sign-in with email and password                                                                                                                                                              | `auth-4`                        | E7.1                   |
 | `/onboarding`      | Three-step shop setup: name, costs and contact hours, default policy                                                                                                                         | `wizard-1`                      | E7.1                   |
-| `/`                | ROI dashboard: KPIs (estimates labelled "ước tính"), actions by type, outcomes, empty state                                                                                                  | `dashboard-1`                   | E7.5                   |
+| `/`                | ROI dashboard: KPIs (estimates labelled "estimated"), actions by type, outcomes, empty state                                                                                                 | `dashboard-1`                   | E7.5                   |
 | `/backtest`        | Lift chart and comparison of five policies                                                                                                                                                   | `dashboard-1`                   | E7.5, E9.1, E9.3       |
 | `/orders`          | Order inbox: search, tier and status filters (in the URL, also from the sidebar), sortable columns, CSV export; create order, import orders, import delivery results                         | `data-grid-base-1`              | E7.2, E8.3             |
 | `/orders/$orderId` | Order page: score, reasons, signals, decision, contacts and call summaries, items, timeline, score history; edit (rescores), override with a reason, AI call on a browser phone, ZNS preview | `receipt-2`                     | E7.3, E5.2, E6.2       |
 | `/review`          | Manual review queue with bulk approve / deposit / cancel and a required reason                                                                                                               | `solution-agents-5`, `card-2`   | E7.4                   |
 | `/settings`        | Shop costs and contact hours, tier policy (new version per change), policy history; read only for staff                                                                                      | `settings-3`, `settings-7` tabs | E7.1, E7.6, E7.7, E4.6 |
 | `/demo`            | Reset demo data, spam simulation, owner/staff switch (mock), buyer links                                                                                                                     | `settings-3` rows               | E1.3, E9.4             |
-| `/c/$token`        | Buyer confirmation page, public: confirm, change address, cancel, "Tôi không đặt"; masked data, 48-hour link                                                                                 | `receipt-6`                     | E6.1                   |
+| `/c/$token`        | Buyer confirmation page, public: confirm, change address, cancel, "I didn't order this"; masked data, 48-hour link                                                                           | `receipt-6`                     | E6.1                   |
 
 The shop layout is ReUI `app-shell-1`: sidebar with navigation, a pending-review count, tier
 shortcuts into the inbox, breadcrumbs and the user menu with theme and sign-out.
@@ -98,5 +98,5 @@ shortcuts into the inbox, breadcrumbs and the user menu with theme and sign-out.
 - Files under `src/components/ui/` and `src/components/reui/` come from the registries. Prefer
   reinstalling over editing them; ReUI files are skipped by oxlint and Prettier.
 - Blocks under `src/components/blocks/` are installed once and then adapted (real data, routes,
-  Vietnamese copy), so they are linted and formatted like our own code. Do not reinstall them over
+  English copy), so they are linted and formatted like our own code. Do not reinstall them over
   the adapted files.

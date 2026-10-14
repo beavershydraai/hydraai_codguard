@@ -16,7 +16,7 @@ import { invalidate, problemMessage } from '@/lib/api'
 const QUEUE = { status: ['pending_review' as const], sort: '-updated_at' as const, limit: 200 }
 
 export const Route = createFileRoute('/_shop/review')({
-  staticData: { crumb: 'Chờ duyệt' },
+  staticData: { crumb: 'Pending review' },
   // Not awaited: the page renders its skeleton while the data loads.
   loader: ({ context }) => {
     void context.queryClient.prefetchQuery(listOrdersOptions({ query: QUEUE }))
@@ -59,9 +59,12 @@ function ReviewPage() {
         ])
         const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
         const label = REVIEW_DECISIONS.find((d) => d.action === action)!.label
-        if (failed.length === 0) toast.success(`${label}: ${orders.length} đơn`, { description: reason })
+        if (failed.length === 0)
+          toast.success(`${label}: ${orders.length} ${orders.length === 1 ? 'order' : 'orders'}`, {
+            description: reason,
+          })
         else
-          toast.error(`${failed.length}/${orders.length} đơn không cập nhật được`, {
+          toast.error(`${failed.length}/${orders.length} orders could not be updated`, {
             description: problemMessage(failed[0]!.reason),
           })
         await invalidate(queryClient, 'listOrders', 'getOrder')

@@ -22,11 +22,11 @@ const order: OrderSummary = {
 }
 
 describe('ordersToCsv', () => {
-  it('writes a BOM, a Vietnamese header and quoted cells', () => {
+  it('writes a BOM, an English header and quoted cells', () => {
     const csv = ordersToCsv([order])
-    expect(csv.startsWith('﻿Mã đơn,Kênh,')).toBe(true)
+    expect(csv.startsWith('﻿Order ID,Channel,')).toBe(true)
     expect(csv).toContain(
-      'FB-1,Facebook,"Nguyễn ""Bé"" A, Hà Nội",+84000000001,330000,Cao,41,AI gọi,Chờ xác nhận,2026-10-09T10:15:00+07:00\r\n',
+      'FB-1,Facebook,"Nguyễn ""Bé"" A, Hà Nội",+84000000001,330000,High,41,AI call,Awaiting confirmation,2026-10-09T10:15:00+07:00\r\n',
     )
   })
 })

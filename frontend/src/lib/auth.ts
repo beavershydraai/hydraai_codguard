@@ -12,7 +12,7 @@ export async function signIn({ email, password }: { email: string; password: str
   try {
     result = await login({ body: { username: email, password } })
   } catch {
-    throw new SignInError('Không kết nối được máy chủ. Vui lòng thử lại.')
+    throw new SignInError('Could not reach the server. Please try again.')
   }
   if (result.data) {
     useAuthStore.getState().setToken(result.data.access_token)
@@ -20,9 +20,9 @@ export async function signIn({ email, password }: { email: string; password: str
   }
   const status = result.response?.status
   if (status === 401 || status === 422) {
-    throw new SignInError('Sai email hoặc mật khẩu.')
+    throw new SignInError('Wrong email or password.')
   }
-  throw new SignInError('Không đăng nhập được. Vui lòng thử lại.')
+  throw new SignInError('Could not sign in. Please try again.')
 }
 
 export function signOut(): void {

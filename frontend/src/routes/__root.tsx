@@ -29,9 +29,9 @@ function RootLayout() {
 function NotFound() {
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-2 p-6 text-center">
-      <p className="text-lg font-medium">Không tìm thấy trang</p>
+      <p className="text-lg font-medium">Page not found</p>
       <Link to="/" className="text-sm text-muted-foreground underline underline-offset-4">
-        Về trang chủ
+        Back to home
       </Link>
     </div>
   )

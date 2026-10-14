@@ -26,10 +26,20 @@ import { BUYER_ACTION_LABELS, formatDateTime, formatVnd } from '@/lib/labels'
 // the items, then a grid of equal-weight action tiles.
 
 const TILES: { action: BuyerAction; icon: LucideIcon; description: string; tone?: string }[] = [
-  { action: 'confirm', icon: CircleCheckIcon, description: 'Đúng đơn, giao cho tôi', tone: 'text-success' },
-  { action: 'edit_address', icon: MapPinIcon, description: 'Giao tới chỗ khác' },
-  { action: 'cancel', icon: CircleXIcon, description: 'Tôi không cần nữa' },
-  { action: 'not_ordered', icon: ShieldAlertIcon, description: 'Có người đặt giả', tone: 'text-destructive' },
+  {
+    action: 'confirm',
+    icon: CircleCheckIcon,
+    description: 'This is my order, deliver it',
+    tone: 'text-success',
+  },
+  { action: 'edit_address', icon: MapPinIcon, description: 'Deliver somewhere else' },
+  { action: 'cancel', icon: CircleXIcon, description: 'I no longer need it' },
+  {
+    action: 'not_ordered',
+    icon: ShieldAlertIcon,
+    description: 'Someone else placed it',
+    tone: 'text-destructive',
+  },
 ]
 
 export function ConfirmationPage({
@@ -55,15 +65,15 @@ export function ConfirmationPage({
       <Card>
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-sm text-muted-foreground">Đơn {view.order_ref}</span>
+            <span className="text-sm text-muted-foreground">Order {view.order_ref}</span>
             <Badge variant="outline" className="gap-1">
               <ClockIcon aria-hidden="true" className="size-3" />
-              Hết hạn {formatDateTime(view.expires_at)}
+              Expires {formatDateTime(view.expires_at)}
             </Badge>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
-              Số tiền trả khi nhận hàng
+              Amount to pay on delivery
             </span>
             <span className="text-3xl leading-none font-semibold tracking-tight tabular-nums">
               {formatVnd(view.cod_amount_vnd)}
@@ -75,7 +85,7 @@ export function ConfirmationPage({
       {/* Items and delivery */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Thông tin đơn</CardTitle>
+          <CardTitle className="text-base">Order details</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <ul className="flex flex-col gap-2">
@@ -92,15 +102,15 @@ export function ConfirmationPage({
           <Separator />
           <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
             <div>
-              <dt className="text-xs text-muted-foreground">Người nhận</dt>
+              <dt className="text-xs text-muted-foreground">Recipient</dt>
               <dd className="font-medium">{view.recipient_name_masked}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Số điện thoại</dt>
+              <dt className="text-xs text-muted-foreground">Phone number</dt>
               <dd className="font-medium tabular-nums">{view.phone_masked}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Giao tới</dt>
+              <dt className="text-xs text-muted-foreground">Deliver to</dt>
               <dd className="font-medium">{view.address_masked}</dd>
             </div>
           </dl>
@@ -112,7 +122,7 @@ export function ConfirmationPage({
       ) : step === 'edit_address' ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Địa chỉ giao mới</CardTitle>
+            <CardTitle className="text-base">New delivery address</CardTitle>
           </CardHeader>
           <CardContent>
             <form
@@ -123,25 +133,29 @@ export function ConfirmationPage({
               }}
             >
               <Field>
-                <FieldLabel htmlFor="new-address">Số nhà, đường, phường/xã, tỉnh/thành phố</FieldLabel>
+                <FieldLabel htmlFor="new-address">
+                  House number, street, ward/commune, province/city
+                </FieldLabel>
                 <Textarea
                   id="new-address"
                   value={address}
                   onChange={(event) => setAddress(event.target.value)}
-                  placeholder="Ví dụ: Số 12 ngõ 34, phường Cầu Giấy, Hà Nội"
+                  placeholder="e.g. Số 12 ngõ 34, phường Cầu Giấy, Hà Nội"
                   autoFocus
                   required
                   minLength={10}
                 />
-                <FieldDescription>Ghi đầy đủ số nhà để shipper tìm được nhanh.</FieldDescription>
+                <FieldDescription>
+                  Include the full house number so the courier can find you quickly.
+                </FieldDescription>
               </Field>
               <div className="flex gap-2">
                 <Button type="submit" disabled={pending || address.trim().length < 10} className="flex-1">
                   {pending && <Spinner data-icon="inline-start" />}
-                  Lưu địa chỉ và xác nhận
+                  Save address and confirm
                 </Button>
                 <Button type="button" variant="outline" onClick={() => setStep(null)}>
-                  Quay lại
+                  Back
                 </Button>
               </div>
             </form>
@@ -152,8 +166,8 @@ export function ConfirmationPage({
           <CardContent className="flex flex-col gap-4">
             <p className="text-sm">
               {step === 'cancel'
-                ? 'Bạn chắc chắn muốn hủy đơn này? Shop sẽ không gửi hàng.'
-                : 'Bạn không đặt đơn này? Shop sẽ hủy đơn và số điện thoại này sẽ không bị liên hệ trong 30 ngày.'}
+                ? 'Are you sure you want to cancel this order? The shop will not ship it.'
+                : "You didn't place this order? The shop will cancel it, and this phone number will not be contacted for 30 days."}
             </p>
             <div className="flex gap-2">
               <Button
@@ -163,10 +177,10 @@ export function ConfirmationPage({
                 onClick={() => onRespond(step)}
               >
                 {pending && <Spinner data-icon="inline-start" />}
-                {step === 'cancel' ? 'Hủy đơn' : 'Tôi không đặt đơn này'}
+                {step === 'cancel' ? 'Cancel order' : "I didn't order this"}
               </Button>
               <Button variant="outline" onClick={() => setStep(null)}>
-                Quay lại
+                Back
               </Button>
             </div>
           </CardContent>
@@ -174,7 +188,7 @@ export function ConfirmationPage({
       ) : (
         <div
           role="group"
-          aria-label={`Trả lời cho đơn ${view.order_ref}`}
+          aria-label={`Reply to order ${view.order_ref}`}
           className="grid grid-cols-2 gap-3 sm:grid-cols-4"
         >
           {TILES.filter((tile) => view.allowed_actions.includes(tile.action)).map(
@@ -225,9 +239,9 @@ function DoneCard({ action, message }: { action: BuyerAction; message?: string }
             )}
           </ItemMedia>
         </Item>
-        <p className="font-medium">Bạn đã chọn: {BUYER_ACTION_LABELS[action]}</p>
+        <p className="font-medium">You chose: {BUYER_ACTION_LABELS[action]}</p>
         <p className="text-sm text-muted-foreground">
-          {message ?? 'Shop đã nhận phản hồi của bạn. Bạn có thể đóng trang này.'}
+          {message ?? 'The shop has received your answer. You can close this page.'}
         </p>
       </CardContent>
     </Card>
@@ -246,13 +260,13 @@ export function ConfirmationShell({ shopName, children }: { shopName?: string; c
             </ItemMedia>
           </Item>
           <div className="flex flex-col">
-            <span className="text-sm font-semibold">{shopName ?? 'Xác nhận đơn hàng'}</span>
-            <span className="text-xs text-muted-foreground">Xác nhận đơn hàng · bảo vệ bởi COD Guard</span>
+            <span className="text-sm font-semibold">{shopName ?? 'Order confirmation'}</span>
+            <span className="text-xs text-muted-foreground">Order confirmation · protected by COD Guard</span>
           </div>
         </header>
         {children}
         <p className="text-center text-xs text-muted-foreground">
-          Shop không bao giờ hỏi mật khẩu, mã OTP hay thông tin ngân hàng qua trang này.
+          The shop never asks for passwords, OTP codes or bank details on this page.
         </p>
       </main>
     </div>

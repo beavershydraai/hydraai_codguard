@@ -4,7 +4,7 @@ Guidance for AI coding agents (Claude Code, Codex, Gemini CLI, Cursor and others
 
 ## Project
 
-COD Guard scores cash-on-delivery (COD) orders from Vietnamese social-commerce and website sellers for refusal risk (*"bom hàng"*). It explains the risk in plain Vietnamese and takes the least intrusive action that still protects the seller: ship, send a confirmation link, place an AI confirmation call, require a deposit, or hold the order for review.
+COD Guard scores cash-on-delivery (COD) orders from Vietnamese social-commerce and website sellers for refusal risk (*"bom hàng"*). It explains the risk in plain English and takes the least intrusive action that still protects the seller: ship, send a confirmation link, place an AI confirmation call, require a deposit, or hold the order for review.
 
 It is a prototype for the Google Cloud AI Builder Cup 2026 (Retail & Commerce track).
 
@@ -104,7 +104,7 @@ These rules come from the README and the epics. Code and tests must enforce them
 ### Scoring
 
 - Gemini extracts signals and writes reasons. It never sets or changes the score, the tier or the action.
-- At most 3 reasons per order, in Vietnamese, each backed by a signal actually present on the order. A check rejects reasons that do not match a real signal. Target: 0 invented reasons on the 30-order evaluation set.
+- At most 3 reasons per order, in English, each backed by a signal actually present on the order. A check rejects reasons that do not match a real signal. Target: 0 invented reasons on the 30-order evaluation set.
 - Hard rules run first:
   - fully prepaid order → skipped;
   - invalid phone number → held for review;
@@ -125,7 +125,7 @@ These rules come from the README and the epics. Code and tests must enforce them
   | High | AI call | Hold for review after the last attempt |
   | Very High | Require deposit | Hold for review if unpaid |
 
-- Order states: Mới, Được gửi, Chờ xác nhận, Chờ cọc, Chờ duyệt, Đã hủy, Đã gửi, Giao thành công, Giao thất bại.
+- Order states: New, Cleared to ship, Awaiting confirmation, Awaiting deposit, Pending review, Cancelled, Shipped, Delivered, Delivery failed (in the epics: Mới, Được gửi, Chờ xác nhận, Chờ cọc, Chờ duyệt, Đã hủy, Đã gửi, Giao thành công, Giao thất bại).
 - Editing an order before it ships triggers a rescore. A confirmed order is never contacted again.
 - A new order runs the pipeline at intake, with no one pressing anything: `load_order → score → assess_order → decide → act`. The assessment uses two advisory agents when `GEMINI_MODEL` is set; it validates evidence-backed reasons before the decision is saved. Only the deterministic engine in `app/decision` picks the action; an LLM may write the wording of a message but never decides.
 - Every way out of the pipeline that is not a decision ends in review: a run that still fails after its retries, an action with no branch of its own, and an event the L4 table does not know. Nothing reaches the buyer on an error.
@@ -141,17 +141,17 @@ These rules come from the README and the epics. Code and tests must enforce them
 | Orders to the same phone batched into one contact | Within 15 minutes |
 | Contact hours | 08:00–21:00, Vietnam time (`Asia/Ho_Chi_Minh`) |
 | Call attempts per order | 2, at least 30 minutes apart |
-| After *"Tôi không đặt"* | Block the phone for 30 days, all shops |
+| After *"I didn't order this"* | Block the phone for 30 days, all shops |
 | After a confirmed order | Trust the phone for 7 days, same shop |
 | Gift orders | Verify with the buyer only, never the recipient |
 | Content | Order-related only, never promotional |
 
 ### AI call and confirmation page
 
-- The AI call discloses that it is an automated assistant and names the shop. It reads the order summary, reads any changes back before ending, and records exactly one of 7 outcomes: Xác nhận, Đã sửa, Hủy, Không đặt, Không nghe máy, Nhầm người, Không rõ.
-- The call's system instruction and its one tool, `record_call_outcome`, live in `backend/voice/prompts/`. The model reports the outcome through the tool. The backend validates it, sets *Không nghe máy* itself, and commits *Không rõ* when a call that the buyer spoke on ends without a valid outcome.
+- The AI call discloses that it is an automated assistant and names the shop. It reads the order summary, reads any changes back before ending, and records exactly one of 7 outcomes: Confirmed, Edited, Cancelled, Not ordered, No answer, Wrong person, Unclear.
+- The call's system instruction and its one tool, `record_call_outcome`, live in `backend/voice/prompts/`. The model reports the outcome through the tool. The backend validates it, sets *No answer* itself, and commits *Unclear* when a call that the buyer spoke on ends without a valid outcome.
 - During a call, the assistant gives no order details until the person confirms they are the buyer. It never mentions risk, scores or tiers, and never asks for money, OTP codes or bank details.
-- The confirmation page needs no login and offers Xác nhận / Sửa địa chỉ / Hủy / *"Tôi không đặt"*. Personal data is partially masked. The link expires after 48 hours.
+- The confirmation page needs no login and offers Confirm / Change address / Cancel / *"I didn't order this"*. Personal data is partially masked. The link expires after 48 hours.
 
 ## Privacy and secrets
 
@@ -163,8 +163,9 @@ These rules come from the README and the epics. Code and tests must enforce them
 ## Language
 
 - Code, identifiers, comments, commit messages and PRs: English.
-- Shop UI, buyer confirmation page, AI reasons and call scripts: Vietnamese, with English available for the demo call.
-- Predicted figures in the UI carry the label "ước tính". Simulated Zalo ZNS / SMS previews carry the label "mock".
+- Everything customers see is in English: shop UI, buyer confirmation page, AI reasons, timeline messages, message previews and the AI call. The call can still run in Vietnamese by setting its `call_language` to `VIETNAMESE`.
+- Keep Vietnamese person names and addresses in sample data; they are realistic Vietnam data, not UI copy. Some API fields keep a `_vi` suffix (`message_vi`, `text_vi`, `label_vi`, `summary_vi`) for compatibility with stored data; their content is English.
+- Predicted figures in the UI carry the label "estimated". Simulated Zalo ZNS / SMS previews carry the label "mock".
 
 ## Scope and timeline
 

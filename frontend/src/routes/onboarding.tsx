@@ -32,10 +32,10 @@ function OnboardingPage() {
     onSuccess: (saved) => {
       markDone(saved.id)
       void invalidate(queryClient, 'getShop')
-      toast.success('Shop đã sẵn sàng', { description: 'Đơn mới sẽ được chấm điểm ngay khi vào.' })
+      toast.success('Your shop is ready', { description: 'New orders are scored as soon as they arrive.' })
       void navigate({ to: '/' })
     },
-    onError: (error) => toast.error('Không lưu được', { description: problemMessage(error) }),
+    onError: (error) => toast.error('Could not save', { description: problemMessage(error) }),
   })
 
   const error = shop.error ?? policy.error
@@ -48,9 +48,9 @@ function OnboardingPage() {
           </ItemMedia>
         </Item>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Thiết lập shop</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Set up your shop</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            3 bước, khoảng 1 phút. Mọi giá trị đã có sẵn mặc định.
+            3 steps, about 1 minute. Every value already has a default.
           </p>
         </div>
       </div>
@@ -86,7 +86,7 @@ function OnboardingPage() {
             void navigate({ to: '/' })
           }}
         >
-          Bỏ qua, dùng giá trị mặc định
+          Skip and use the defaults
         </Button>
       )}
     </div>

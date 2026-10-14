@@ -23,12 +23,12 @@ import { invalidate, problemMessage } from '@/lib/api'
 import { DECISION_ACTION_LABELS } from '@/lib/labels'
 
 const HELP: Record<DecisionAction, string> = {
-  ship_now: 'Gửi hàng ngay, không liên hệ thêm.',
-  send_confirmation_link: 'Gửi link để người mua tự xác nhận hoặc sửa đơn.',
-  ai_call: 'AI gọi người mua để xác nhận.',
-  require_deposit: 'Yêu cầu người mua đặt cọc trước khi gửi.',
-  hold_for_review: 'Giữ đơn để shop xem lại sau.',
-  cancel: 'Hủy đơn, không gửi hàng.',
+  ship_now: 'Ship right away, with no further contact.',
+  send_confirmation_link: 'Send a link so the buyer can confirm or edit the order.',
+  ai_call: 'An AI call asks the buyer to confirm.',
+  require_deposit: 'Ask the buyer for a deposit before shipping.',
+  hold_for_review: 'Hold the order for the shop to review later.',
+  cancel: 'Cancel the order; nothing ships.',
 }
 
 /** Staff decision that replaces the engine's (E4.5). Who, when and why go to the audit log. */
@@ -50,7 +50,7 @@ export function OverrideDialog({
   const mutation = useMutation({
     ...overrideOrderMutation(),
     onSuccess: () => {
-      toast.success('Đã ghi quyết định', {
+      toast.success('Decision recorded', {
         description: `${DECISION_ACTION_LABELS[action!]} · ${reason.trim()}`,
       })
       void invalidate(queryClient, 'getOrder', 'listOrders')
@@ -70,9 +70,9 @@ export function OverrideDialog({
     >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Quyết định thay cho hệ thống</DialogTitle>
+          <DialogTitle>Override the system decision</DialogTitle>
           <DialogDescription>
-            Đơn {order.external_id ?? order.id}. Người quyết định, thời điểm và lý do được ghi vào nhật ký.
+            Order {order.external_id ?? order.id}. Who decided, when and why are recorded in the audit log.
           </DialogDescription>
         </DialogHeader>
 
@@ -92,7 +92,7 @@ export function OverrideDialog({
             value={action ?? ''}
             onValueChange={(value) => setAction(value as DecisionAction)}
             className="gap-2"
-            aria-label="Hành động"
+            aria-label="Action"
           >
             {allowed.map((value) => (
               <Label
@@ -110,16 +110,16 @@ export function OverrideDialog({
           </RadioGroup>
 
           <Field>
-            <FieldLabel htmlFor="override-reason">Lý do</FieldLabel>
+            <FieldLabel htmlFor="override-reason">Reason</FieldLabel>
             <Textarea
               id="override-reason"
               value={reason}
               onChange={(event) => setReason(event.target.value)}
-              placeholder="Ví dụ: Khách quen, đã gọi xác nhận qua Zalo."
+              placeholder="e.g. Regular buyer, already confirmed on Zalo."
               maxLength={500}
               required
             />
-            <FieldDescription>Bắt buộc, ít nhất 3 ký tự.</FieldDescription>
+            <FieldDescription>Required, at least 3 characters.</FieldDescription>
           </Field>
 
           {mutation.isError && (
@@ -131,11 +131,11 @@ export function OverrideDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Hủy bỏ
+            Back
           </Button>
           <Button type="submit" form="override-form" disabled={!valid || mutation.isPending}>
             {mutation.isPending && <Spinner data-icon="inline-start" />}
-            Ghi quyết định
+            Record decision
           </Button>
         </DialogFooter>
       </DialogContent>

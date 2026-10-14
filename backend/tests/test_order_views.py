@@ -15,10 +15,10 @@ NOW = datetime(2026, 10, 13, 3, tzinfo=UTC)
 def document() -> dict:
     order = OrderCreate(
         channel="website",
-        buyer_name="Khách demo",
+        buyer_name="Demo buyer",
         buyer_phone="+84000000001",
         address={"raw": "Số 1 đường mẫu, phường mẫu, tỉnh mẫu"},
-        items=[{"name": "Sản phẩm mẫu", "quantity": 2, "unit_price_vnd": 150_000}],
+        items=[{"name": "Sample product", "quantity": 2, "unit_price_vnd": 150_000}],
         discount_vnd=20_000,
         shipping_fee_vnd=30_000,
         prepaid_vnd=50_000,
@@ -141,22 +141,25 @@ def test_detail_preserves_existing_api_score_fields_and_timeline_order():
             {
                 "key": "address_missing_house_number",
                 "group": "address_quality",
-                "label_vi": "Địa chỉ thiếu số nhà",
+                "label_vi": "Address missing a house number",
                 "value": True,
                 "contribution": 0.07,
             }
         ],
         "reasons": [
-            {"text_vi": "Địa chỉ thiếu số nhà.", "signal_keys": ["address_missing_house_number"]}
+            {
+                "text_vi": "The address is missing a house number.",
+                "signal_keys": ["address_missing_house_number"],
+            }
         ],
     }
     doc["timeline"] = [
-        {"at": NOW, "type": "created", "actor": "system", "message_vi": "Đã tạo đơn."},
+        {"at": NOW, "type": "created", "actor": "system", "message_vi": "Order created."},
         {
             "at": NOW + timedelta(minutes=1),
             "type": "scored",
             "actor": "system",
-            "message_vi": "Đã chấm điểm đơn.",
+            "message_vi": "Order scored.",
         },
     ]
 

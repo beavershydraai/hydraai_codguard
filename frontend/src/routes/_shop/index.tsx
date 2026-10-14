@@ -16,7 +16,7 @@ function range(days: number): { from: string; to: string } {
 }
 
 export const Route = createFileRoute('/_shop/')({
-  staticData: { crumb: 'Tổng quan' },
+  staticData: { crumb: 'Overview' },
   validateSearch: (search: Record<string, unknown>): DashboardSearch => ({
     period: PERIODS.some((p) => p.value === search.period) ? (search.period as Period) : undefined,
   }),

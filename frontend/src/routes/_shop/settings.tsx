@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 const TABS: SettingsTab[] = ['shop', 'policy', 'history']
 
 export const Route = createFileRoute('/_shop/settings')({
-  staticData: { crumb: 'Cài đặt' },
+  staticData: { crumb: 'Settings' },
   validateSearch: (search: Record<string, unknown>): { tab?: SettingsTab } => ({
     tab: TABS.includes(search.tab as SettingsTab) ? (search.tab as SettingsTab) : undefined,
   }),

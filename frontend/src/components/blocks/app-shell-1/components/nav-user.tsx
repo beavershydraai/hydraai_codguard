@@ -30,12 +30,12 @@ import { type Theme, useThemeStore } from '@/stores/theme'
 
 // ── Constants ──
 
-const ROLE_LABELS = { owner: 'Chủ shop', staff: 'Nhân viên' } as const
+const ROLE_LABELS = { owner: 'Shop owner', staff: 'Staff' } as const
 
 const THEMES: { value: Theme; label: string; icon: ReactNode }[] = [
-  { value: 'light', label: 'Sáng', icon: <SunIcon className="size-3.5" aria-hidden="true" /> },
-  { value: 'dark', label: 'Tối', icon: <MoonIcon className="size-3.5" aria-hidden="true" /> },
-  { value: 'system', label: 'Theo hệ thống', icon: <MonitorIcon className="size-3.5" aria-hidden="true" /> },
+  { value: 'light', label: 'Light', icon: <SunIcon className="size-3.5" aria-hidden="true" /> },
+  { value: 'dark', label: 'Dark', icon: <MoonIcon className="size-3.5" aria-hidden="true" /> },
+  { value: 'system', label: 'System', icon: <MonitorIcon className="size-3.5" aria-hidden="true" /> },
 ]
 
 function useCurrentUser() {
@@ -58,7 +58,7 @@ function ThemeSegmentedToggle() {
   return (
     <div
       role="radiogroup"
-      aria-label="Giao diện"
+      aria-label="Theme"
       className="inline-flex items-center gap-0.5 rounded-full bg-muted/60 p-0.5"
     >
       {THEMES.map(({ value, label, icon }) => {
@@ -113,7 +113,7 @@ function UserMenuAccount() {
       <DropdownMenuItem asChild>
         <Link to="/settings">
           <SettingsIcon aria-hidden="true" />
-          Cài đặt shop
+          Shop settings
         </Link>
       </DropdownMenuItem>
     </DropdownMenuGroup>
@@ -125,7 +125,7 @@ function UserMenuTheme() {
     <DropdownMenuGroup>
       <DropdownMenuItem className="cursor-default focus:bg-transparent!" onSelect={(e) => e.preventDefault()}>
         <PaletteIcon aria-hidden="true" />
-        Giao diện
+        Theme
         <div className="ml-auto">
           <ThemeSegmentedToggle />
         </div>
@@ -156,7 +156,7 @@ function UserMenuContent() {
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={handleSignOut}>
           <LogOutIcon aria-hidden="true" />
-          Đăng xuất
+          Sign out
         </DropdownMenuItem>
       </DropdownMenuGroup>
     </DropdownMenuContent>
@@ -175,7 +175,7 @@ export function NavUser() {
             className="h-auto shrink-0 border border-border bg-background p-1.5 text-sm shadow-sm shadow-black/5 group-data-[collapsible=icon]:justify-center"
             asChild
           >
-            <SidebarMenuButton size="lg" aria-label="Mở menu tài khoản">
+            <SidebarMenuButton size="lg" aria-label="Open account menu">
               <Avatar className="size-6 transition-all duration-300 ease-in-out in-data-[state=collapsed]:size-7!">
                 <AvatarFallback className="rounded-md">{user.initials}</AvatarFallback>
               </Avatar>

@@ -15,15 +15,15 @@ export function MockBadge() {
       <TooltipTrigger asChild>
         <Badge variant="warning-light" className="cursor-default gap-1" tabIndex={0}>
           <DatabaseIcon aria-hidden="true" className="size-3" />
-          Dữ liệu mẫu
+          Sample data
         </Badge>
       </TooltipTrigger>
       <TooltipContent side="bottom" align="end" className="max-w-xs">
         {mockMode === 'all' ? (
-          <p>Toàn bộ dữ liệu là mô phỏng (mock), không gọi backend.</p>
+          <p>All data is simulated (mock); the backend is not called.</p>
         ) : (
           <div className="space-y-1">
-            <p>Các API sau chưa có ở backend nên đang dùng dữ liệu mô phỏng:</p>
+            <p>These APIs are not in the backend yet, so they use simulated data:</p>
             <ul className="font-mono text-[11px]">
               {mocked.map((operation) => (
                 <li key={operation}>{operation}</li>

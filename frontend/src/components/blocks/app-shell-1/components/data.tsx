@@ -32,9 +32,9 @@ export type TierShortcut = {
 // ── Nav Main ──
 
 export const NAV_MAIN: NavItem[] = [
-  { id: 'overview', label: 'Tổng quan', icon: <HouseIcon />, to: '/', exact: true },
-  { id: 'orders', label: 'Đơn hàng', icon: <PackageIcon />, to: '/orders' },
-  { id: 'review', label: 'Chờ duyệt', icon: <ClipboardCheckIcon />, to: '/review' },
+  { id: 'overview', label: 'Overview', icon: <HouseIcon />, to: '/', exact: true },
+  { id: 'orders', label: 'Orders', icon: <PackageIcon />, to: '/orders' },
+  { id: 'review', label: 'Pending review', icon: <ClipboardCheckIcon />, to: '/review' },
   { id: 'backtest', label: 'Backtest', icon: <ChartLineIcon />, to: '/backtest' },
 ]
 
@@ -51,5 +51,5 @@ export const TIER_SHORTCUTS: TierShortcut[] = [
 
 export const NAV_SECONDARY: NavItem[] = [
   { id: 'demo', label: 'Demo', icon: <FlaskConicalIcon />, to: '/demo' },
-  { id: 'settings', label: 'Cài đặt', icon: <SettingsIcon />, to: '/settings' },
+  { id: 'settings', label: 'Settings', icon: <SettingsIcon />, to: '/settings' },
 ]

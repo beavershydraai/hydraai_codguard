@@ -112,25 +112,25 @@ export function ReviewInbox({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-0.5">
             <div className="flex items-center gap-2.5">
-              <h1 className="text-lg leading-tight font-semibold tracking-tight">Hàng chờ duyệt</h1>
+              <h1 className="text-lg leading-tight font-semibold tracking-tight">Review queue</h1>
               <span className="flex items-center gap-1.5">
                 <span className="relative flex size-2 shrink-0" aria-hidden="true">
                   <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500/60" />
                   <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
                 </span>
-                <span className="hidden text-sm text-muted-foreground sm:block">Tự cập nhật</span>
+                <span className="hidden text-sm text-muted-foreground sm:block">Live updates</span>
               </span>
             </div>
             <p className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-              <span className="tabular-nums">{orders.length} đơn chờ</span>
+              <span className="tabular-nums">{orders.length} pending</span>
               <Dot />
-              <span className="tabular-nums">{late.length} chờ quá 2 giờ</span>
+              <span className="tabular-nums">{late.length} waiting over 2 hours</span>
               <Dot />
-              <span className="tabular-nums">{highRisk.length} rủi ro cao</span>
+              <span className="tabular-nums">{highRisk.length} high risk</span>
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <Button size="icon-sm" variant="ghost" onClick={onRefresh} aria-label="Làm mới hàng chờ">
+            <Button size="icon-sm" variant="ghost" onClick={onRefresh} aria-label="Refresh review queue">
               <RefreshCwIcon aria-hidden="true" />
             </Button>
             <Button
@@ -139,7 +139,7 @@ export function ReviewInbox({
               onClick={() => oldest && navigate({ to: '/orders/$orderId', params: { orderId: oldest.id } })}
             >
               <ListChecksIcon aria-hidden="true" />
-              <span className="hidden sm:block">Xem đơn chờ lâu nhất</span>
+              <span className="hidden sm:block">Open oldest order</span>
             </Button>
           </div>
         </div>
@@ -149,28 +149,28 @@ export function ReviewInbox({
           <SummaryTiles
             items={[
               {
-                title: 'Đơn chờ duyệt',
+                title: 'Pending review',
                 value: orders.length,
-                note: 'Gọi không được, chưa cọc, SĐT lỗi…',
+                note: 'Unreachable, unpaid deposit, invalid phone…',
                 icon: <InboxIcon aria-hidden="true" />,
               },
               {
-                title: 'Chờ quá 2 giờ',
+                title: 'Waiting over 2 hours',
                 value: late.length,
-                badge: late.length > 0 ? <Badge variant="destructive-light">Cần xử lý</Badge> : undefined,
-                note: 'Tính từ lần cập nhật gần nhất',
+                badge: late.length > 0 ? <Badge variant="destructive-light">Needs action</Badge> : undefined,
+                note: 'Since the last update',
                 icon: <ClockAlertIcon aria-hidden="true" />,
               },
               {
-                title: 'Tiền thu hộ đang giữ',
+                title: 'COD on hold',
                 value: formatVnd(held),
-                note: 'Tổng COD của các đơn đang chờ',
+                note: 'Total COD of the pending orders',
                 icon: <WalletIcon aria-hidden="true" />,
               },
               {
-                title: 'Đã xử lý trong phiên',
+                title: 'Handled this session',
                 value: decisions.filter((d) => d.ok).length,
-                note: 'Mỗi quyết định có ghi người, lúc và lý do',
+                note: 'Each decision records who, when and why',
                 icon: <CheckCheckIcon aria-hidden="true" />,
               },
             ]}
@@ -187,29 +187,30 @@ export function ReviewInbox({
           <AlertDialogHeader>
             <AlertDialogTitle>
               {pending &&
-                `${REVIEW_DECISIONS.find((d) => d.action === pending.action)!.label} ${pending.orders.length > 1 ? `${pending.orders.length} đơn` : `đơn ${pending.orders[0]!.external_id ?? pending.orders[0]!.id}`}?`}
+                `${REVIEW_DECISIONS.find((d) => d.action === pending.action)!.label}: ${pending.orders.length > 1 ? `${pending.orders.length} orders` : `order ${pending.orders[0]!.external_id ?? pending.orders[0]!.id}`}?`}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {pending?.action === 'ship_now' && 'Đơn được gửi đi ngay, không liên hệ người mua thêm.'}
+              {pending?.action === 'ship_now' &&
+                'The order ships now, with no further contact with the buyer.'}
               {pending?.action === 'require_deposit' &&
-                'Người mua nhận yêu cầu đặt cọc trước khi shop gửi hàng.'}
-              {pending?.action === 'cancel' && 'Đơn bị hủy và không gửi hàng.'} Lý do được ghi vào nhật ký của
-              đơn.
+                'The buyer gets a deposit request before the shop ships.'}
+              {pending?.action === 'cancel' && 'The order is cancelled and not shipped.'} The reason is saved
+              to the order's log.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <Field>
-            <FieldLabel htmlFor="review-reason">Lý do</FieldLabel>
+            <FieldLabel htmlFor="review-reason">Reason</FieldLabel>
             <Textarea
               id="review-reason"
               value={reason}
               onChange={(event) => setReason(event.target.value)}
-              placeholder="Ví dụ: Đã gọi lại qua Zalo, khách xác nhận."
+              placeholder="For example: Called back on Zalo, the buyer confirmed."
               className="min-h-24 resize-none"
             />
-            <FieldDescription>Bắt buộc, ít nhất 3 ký tự.</FieldDescription>
+            <FieldDescription>Required, at least 3 characters.</FieldDescription>
           </Field>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>Hủy bỏ</AlertDialogCancel>
+            <AlertDialogCancel disabled={busy}>Back</AlertDialogCancel>
             <AlertDialogAction
               variant={pending?.action === 'cancel' ? 'destructive' : 'default'}
               disabled={reason.trim().length < 3 || busy}
@@ -222,7 +223,7 @@ export function ReviewInbox({
                 setPending(null)
               }}
             >
-              Xác nhận
+              Confirm
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -284,15 +285,15 @@ function ReviewQueue({
       table={table}
       recordCount={filtered.length}
       isLoading={isLoading}
-      emptyMessage={orders.length === 0 ? 'Không có đơn nào chờ duyệt. 🎉' : 'Không có đơn khớp bộ lọc.'}
+      emptyMessage={orders.length === 0 ? 'No orders pending review. 🎉' : 'No orders match the filter.'}
       tableLayout={{ headerSticky: true, dense: true, width: 'auto' }}
     >
       <Frame variant="default" spacing="sm" className="w-full">
         <FrameHeader className="flex-row items-center justify-between gap-3">
           <div className="flex flex-col gap-0.5">
-            <FrameTitle className="text-balance">Đơn cần shop quyết định</FrameTitle>
+            <FrameTitle className="text-balance">Orders that need a decision</FrameTitle>
             <FrameDescription className="text-xs text-pretty">
-              {filtered.length} đơn trong danh sách này
+              {filtered.length} orders in this list
             </FrameDescription>
           </div>
           <Button
@@ -301,7 +302,7 @@ function ReviewQueue({
             onClick={() => setLateOnly((v) => !v)}
             className={cn(lateOnly && 'bg-muted')}
           >
-            Chờ quá 2 giờ
+            Waiting over 2 hours
           </Button>
         </FrameHeader>
         <FramePanel className="bg-card p-0! shadow-none!">
@@ -311,14 +312,14 @@ function ReviewQueue({
                 <SearchIcon aria-hidden="true" />
               </InputGroupAddon>
               <InputGroupInput
-                placeholder="Tìm mã đơn, tên, SĐT…"
-                aria-label="Tìm trong hàng chờ"
+                placeholder="Search order ID, name, phone…"
+                aria-label="Search the review queue"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
               {search && (
                 <InputGroupAddon align="inline-end">
-                  <InputGroupButton size="icon-xs" aria-label="Xóa tìm kiếm" onClick={() => setSearch('')}>
+                  <InputGroupButton size="icon-xs" aria-label="Clear search" onClick={() => setSearch('')}>
                     <XIcon aria-hidden="true" />
                   </InputGroupButton>
                 </InputGroupAddon>
@@ -330,9 +331,9 @@ function ReviewQueue({
             <>
               <div className="flex flex-col gap-3 bg-muted/25 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-sm font-medium">Đã chọn {selected.length} đơn</span>
+                  <span className="text-sm font-medium">{selected.length} orders selected</span>
                   <span className="text-xs text-muted-foreground">
-                    Áp dụng một quyết định và một lý do cho cả nhóm.
+                    Apply one decision and one reason to the whole group.
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -348,7 +349,7 @@ function ReviewQueue({
                     </Button>
                   ))}
                   <Button size="sm" variant="ghost" onClick={() => setRowSelection({})}>
-                    Bỏ chọn
+                    Clear selection
                   </Button>
                 </div>
               </div>
@@ -361,10 +362,10 @@ function ReviewQueue({
         </FramePanel>
         <FrameFooter>
           <DataGridPagination
-            info="{from} - {to} trên {count} đơn"
-            rowsPerPageLabel="Số đơn mỗi trang"
-            previousPageLabel="Trang trước"
-            nextPageLabel="Trang sau"
+            info="{from}–{to} of {count} orders"
+            rowsPerPageLabel="Orders per page"
+            previousPageLabel="Previous page"
+            nextPageLabel="Next page"
           />
         </FrameFooter>
       </Frame>
@@ -376,14 +377,14 @@ function RecentDecisions({ decisions }: { decisions: SessionDecision[] }) {
   return (
     <Frame variant="default" spacing="sm" className="w-full">
       <FrameHeader className="gap-0.5">
-        <FrameTitle className="text-balance">Quyết định gần đây</FrameTitle>
+        <FrameTitle className="text-balance">Recent decisions</FrameTitle>
         <FrameDescription className="text-xs text-pretty">
-          Trong phiên làm việc này. Nhật ký đầy đủ nằm ở từng đơn.
+          In this session. The full log is on each order.
         </FrameDescription>
       </FrameHeader>
       <FramePanel>
         {decisions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Chưa có quyết định nào.</p>
+          <p className="text-sm text-muted-foreground">No decisions yet.</p>
         ) : (
           <Timeline defaultValue={decisions.length} className="gap-0">
             {decisions.map((d, index) => (
@@ -404,10 +405,10 @@ function RecentDecisions({ decisions }: { decisions: SessionDecision[] }) {
                 <TimelineContent className="ps-3">
                   <p className="text-sm font-medium">
                     {REVIEW_DECISIONS.find((x) => x.action === d.action)!.label} · {d.orderLabel}
-                    {!d.ok && <span className="ms-1.5 text-xs text-destructive">(không thành công)</span>}
+                    {!d.ok && <span className="ms-1.5 text-xs text-destructive">(failed)</span>}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {formatDateTime(d.at)} · Lý do: {d.reason}
+                    {formatDateTime(d.at)} · Reason: {d.reason}
                   </p>
                 </TimelineContent>
               </TimelineItem>

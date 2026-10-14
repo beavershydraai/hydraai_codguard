@@ -46,7 +46,7 @@ export function NavMain() {
   const pendingReview = usePendingReviewCount()
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Vận hành</SidebarGroupLabel>
+      <SidebarGroupLabel>Operations</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu className="gap-1!">
           {NAV_MAIN.map((item) => (
