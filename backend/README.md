@@ -83,8 +83,9 @@ the score, tier or action. Message composition and voice remain E5 integration w
 `GEMINI_MODEL` selects the assessment model. With it unset, assessment records `disabled` and
 the deterministic pipeline continues. Hard-rule and confirmed orders skip the agents; no
 candidate evidence records `no_evidence`. Without a trained risk model, the order stays new and
-unscored, and no assessment runs. A configured assessment failure, invalid output, timeout,
-exhausted quota or changed order snapshot reaches review before any buyer contact.
+unscored, and no assessment runs. An exhausted daily quota records `quota_exhausted` and the engine decides without Gemini
+reasons. A configured assessment failure, invalid output, timeout or changed order snapshot
+reaches review before any buyer contact.
 If another run or a staff member has already decided the order, the failed intake preserves
 that decision instead. This check runs inside the fallback transaction, including its retries.
 

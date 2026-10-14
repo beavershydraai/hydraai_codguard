@@ -99,23 +99,29 @@ async def test_assessment_cannot_mutate_the_scored_order(pipe, monkeypatch):
     assert doc["scoring"]["probability"] == 0.6 and doc["tier"] == "high"
 
 
-@pytest.mark.parametrize(
-    "output",
-    [
-        {"status": "completed", "reasons": [], "action": "ship_now"},
-        {"status": "quota_exhausted", "reasons": []},
-    ],
-)
 @pytest.mark.asyncio
-async def test_invalid_or_over_budget_assessment_holds_without_contact(pipe, monkeypatch, output):
+async def test_invalid_assessment_holds_without_contact(pipe, monkeypatch):
     async def assess(doc, **kwargs):
-        return output
+        return {"status": "completed", "reasons": [], "action": "ship_now"}
 
     install_assessor(monkeypatch, assess)
     result = await run_new_order("ord_test", "shop_a", pipeline=pipe)
     assert result["action"] == "hold_for_review"
     assert pipe.store.get("ord_test")["status"] == "pending_review"
     assert pipe.log.claims == {}
+
+
+@pytest.mark.asyncio
+async def test_an_exhausted_assessment_budget_keeps_the_engine_decision(pipe, monkeypatch):
+    async def assess(doc, **kwargs):
+        return {"status": "quota_exhausted", "reasons": []}
+
+    install_assessor(monkeypatch, assess)
+    result = await run_new_order("ord_test", "shop_a", pipeline=pipe)
+    doc = pipe.store.get("ord_test")
+    assert result["action"] == "ai_call"
+    assert doc["scoring"]["assessment"]["status"] == "quota_exhausted"
+    assert doc["scoring"]["reasons"] == []
 
 
 @pytest.mark.asyncio
