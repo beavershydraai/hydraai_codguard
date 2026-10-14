@@ -10,7 +10,7 @@ from app.agents.agent import Pipeline
 from app.agents.log import DecisionLog, get_decision_log
 from app.agents.runner import run_new_order_sync
 from app.api.errors import ApiError, NotImplementedYet, problem_example, problem_responses
-from app.api.security import firebase_auth, intake_api_key
+from app.api.security import bearer_auth, intake_api_key
 from app.data.orders import order_document
 from app.data.store import OrderStore, get_store, order_id_for, phone_key, shop_for_key
 from app.schemas.confirm import BuyerOrderView, BuyerResponse, BuyerResponseResult
@@ -101,7 +101,7 @@ async def respond_confirmation(token: Token, body: BuyerResponse) -> BuyerRespon
     raise NotImplementedYet("respond_confirmation")
 
 
-demo_router = APIRouter(prefix="/demo", tags=["demo"], dependencies=[Security(firebase_auth)])
+demo_router = APIRouter(prefix="/demo", tags=["demo"], dependencies=[Security(bearer_auth)])
 
 
 @demo_router.post(

@@ -1,4 +1,4 @@
-"""Endpoints used by the shop web app (Firebase auth)."""
+"""Endpoints used by the shop web app (bearer token from /auth/login)."""
 
 from datetime import date, datetime
 from typing import Annotated, Literal
@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, File, Path, Query, Security, UploadFile, status
 
 from app.api.errors import NotImplementedYet, problem_example, problem_responses
-from app.api.security import firebase_auth
+from app.api.security import CurrentUser, bearer_auth
 from app.schemas.calls import Call
 from app.schemas.dashboard import BacktestResult, DashboardSummary
 from app.schemas.delivery import DeliveryImportResult, DeliveryOutcomeBatch
@@ -22,7 +22,7 @@ from app.schemas.orders import (
 )
 from app.schemas.shops import Me, Policy, PolicyUpdate, Shop, ShopUpdate
 
-auth = [Security(firebase_auth)]
+auth = [Security(bearer_auth)]
 OrderId = Annotated[str, Path(description="Order ID.", examples=["ord_01"])]
 
 # ---------------------------------------------------------------- me & shop
@@ -32,8 +32,14 @@ shop_router = APIRouter(prefix="/shop", tags=["shop"], dependencies=auth)
 
 
 @me_router.get("/me", response_model=Me, responses=problem_responses(401), summary="Current user")
-async def get_me() -> Me:
-    raise NotImplementedYet("get_me")
+async def get_me(user: CurrentUser) -> Me:
+    return Me(
+        user_id=user.user_id,
+        email=user.email,
+        display_name=user.display_name,
+        role=user.role,
+        shop_id=user.shop_id,
+    )
 
 
 @shop_router.get(

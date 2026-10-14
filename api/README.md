@@ -46,7 +46,8 @@ npx @stoplight/prism-cli mock api/openapi.yaml        # http://127.0.0.1:4010
 - Errors: `application/problem+json` (RFC 9457) with a machine-readable `code`, plus `errors`
   for validation and `block_reasons` for `contact_blocked`.
 - Lists: cursor pagination. Pass `next_cursor` back as `cursor`.
-- Auth: Firebase ID token (`Authorization: Bearer`) for the shop app; `X-Api-Key` for the
+- Auth: the shop app signs in with `POST /api/v1/auth/login` and sends the returned token as
+  `Authorization: Bearer` (Firebase ID tokens will replace it, E7.1); `X-Api-Key` for the
   intake API; the buyer confirmation page uses the token in its URL.
 - Phone numbers in examples use the invalid prefix `+84000…` on purpose. Never put a real
   phone number in examples, fixtures or tests.
