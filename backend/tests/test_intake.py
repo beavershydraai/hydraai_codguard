@@ -25,6 +25,10 @@ class FakeStore:
         self.docs[doc["order_id"]] = doc
         return None
 
+    def get(self, order_id):
+        doc = self.docs.get(order_id)
+        return deepcopy(doc) if doc else None
+
     def update(self, order_id, fields):
         self.docs[order_id].update(fields)
 

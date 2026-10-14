@@ -36,6 +36,10 @@ class OrderStore:
         except AlreadyExists:
             return ref.get().to_dict()
 
+    def get(self, order_id: str) -> dict | None:
+        snapshot = self.orders.document(order_id).get()
+        return snapshot.to_dict() if snapshot.exists else None
+
     def update(self, order_id: str, fields: dict) -> None:
         self.orders.document(order_id).update(fields)
 

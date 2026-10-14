@@ -520,6 +520,38 @@ def apply_call_outcome(
     return _transact(store, order_id, apply)
 
 
+def hold_for_review(
+    store: OrderStore,
+    order_id: str,
+    now: datetime,
+    *,
+    settings: ShopSettings | None = None,
+    policy: Policy | None = None,
+) -> dict:
+    """Put an unshipped order in the seller's review queue; a shipped or finished one is left
+    alone. The ADK pipeline (E4.7) calls this when a run fails, so a broken model or a storage
+    outage ends with a person deciding instead of the buyer being contacted.
+    """
+
+    def apply(doc):
+        if doc["status"] not in EDITABLE:
+            return doc
+        decision = decisions.decide(
+            RiskTier(doc.get("tier") or RiskTier.LOW),
+            (doc.get("scoring") or {}).get("expected_loss_vnd") or 0,
+            now,
+            settings=settings,
+            policy=policy,
+            action=DecisionAction.HOLD_FOR_REVIEW,
+        )
+        _move(doc, "decided" if doc.get("decision") is None else "rescored", decision.action)
+        _set_decision(doc, decision)
+        _event(doc, "decided", now, "Đã chuyển đơn hàng cho người bán duyệt.")
+        return doc
+
+    return _transact(store, order_id, apply)
+
+
 def mark_shipped(store: OrderStore, order_id: str, now: datetime) -> dict:
     """Record the handover to the carrier, locking further input edits."""
 
