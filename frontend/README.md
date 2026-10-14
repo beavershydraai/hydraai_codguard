@@ -100,3 +100,20 @@ shortcuts into the inbox, breadcrumbs and the user menu with theme and sign-out.
 - Blocks under `src/components/blocks/` are installed once and then adapted (real data, routes,
   English copy), so they are linted and formatted like our own code. Do not reinstall them over
   the adapted files.
+
+## Deploy
+
+Every push to `main` that passes CI builds `Dockerfile` (the Vite build served by nginx) and
+deploys it to the Cloud Run service `codguard-web` in `asia-southeast1`, right after the backend.
+nginx forwards `/api/...` to `codguard-api` (the `API_ORIGIN` variable, see `nginx.conf.template`),
+so the app and the API share one origin and the backend needs no CORS. The app URL is in the
+summary of the CI run.
+
+The image keeps the build-time defaults: same-origin API, and the mock only for endpoints that
+still answer 501. To run it against a local backend:
+
+```bash
+docker build -t codguard-web .
+docker run --rm -p 3000:8080 --add-host host.docker.internal:host-gateway \
+  -e API_ORIGIN=http://host.docker.internal:8080 codguard-web
+```
