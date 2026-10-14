@@ -15,6 +15,35 @@ M_SMOOTH = 5  # E2.3 rule 7
 CHANNELS = ["facebook", "zalo", "tiktok", "website", "instagram", "other"]
 _DIGIT = re.compile(r"\d")
 
+# key -> (SignalGroup, label shown to the shop), for the top signals of each order (E2.4)
+SIGNALS = {
+    "cod_amount_vnd": ("payment", "Số tiền thu hộ"),
+    "log_cod_amount": ("payment", "Số tiền thu hộ"),
+    "cod_vs_phone_avg_ratio": ("payment", "Tiền thu hộ so với các đơn trước của SĐT"),
+    "n_lines": ("order_behavior", "Số loại hàng trong đơn"),
+    "total_qty": ("order_behavior", "Tổng số lượng hàng"),
+    "discount_ratio": ("order_behavior", "Tỷ lệ giảm giá"),
+    "placed_hour_vn": ("order_behavior", "Giờ đặt hàng"),
+    "placed_dow": ("order_behavior", "Ngày trong tuần"),
+    "is_night": ("order_behavior", "Đặt hàng ban đêm"),
+    "address_has_house_number": ("address_quality", "Địa chỉ thiếu số nhà"),
+    "address_parts_filled": ("address_quality", "Độ đầy đủ của địa chỉ"),
+    "province_fail_rate_te": ("address_quality", "Tỷ lệ bom hàng của tỉnh/thành"),
+    "is_gift": ("context", "Đơn quà tặng"),
+    "channel": ("context", "Kênh bán"),
+    "phone_outcomes_all": ("phone_history", "Số đơn trước đã có kết quả"),
+    "phone_failed_all": ("phone_history", "Số đơn trước bị bom"),
+    "phone_fail_rate_smoothed_all": ("phone_history", "Tỷ lệ bom hàng của SĐT"),
+    "phone_days_since_last_failure": ("phone_history", "Số ngày từ lần bom gần nhất"),
+    "phone_is_new": ("phone_history", "SĐT lần đầu đặt hàng"),
+    "phone_orders_1h": ("velocity", "Số đơn của SĐT trong 1 giờ"),
+    "phone_orders_24h": ("velocity", "Số đơn của SĐT trong 24 giờ"),
+    "phone_orders_30d": ("velocity", "Số đơn của SĐT trong 30 ngày"),
+    "phone_orders_all": ("velocity", "Tổng số đơn trước của SĐT"),
+    "phone_minutes_since_prev_order": ("velocity", "Số phút từ đơn trước"),
+    "phone_distinct_shops_all": ("velocity", "Số shop SĐT đã mua"),
+}
+
 
 def has_house_number(address: dict) -> int:
     """A number before the ward ('Số 12 ...', '12/3 ...'). Digits in 'Phường 5' do not count."""

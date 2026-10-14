@@ -14,6 +14,7 @@ dependencies = [
     "python-multipart>=0.0.9",
     "pyyaml>=6.0",
     "scikit-learn>=1.9.1",
+    "shap>=0.53",
     "uvicorn[standard]>=0.30",
 ]
 

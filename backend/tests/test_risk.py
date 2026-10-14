@@ -10,6 +10,8 @@ from app.risk import artifacts, engine
 from app.risk.features import compute_features, has_house_number
 from app.risk.jobs import monitor
 from app.risk.jobs.train import train
+from app.risk.model import explain1, explainer1
+from app.schemas.scoring import Signal
 from tests.risk_data import START, orders
 
 NOW = START + timedelta(days=200)
@@ -124,6 +126,33 @@ def test_engine_scores_with_the_latest_model(trained, tmp_path, monkeypatch):
     assert fields["contact_action"] in {"none", "link", "call", "deposit", "hold"}
     scoring = fields["scoring"]
     assert scoring["expected_loss_vnd"] == pytest.approx(scoring["probability"] * 60_000, abs=4)
+    signals = [Signal.model_validate(s) for s in scoring["top_signals"]]
+    assert len(signals) == 5
+    sizes = [abs(s.contribution) for s in signals]
+    assert sizes == sorted(sizes, reverse=True) and sizes[0] > 0
+    assert all(
+        s.value == pytest.approx(scoring["features"][s.key], abs=1e-4)
+        for s in signals
+        if s.key in scoring["features"] and s.key != "channel"
+    )
+
+
+def test_the_house_number_signal_uses_the_api_key(trained):
+    _, model, _, table = trained
+    features = table[model["cols"]].iloc[0].to_dict() | {"address_has_house_number": 0}
+    signals = explain1(model, explainer1(model), features, top=len(model["cols"]))
+    (house,) = [s for s in signals if "house_number" in s["key"]]
+    assert (house["key"], house["value"]) == ("address_missing_house_number", 1)
+
+
+def test_top_signals_add_up_to_the_change_from_the_average_order(trained):
+    docs, model, _, table = trained
+    explainer = explainer1(model)
+    features = table[model["cols"]].iloc[0].to_dict()
+    signals = explain1(model, explainer, features, top=len(model["cols"]))
+    raw = model["clf"].predict_proba(table[model["cols"]].iloc[[0]])[0, 1]
+    base = 1 / (1 + np.exp(-np.ravel(explainer.expected_value)[0]))
+    assert sum(s["contribution"] for s in signals) == pytest.approx(raw - base, abs=1e-3)
 
 
 def test_engine_without_a_model_leaves_the_order_unscored(tmp_path, monkeypatch):
