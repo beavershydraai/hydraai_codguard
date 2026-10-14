@@ -66,7 +66,7 @@ class FakeModel(BaseLlm):
     async def generate_content_async(self, llm_request, stream=False):
         texts = [p.text for c in llm_request.contents for p in c.parts if p.text]
         payload = json.loads(texts[-1])
-        self.requests.append({"input": payload, "request": str(llm_request)})
+        self.requests.append({"input": payload, "request": str(llm_request), "text": texts[-1]})
         await asyncio.sleep(self.delay)
         response = self.responses.pop(0) if self.responses else {"reasons": [REASON]}
         if isinstance(response, Exception):
@@ -336,3 +336,19 @@ async def test_conflicting_feature_evidence_is_rejected_without_spending_quota()
     with pytest.raises(ValueError, match="Conflicting"):
         await assess(doc, model=model, log=log)
     assert not model.requests and not log.claims
+
+
+def test_the_response_schema_is_accepted_by_vertex_ai():
+    """Vertex AI rejects `examples` in a response schema; with them every live call failed."""
+    from app.agents.assessment import _Selection
+
+    assert "examples" not in json.dumps(_Selection.model_json_schema())
+
+
+async def test_the_agents_read_plain_vietnamese():
+    """Escaped text (\\u0110...) made gemini-3.1-flash-lite miscopy the candidate reasons."""
+    model = FakeModel()
+    await assess(model=model)
+    text = model.requests[0]["text"]
+    assert "\\u" not in text
+    assert any(c["text_vi"] in text for c in model.requests[0]["input"]["candidates"])

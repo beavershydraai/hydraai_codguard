@@ -104,6 +104,9 @@ jobs:
       GCP_TRAINER_SA: codguard-trainer@ai-codguard.iam.gserviceaccount.com
       SERVICE: codguard-api
       DATA_ENV: FIRESTORE_DATABASE=vn-synthetic,MODEL_BUCKET=ai-codguard-ml
+      # Gemini through Vertex AI as the runtime service account (no API key). This model is served
+      # only from the global location, not asia-southeast1.
+      GEMINI_ENV: GEMINI_MODEL=gemini-3.1-flash-lite,GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=ai-codguard,GOOGLE_CLOUD_LOCATION=global
       SOURCE_IMAGE: ghcr.io/${{ github.repository }}/backend
     steps:
       - name: Image names
@@ -132,7 +135,7 @@ jobs:
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --service-account "$GCP_RUNTIME_SA" --allow-unauthenticated \
             --port 8080 --cpu 1 --memory 512Mi --min-instances 0 --max-instances 2 \
-            --update-env-vars "$DATA_ENV" --remove-env-vars MODEL_URI \
+            --update-env-vars "$DATA_ENV,$GEMINI_ENV" --remove-env-vars MODEL_URI \
             --update-secrets "PHONE_HASH_KEY=phone-hash-key-synthetic:latest,INTAKE_API_KEYS=intake-api-keys:latest" --quiet
           URL=$(gcloud run services describe "$SERVICE" --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" --format 'value(status.url)')

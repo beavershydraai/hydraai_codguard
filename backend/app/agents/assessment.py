@@ -65,9 +65,18 @@ class AssessmentResult(BaseModel):
     model: str | None = None
 
 
+# A Reason as the model returns it. Vertex AI rejects `examples` in a response schema, which the
+# API model `Reason` carries, so the agents get this copy without them (and no docstring, which
+# would be sent as the schema description).
+class _Pick(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text_vi: str = Field(max_length=200)
+    signal_keys: list[str] = Field(min_length=1)
+
+
 class _Selection(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    reasons: list[Reason] = Field(max_length=3)
+    reasons: list[_Pick] = Field(max_length=3)
 
 
 def _numeric(value) -> bool:
@@ -208,7 +217,9 @@ async def _run(context: dict, *, shop_id: str, model: BaseLlm) -> list[dict]:
     runner = Runner(app_name=app_name, node=workflow, session_service=sessions)
     result = None
     try:
-        message = types.Content(role="user", parts=[types.Part(text=json.dumps(context))])
+        # Plain Vietnamese: with \u escapes the model miscopies the candidate reasons.
+        text = json.dumps(context, ensure_ascii=False)
+        message = types.Content(role="user", parts=[types.Part(text=text)])
         async for event in runner.run_async(
             user_id=shop_id,
             session_id=session.id,
