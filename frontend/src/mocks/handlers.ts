@@ -24,8 +24,14 @@ const ME = {
   user_id: 'usr_admin',
   email: 'admin@gmail.com',
   display_name: 'Admin',
-  role: 'owner' as const,
   shop_id: 'shop_demo',
+}
+const me = () => ({ ...ME, role: mockDb.role })
+
+function ownerOnly() {
+  if (mockDb.role !== 'owner') {
+    throw new MockError(403, 'forbidden', 'Only the shop owner can change costs and policy.')
+  }
 }
 
 on('POST', '/api/v1/auth/login', async ({ body }) => {
@@ -37,15 +43,21 @@ on('POST', '/api/v1/auth/login', async ({ body }) => {
     access_token: 'mock-access-token',
     token_type: 'bearer',
     expires_at: new Date(Date.now() + 12 * 3_600_000).toISOString(),
-    user: ME,
+    user: me(),
   }
 })
-on('GET', '/api/v1/me', () => ME)
+on('GET', '/api/v1/me', me)
 
 on('GET', '/api/v1/shop', () => mockDb.shop)
-on('PATCH', '/api/v1/shop', async ({ body }) => mockDb.updateShop((await body()) as never))
+on('PATCH', '/api/v1/shop', async ({ body }) => {
+  ownerOnly()
+  return mockDb.updateShop((await body()) as never)
+})
 on('GET', '/api/v1/shop/policy', () => mockDb.policy)
-on('PUT', '/api/v1/shop/policy', async ({ body }) => mockDb.updatePolicy((await body()) as never, ME.email))
+on('PUT', '/api/v1/shop/policy', async ({ body }) => {
+  ownerOnly()
+  return mockDb.updatePolicy((await body()) as never, ME.email)
+})
 on('GET', '/api/v1/shop/policy/versions', () => [...mockDb.policies].reverse())
 
 on('GET', '/api/v1/orders', ({ url }) => {
@@ -115,6 +127,7 @@ on('POST', '/api/v1/demo/spam-simulation', () => mockDb.spamSimulation())
 const TITLES: Record<number, string> = {
   400: 'Bad request',
   401: 'Unauthorized',
+  403: 'Forbidden',
   404: 'Not found',
   409: 'Conflict',
   410: 'Gone',

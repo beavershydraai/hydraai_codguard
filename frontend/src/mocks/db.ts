@@ -116,6 +116,8 @@ export class MockDb {
   policies: Policy[] = []
   blockedPhones = new Set<string>()
   seed = 2026
+  /** Role of the signed-in demo user; switch to `staff` to see the read-only settings (E7.7). */
+  role: 'owner' | 'staff' = 'owner'
 
   constructor() {
     this.reset()
