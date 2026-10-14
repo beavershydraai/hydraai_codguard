@@ -26,7 +26,7 @@ SIGNALS = {
     "placed_hour_vn": ("order_behavior", "Giờ đặt hàng"),
     "placed_dow": ("order_behavior", "Ngày trong tuần"),
     "is_night": ("order_behavior", "Đặt hàng ban đêm"),
-    "address_has_house_number": ("address_quality", "Địa chỉ thiếu số nhà"),
+    "address_missing_house_number": ("address_quality", "Địa chỉ thiếu số nhà"),
     "address_parts_filled": ("address_quality", "Độ đầy đủ của địa chỉ"),
     "province_fail_rate_te": ("address_quality", "Tỷ lệ bom hàng của tỉnh/thành"),
     "is_gift": ("context", "Đơn quà tặng"),
@@ -43,6 +43,15 @@ SIGNALS = {
     "phone_minutes_since_prev_order": ("velocity", "Số phút từ đơn trước"),
     "phone_distinct_shops_all": ("velocity", "Số shop SĐT đã mua"),
 }
+
+
+def upgrade(features: dict) -> dict:
+    """Features stored before 15 Oct used `address_has_house_number` (1 = has one); the API name
+    `address_missing_house_number` is the inverse. ponytail: drop once those orders are gone."""
+    features = dict(features)  # a copy: the stored order is never changed
+    if "address_has_house_number" in features:
+        features["address_missing_house_number"] = 1 - features.pop("address_has_house_number")
+    return features
 
 
 def has_house_number(address: dict) -> int:
@@ -86,7 +95,7 @@ def compute_features(order: dict, history: list[dict], at, enc: dict) -> dict:
         "placed_dow": local.weekday(),
         "is_night": int(local.hour >= 22 or local.hour < 6),
         # address quality
-        "address_has_house_number": has_house_number(order["address"]),
+        "address_missing_house_number": 1 - has_house_number(order["address"]),
         "address_parts_filled": sum(
             order["address"].get(k) is not None for k in ("street", "ward", "province")
         ),

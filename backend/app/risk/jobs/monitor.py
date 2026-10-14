@@ -24,6 +24,7 @@ from sklearn.metrics import average_precision_score
 from app.data.orders import final_state
 from app.risk import artifacts
 from app.risk.engine import TIER_OPTIONS, TIER_RULE
+from app.risk.features import upgrade
 from app.risk.model import ACTION_COST, FAIL_COST, expected_cost, fit_model2
 
 WINDOW = timedelta(days=30)
@@ -170,7 +171,7 @@ def scored_rows(docs: list[dict]) -> pd.DataFrame:
                 "contact_action": assignment.get("contact_action"),
                 "random_slice": bool(assignment.get("random_slice")),
                 "probability": assignment.get("probability", scoring.get("probability")),
-                **features,
+                **upgrade(features),
             }
         )
     return pd.DataFrame(rows)

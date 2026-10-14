@@ -33,7 +33,7 @@ def pipe(monkeypatch):
         order_document(order, order_id="ord_test", shop_id="shop_a", phone_key=b"key", now=NOW)
     )
     fields = scored_fields("high", "call")
-    fields["scoring"]["features"] = {"phone_is_new": 1, "address_has_house_number": 0}
+    fields["scoring"]["features"] = {"phone_is_new": 1, "address_missing_house_number": 1}
     monkeypatch.setattr(engine, "score", lambda doc, history: deepcopy(fields))
     return Pipeline(store=store, log=FakeDecisionLog(), now=NOW)
 

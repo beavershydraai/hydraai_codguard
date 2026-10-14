@@ -34,7 +34,7 @@ FEATURES = frozenset(
         "placed_hour_vn",
         "placed_dow",
         "is_night",
-        "address_has_house_number",
+        "address_missing_house_number",
         "address_parts_filled",
         "province_fail_rate_te",
         "is_gift",
@@ -145,8 +145,8 @@ def _candidates(features: dict) -> list[dict]:
         if outcomes or count("phone_orders_all"):
             raise ValueError("Conflicting new-phone evidence")
         add("SĐT chưa có đơn hàng trước đây.", "phone_is_new")
-    if features.get("address_has_house_number") == 0:
-        add("Địa chỉ thiếu số nhà.", "address_missing_house_number")  # API key, as in top_signals
+    if features.get("address_missing_house_number") == 1:
+        add("Địa chỉ thiếu số nhà.", "address_missing_house_number")
     parts = count("address_parts_filled")
     if parts is not None and parts < 3:
         add(f"Địa chỉ mới có {parts} trên 3 phần thông tin cần thiết.", "address_parts_filled")

@@ -7,7 +7,7 @@ from datetime import timedelta
 import pandas as pd
 
 from app.data.orders import final_state
-from app.risk.features import compute_features
+from app.risk.features import compute_features, upgrade
 from app.risk.model import KEY_COLUMNS
 
 MATURITY = timedelta(days=14)  # E2.3 rule 5: outcomes of the last 14 days may still be missing
@@ -51,7 +51,7 @@ def build_table(docs: list[dict], rows, enc: dict) -> pd.DataFrame:
         province = assignment.get("province", d["address"].get("province"))
         frozen = assignment.get("features")
         if frozen:
-            features = dict(frozen)
+            features = upgrade(frozen)
             features["province_fail_rate_te"] = enc["province"].get(province, enc["p0"])
             features["phone_fail_rate_smoothed_all"] = (
                 features["phone_failed_all"] + M_SMOOTH * enc["p0"]

@@ -44,7 +44,7 @@ DOC = {
             "phone_failed_all": 2,
             "phone_outcomes_all": 4,
             "phone_is_new": 0,
-            "address_has_house_number": 1,
+            "address_missing_house_number": 0,
             "address_parts_filled": 3,
             "phone_orders_24h": 1,
             "cod_vs_phone_avg_ratio": 1.0,
@@ -165,7 +165,7 @@ async def test_missing_or_invalid_verifier_output_fails_the_assessment(response)
 
 async def test_verifier_cannot_add_evidence_the_analyst_did_not_select():
     doc = deepcopy(DOC)
-    doc["scoring"]["features"]["address_has_house_number"] = 0
+    doc["scoring"]["features"]["address_missing_house_number"] = 1
     invented_selection = {
         "text_vi": "Địa chỉ thiếu số nhà.",
         "signal_keys": ["address_missing_house_number"],
@@ -185,7 +185,7 @@ async def test_duplicate_reasons_are_returned_once():
     ("features", "reason"),
     [
         ({"phone_is_new": 1}, "SĐT chưa có đơn hàng trước đây."),
-        ({"address_has_house_number": 0}, "Địa chỉ thiếu số nhà."),
+        ({"address_missing_house_number": 1}, "Địa chỉ thiếu số nhà."),
         ({"address_parts_filled": 2}, "Địa chỉ mới có 2 trên 3 phần thông tin cần thiết."),
         ({"phone_orders_24h": 3}, "SĐT có 3 đơn hàng trước đó trong 24 giờ."),
         ({"cod_vs_phone_avg_ratio": 2}, "Tiền COD bằng 2 lần mức trung bình đơn trước của SĐT."),
@@ -196,9 +196,8 @@ async def test_candidate_reasons_describe_only_actual_feature_values(features, r
     doc["scoring"]["features"] = features
     model = FakeModel(responses=[{"reasons": []}, {"reasons": []}])
     await assess(doc, model=model)
-    api_key = {"address_has_house_number": "address_missing_house_number"}  # as in top_signals
     assert model.requests[0]["input"]["candidates"] == [
-        {"text_vi": reason, "signal_keys": [api_key.get(k, k) for k in features]}
+        {"text_vi": reason, "signal_keys": list(features)}
     ]
 
 
@@ -366,6 +365,7 @@ def test_every_reason_cites_a_key_that_top_signals_uses():
         "phone_outcomes_all": 2,
         "phone_orders_24h": 3,
         "cod_vs_phone_avg_ratio": 2,
+        "address_missing_house_number": 1,
     }
     every = top_signals(features, dict.fromkeys(SIGNALS, 1.0), top=len(SIGNALS))
     cited = {key for reason in _candidates(features) for key in reason["signal_keys"]}
