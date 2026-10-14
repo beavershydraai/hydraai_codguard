@@ -1,5 +1,5 @@
 import type { LinkProps } from '@tanstack/react-router'
-import { ClipboardCheckIcon, HouseIcon, PackageIcon, SettingsIcon } from 'lucide-react'
+import { ChartLineIcon, ClipboardCheckIcon, HouseIcon, PackageIcon, SettingsIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import type { RiskTier } from '@/api/gen'
@@ -28,6 +28,7 @@ export const NAV_MAIN: NavItem[] = [
   { id: 'overview', label: 'Tổng quan', icon: <HouseIcon />, to: '/', exact: true },
   { id: 'orders', label: 'Đơn hàng', icon: <PackageIcon />, to: '/orders' },
   { id: 'review', label: 'Chờ duyệt', icon: <ClipboardCheckIcon />, to: '/review' },
+  { id: 'backtest', label: 'Backtest', icon: <ChartLineIcon />, to: '/backtest' },
 ]
 
 // ── Tier shortcuts (the block's "Resources" group) ──

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ShopRouteImport } from './routes/_shop'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ShopIndexRouteImport } from './routes/_shop/index'
+import { Route as ShopBacktestRouteImport } from './routes/_shop/backtest'
 import { Route as ShopReviewRouteImport } from './routes/_shop/review'
 import { Route as ShopSettingsRouteImport } from './routes/_shop/settings'
 import { Route as CTokenRouteImport } from './routes/c/$token'
@@ -30,6 +31,11 @@ const LoginRoute = LoginRouteImport.update({
 const ShopIndexRoute = ShopIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => ShopRoute,
+} as any)
+const ShopBacktestRoute = ShopBacktestRouteImport.update({
+  id: '/backtest',
+  path: '/backtest',
   getParentRoute: () => ShopRoute,
 } as any)
 const ShopReviewRoute = ShopReviewRouteImport.update({
@@ -61,6 +67,7 @@ const ShopOrdersOrderIdRoute = ShopOrdersOrderIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof ShopIndexRoute
   '/login': typeof LoginRoute
+  '/backtest': typeof ShopBacktestRoute
   '/review': typeof ShopReviewRoute
   '/settings': typeof ShopSettingsRoute
   '/c/$token': typeof CTokenRoute
@@ -69,6 +76,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/backtest': typeof ShopBacktestRoute
   '/review': typeof ShopReviewRoute
   '/settings': typeof ShopSettingsRoute
   '/c/$token': typeof CTokenRoute
@@ -80,6 +88,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_shop': typeof ShopRouteWithChildren
   '/login': typeof LoginRoute
+  '/_shop/backtest': typeof ShopBacktestRoute
   '/_shop/review': typeof ShopReviewRoute
   '/_shop/settings': typeof ShopSettingsRoute
   '/c/$token': typeof CTokenRoute
@@ -92,6 +101,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/backtest'
     | '/review'
     | '/settings'
     | '/c/$token'
@@ -100,6 +110,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/backtest'
     | '/review'
     | '/settings'
     | '/c/$token'
@@ -110,6 +121,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_shop'
     | '/login'
+    | '/_shop/backtest'
     | '/_shop/review'
     | '/_shop/settings'
     | '/c/$token'
@@ -145,6 +157,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof ShopIndexRouteImport
+      parentRoute: typeof ShopRoute
+    }
+    '/_shop/backtest': {
+      id: '/_shop/backtest'
+      path: '/backtest'
+      fullPath: '/backtest'
+      preLoaderRoute: typeof ShopBacktestRouteImport
       parentRoute: typeof ShopRoute
     }
     '/_shop/review': {
@@ -186,6 +205,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface ShopRouteChildren {
+  ShopBacktestRoute: typeof ShopBacktestRoute
   ShopReviewRoute: typeof ShopReviewRoute
   ShopSettingsRoute: typeof ShopSettingsRoute
   ShopIndexRoute: typeof ShopIndexRoute
@@ -194,6 +214,7 @@ interface ShopRouteChildren {
 }
 
 const ShopRouteChildren: ShopRouteChildren = {
+  ShopBacktestRoute: ShopBacktestRoute,
   ShopReviewRoute: ShopReviewRoute,
   ShopSettingsRoute: ShopSettingsRoute,
   ShopIndexRoute: ShopIndexRoute,

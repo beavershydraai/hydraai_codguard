@@ -33,6 +33,7 @@
     "radix-ui": "^1.8.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "recharts": "3.8.0",
     "shadcn": "^4.21.5",
     "sonner": "^2.0.8",
     "tailwindcss": "^4.3.3",
