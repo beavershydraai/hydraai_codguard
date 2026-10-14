@@ -10,7 +10,7 @@ from app.risk import artifacts, engine
 from app.risk.features import compute_features, has_house_number
 from app.risk.jobs import monitor
 from app.risk.jobs.train import train
-from app.risk.model import explain1, explainer1
+from app.risk.model import explain1, explainer1, top_signals
 from app.schemas.scoring import Signal
 from tests.risk_data import START, orders
 
@@ -140,19 +140,38 @@ def test_engine_scores_with_the_latest_model(trained, tmp_path, monkeypatch):
 def test_the_house_number_signal_uses_the_api_key(trained):
     _, model, _, table = trained
     features = table[model["cols"]].iloc[0].to_dict() | {"address_has_house_number": 0}
-    signals = explain1(model, explainer1(model), features, top=len(model["cols"]))
+    shap = explain1(model, explainer1(model), features)
+    signals = top_signals(features, shap["contributions"], top=len(model["cols"]))
     (house,) = [s for s in signals if "house_number" in s["key"]]
     assert (house["key"], house["value"]) == ("address_missing_house_number", 1)
+    assert house["contribution"] == shap["contributions"]["address_has_house_number"]
 
 
-def test_top_signals_add_up_to_the_change_from_the_average_order(trained):
-    docs, model, _, table = trained
-    explainer = explainer1(model)
+def test_shap_adds_up_to_the_change_from_the_average_order(trained):
+    _, model, _, table = trained
     features = table[model["cols"]].iloc[0].to_dict()
-    signals = explain1(model, explainer, features, top=len(model["cols"]))
+    shap = explain1(model, explainer1(model), features)
     raw = model["clf"].predict_proba(table[model["cols"]].iloc[[0]])[0, 1]
-    base = 1 / (1 + np.exp(-np.ravel(explainer.expected_value)[0]))
-    assert sum(s["contribution"] for s in signals) == pytest.approx(raw - base, abs=1e-3)
+    assert shap["prediction"] == pytest.approx(raw, abs=1e-4)
+    assert shap["base_value"] + sum(shap["contributions"].values()) == pytest.approx(raw, abs=1e-3)
+    assert set(shap["contributions"]) == set(model["cols"])
+
+
+def test_an_explanation_error_never_blocks_scoring(trained, tmp_path, monkeypatch):
+    docs, model, _, _ = trained
+    monkeypatch.setenv("MODEL_DIR", str(tmp_path))
+    artifacts.write("latest/model1.pkl", pickle.dumps(model))
+    engine._cache.update(at=0.0, models=None)
+
+    def broken(*args):
+        raise RuntimeError("explainer unavailable")
+
+    monkeypatch.setattr(engine, "explain1", broken)
+    fields = engine.score(docs[0] | {"placed_at": NOW, "order_id": "new"}, [])
+    engine._cache.update(at=0.0, models=None)
+    assert 0 <= fields["scoring"]["probability"] <= 1
+    assert fields["scoring"]["shap"]["available"] is False
+    assert fields["scoring"]["top_signals"] == []
 
 
 def test_engine_without_a_model_leaves_the_order_unscored(tmp_path, monkeypatch):

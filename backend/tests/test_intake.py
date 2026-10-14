@@ -5,6 +5,7 @@ from datetime import timedelta
 import pytest
 from fastapi.testclient import TestClient
 
+from app.agents.log import get_decision_log
 from app.data.store import get_store
 from app.main import create_app
 from app.risk import artifacts, engine
@@ -25,6 +26,10 @@ class FakeStore:
         self.docs[doc["order_id"]] = doc
         return None
 
+    def get(self, order_id):
+        doc = self.docs.get(order_id)
+        return deepcopy(doc) if doc else None
+
     def update(self, order_id, fields):
         self.docs[order_id].update(fields)
 
@@ -43,15 +48,41 @@ class FakeStore:
         ]
 
 
+class FakeDecisionLog:
+    """In-memory stand-in for app.agents.log.DecisionLog, with the same atomic claim."""
+
+    def __init__(self):
+        self.rows = {}
+        self.claims = {}
+
+    def write(self, row):
+        self.rows[row["order_id"], row["decided_at"]] = deepcopy(row)
+
+    def for_order(self, order_id):
+        rows = [r for r in self.rows.values() if r["order_id"] == order_id]
+        return sorted(rows, key=lambda r: r["decided_at"])
+
+    def claim(self, key, record):
+        if key in self.claims:
+            return False
+        self.claims[key] = deepcopy(record)
+        return True
+
+    def claimed(self, key):
+        return self.claims.get(key)
+
+
 @pytest.fixture
 def api(monkeypatch, tmp_path):
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
     monkeypatch.setenv("INTAKE_API_KEYS", "key-a:shop_a,key-b:shop_b")
     monkeypatch.setenv("PHONE_HASH_KEY", "test-key")
     monkeypatch.setenv("MODEL_DIR", str(tmp_path))  # no model yet
     engine._cache.update(at=0.0, models=None)
-    store = FakeStore()
+    store, decisions = FakeStore(), FakeDecisionLog()
     app = create_app()
     app.dependency_overrides[get_store] = lambda: store
+    app.dependency_overrides[get_decision_log] = lambda: decisions
     return TestClient(app), store
 
 
@@ -126,7 +157,8 @@ def test_intake_returns_the_decided_status_and_duplicate_preserves_it(api, monke
     assert [e["type"] for e in doc["timeline"]] == ["decided", "scored", "created"]
 
 
-def test_scoring_failure_does_not_lose_an_intake_order(api, monkeypatch):
+def test_scoring_failure_holds_an_intake_order_for_review(api, monkeypatch):
+    """E4.7: a pipeline that keeps failing hands the order to a person, never to the buyer."""
     client, store = api
 
     def fail(doc, history):
@@ -135,6 +167,8 @@ def test_scoring_failure_does_not_lose_an_intake_order(api, monkeypatch):
     monkeypatch.setattr(engine, "score", fail)
     response = post(client, "key-a")
     assert response.status_code == 202
-    doc = store.docs[response.json()["order_id"]]
-    assert doc["status"] == "new"
-    assert doc["scoring"] is None and doc["decision"] is None
+    body = response.json()
+    assert body["status"] == "pending_review"
+    doc = store.docs[body["order_id"]]
+    assert doc["scoring"] is None
+    assert doc["decision"]["action"] == "hold_for_review"

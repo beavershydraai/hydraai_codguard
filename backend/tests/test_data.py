@@ -123,10 +123,19 @@ def test_snapshot_row_excludes_lifecycle_outcomes_but_keeps_the_label():
         "score_history": [{"probability": 0.9}],
         "confirmation": {"at": NOW, "via": "link"},
         "cancel": None,
+        "attempts": {"ai_call": 2},
     }
     row = snapshot_row(doc)
     assert row["is_failed"] == 0
-    for field in ("status", "decision", "score_history", "timeline", "confirmation", "cancel"):
+    for field in (
+        "status",
+        "decision",
+        "score_history",
+        "timeline",
+        "confirmation",
+        "cancel",
+        "attempts",
+    ):
         assert field not in row
 
 

@@ -55,23 +55,38 @@ def explainer1(model: dict):
     return shap.TreeExplainer(model["clf"])
 
 
-def explain1(model: dict, explainer, features: dict, top: int = 5) -> list[dict]:
-    """The `top` features that moved this order's risk most, as Signal dicts (E2.4).
+def explain1(model: dict, explainer, features: dict) -> dict:
+    """Exact TreeSHAP contributions of every feature to this order's risk (E2.4).
 
     SHAP values are in log-odds. They are rescaled so they add up to the change in the model's
-    probability from the average order to this one: positive raises risk, negative lowers it.
-    Calibration is monotone, so it keeps their order and sign.
+    probability from the average order (`base_value`) to this one (`prediction`): positive raises
+    risk. This is the boosted model's probability before calibration; calibration is monotone,
+    so it keeps their order and sign.
     """
     x = pd.DataFrame([features])[model["cols"]]
     phi = explainer.shap_values(x)[0]
     base, logit = float(np.ravel(explainer.expected_value)[0]), float(phi.sum())
-    change = 1 / (1 + np.exp(-(base + logit))) - 1 / (1 + np.exp(-base))
-    scale = change / logit if abs(logit) > 1e-9 else 0.0
+    before, after = 1 / (1 + np.exp(-base)), 1 / (1 + np.exp(-(base + logit)))
+    scale = (after - before) / logit if abs(logit) > 1e-9 else 0.0
+    return {
+        "available": True,
+        "method": "tree_shap",
+        "approximate": False,
+        "output": "model_failure_probability",
+        "base_value": round(float(before), 4),
+        "prediction": round(float(after), 4),
+        "contributions": {
+            c: round(float(v * scale), 4) for c, v in zip(model["cols"], phi, strict=True)
+        },
+    }
+
+
+def top_signals(features: dict, contributions: dict, top: int = 5) -> list[dict]:
+    """The `top` largest contributions as API Signal dicts (key, group, label_vi, value)."""
     signals = []
-    for i in np.argsort(-np.abs(phi))[:top]:
-        key = model["cols"][i]
+    for key in sorted(contributions, key=lambda k: -abs(contributions[k]))[:top]:
         group, label = SIGNALS[key]
-        value = features[key]
+        value, contribution = features[key], contributions[key]
         if key == "address_has_house_number":  # the API has named the inverse flag since 8 Oct
             key, value = "address_missing_house_number", 1 - value
         signals.append(
@@ -80,7 +95,7 @@ def explain1(model: dict, explainer, features: dict, top: int = 5) -> list[dict]
                 "group": group,
                 "label_vi": label,
                 "value": CHANNELS[int(value)] if key == "channel" else round(value, 4),
-                "contribution": round(float(phi[i] * scale), 4),
+                "contribution": contribution,
             }
         )
     return signals
