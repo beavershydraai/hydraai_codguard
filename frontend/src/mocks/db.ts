@@ -476,6 +476,9 @@ export class MockDb {
         block_reasons: ['already_confirmed'],
       })
     }
+    if (order.current_score?.hard_rules?.includes('invalid_phone')) {
+      throw new MockError(409, 'contact_blocked', 'The phone number is invalid.', { block_reasons: [] })
+    }
     const attempt = (order.calls?.length ?? 0) + 1
     if (attempt > 2) {
       throw new MockError(409, 'contact_blocked', 'Both call attempts have been used.', {
@@ -515,7 +518,7 @@ export class MockDb {
   }
 
   /** Simulated phone (E5.2 UI): moves a call along and records its single outcome. */
-  progressCall(callId: string, outcome?: CallOutcome, summaryVi?: string): Call {
+  progressCall(callId: string, outcome?: CallOutcome, summaryVi?: string, newAddress?: string): Call {
     const call = this.calls.get(callId)
     if (!call) throw new MockError(404, 'not_found', `Call ${callId} not found.`)
     const now = nowIso()
@@ -529,6 +532,13 @@ export class MockDb {
       call.duration_seconds = Math.round((Date.parse(now) - Date.parse(call.started_at)) / 1000)
       call.outcome = outcome
       call.summary_vi = summaryVi ?? null
+      if (outcome === 'edited' && newAddress) {
+        call.changes = call.order_ids.map((orderId) => ({
+          order_id: orderId,
+          field: 'delivery_address' as const,
+          new_value: newAddress,
+        }))
+      }
       for (const orderId of call.order_ids) {
         const order = this.orders.get(orderId)
         if (!order) continue
@@ -539,6 +549,10 @@ export class MockDb {
             : c,
         )
         this.event(order, 'call_completed', 'ai_call', `Kết quả cuộc gọi: ${CALL_OUTCOME_VI[outcome]}.`)
+        if (outcome === 'edited' && newAddress) {
+          order.address = { raw: newAddress }
+          this.event(order, 'edited', 'ai_call', 'Cập nhật địa chỉ theo cuộc gọi.')
+        }
         if (outcome === 'confirmed' || outcome === 'edited') this.setStatus(order, 'cleared_to_ship')
         if (outcome === 'cancelled') this.setStatus(order, 'cancelled')
         if (outcome === 'not_ordered') {

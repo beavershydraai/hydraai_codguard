@@ -167,6 +167,14 @@ const PRODUCTS: { sku: string; name: string; variants: string[]; price: number }
   { sku: 'DN-07', name: 'Set đồ ngủ lụa', variants: ['Hồng / M', 'Xanh / L'], price: 279_000 },
 ]
 
+const CHANNEL_NAME: Record<SalesChannel, string> = {
+  facebook: 'Facebook',
+  tiktok: 'TikTok',
+  zalo: 'Zalo',
+  website: 'website',
+  other: 'kênh khác',
+}
+
 const CHANNEL_PREFIX: Record<SalesChannel, string> = {
   facebook: 'FB',
   tiktok: 'TT',
@@ -488,7 +496,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
         at: iso(placed),
         type: 'created',
         actor: 'system',
-        message_vi: `Nhận đơn từ ${channel === 'website' ? 'website' : channel}.`,
+        message_vi: `Nhận đơn từ ${CHANNEL_NAME[channel]}.`,
       },
     ]
     let status: OrderStatus = 'new'
@@ -505,7 +513,10 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
       if (scenario === 'invalid_phone') hardRules.push('invalid_phone')
       const skipped = scenario === 'prepaid_skip'
       const tier: RiskTier | null = skipped ? null : tierFor(probability)
-      const { signals, reasons } = skipped ? { signals: [], reasons: [] } : buildSignals(r, probability, cod)
+      const { signals, reasons } =
+        skipped || scenario === 'invalid_phone'
+          ? { signals: [], reasons: [] }
+          : buildSignals(r, probability, cod)
       const invalidReason: Reason[] =
         scenario === 'invalid_phone'
           ? [
