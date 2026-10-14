@@ -21,3 +21,5 @@ node_modules/
 Thumbs.db
 .idea/
 .vscode/
+.claude/
+.playwright-mcp/

@@ -19,7 +19,7 @@ It is a prototype for the Google Cloud AI Builder Cup 2026 (Retail & Commerce tr
 
 ## Status
 
-The backend API contract exists; the rest of the application code does not yet. The layout and stack below are the plan from `README.md`, and commands marked "Planned" have not been run. When you add the first real code for an area, replace the planned command with the real one, here and in the README, in the same PR. Never document a command you have not run.
+The backend and the frontend scaffold exist; most shop screens are still placeholders. The layout and stack below are the plan from `README.md`, and commands marked "Planned" have not been run. When you add the first real code for an area, replace the planned command with the real one, here and in the README, in the same PR. Never document a command you have not run.
 
 ## Planned layout
 
@@ -35,7 +35,10 @@ backend/        Python service on Cloud Run: API, decision engine, ADK agents
     prompts/    AI call system instruction and the record_call_outcome tool
   tests/
 docs/           Technical notes (Gemini Live integration)
-frontend/       Shop web app + buyer confirmation page (Firebase Hosting)
+frontend/       Shop web app + buyer confirmation page (Vite + React, Firebase Hosting)
+  src/routes/   TanStack Router file routes; _shop/ is the shop layout, c/ the public buyer page
+  src/api/gen/  Hey API client generated from api/openapi.yaml (do not edit)
+  src/components/ui/, src/components/reui/  shadcn and ReUI registry components
 ml/             Data prep, synthetic data generator, BigQuery ML SQL, backtest
 data/seed/      Pseudonymised demo data only
 infra/          Deployment and Firebase config
@@ -45,7 +48,9 @@ scripts/        Demo reset, abuse simulation, call test runner
 ## Stack
 
 - Backend: Python 3.11+, ASGI app served by uvicorn (`app.main:app`)
-- Frontend: Node.js 20+
+- Frontend: Node.js 20+, pnpm, React 19 + TypeScript on Vite, Tailwind CSS v4, shadcn/ui and ReUI components, TanStack Router (file-based) and TanStack Query, Zustand for client state, Hey API for the API client
+- Use ReUI's `data-grid` for data tables, not a hand-rolled `<table>`. Install registry components with the shadcn CLI rather than writing or editing them by hand (see `frontend/README.md`).
+- Server state lives in TanStack Query through the generated `*Options` helpers; Zustand only holds client state such as the auth token.
 - AI: Gemini (signal extraction and reasons), Gemini Live API (voice), Agent Development Kit (orchestration)
 - Data: BigQuery ML boosted trees (risk model), BigQuery (training data, analytics), Firestore (app state)
 - Secrets in Secret Manager; region `asia-southeast1`. Exception: Gemini Live API sessions run in `GEMINI_LIVE_LOCATION` (`us-central1`), because the Live API is not served from Asia regions.
@@ -71,14 +76,18 @@ Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 | Monitor the models | `uv run python -m app.risk.jobs.monitor` (same env); in the cloud: Cloud Run job `codguard-monitor`, daily |
 | Build and run the backend image | `docker build -t codguard-backend backend` then `docker run -p 8080:8080 codguard-backend` (from the repo root) |
 | Mock API for the frontend | `npx @stoplight/prism-cli mock api/openapi.yaml` (from the repo root) |
-| Frontend dev server | Planned: `cd frontend && npm run dev` |
+| Install frontend dependencies | `pnpm install` (from `frontend/`, as are the frontend commands below) |
+| Frontend dev server | `pnpm dev` (http://localhost:5173, proxies `/api` to the Prism mock on :4010; `API_PROXY_TARGET` overrides) |
+| Frontend lint, format, types, tests | `pnpm lint && pnpm format:check && pnpm typecheck && pnpm test` |
+| Frontend build | `pnpm build` |
+| Regenerate the frontend API client | `pnpm generate:api` (writes `frontend/src/api/gen/` from `api/openapi.yaml`) |
 | Reset demo data | Planned: `python scripts/reset_demo.py` |
 | Deploy | Automatic: every push to `main` that passes CI deploys the backend to Cloud Run (`codguard-api`, project `ai-codguard`, `asia-southeast1`). Do not deploy by hand unless asked. |
 
 ## API contract
 
 - The contract is defined in code: Pydantic models in `backend/app/schemas/` and routes in `backend/app/api/v1/`. `api/openapi.yaml` is generated from them and committed.
-- Any change to a schema or route must re-export `api/openapi.yaml` in the same PR. `tests/test_contract.py` fails when the file is out of date.
+- Any change to a schema or route must re-export `api/openapi.yaml` and regenerate the frontend client (`pnpm generate:api`) in the same PR. `tests/test_contract.py` fails when the YAML is out of date; the frontend CI job fails when `frontend/src/api/gen/` is.
 - Routes that are not implemented yet return 501 `not_implemented`. The frontend works against the Prism mock until then; see `api/README.md`.
 - Every schema example must validate against its model (also enforced by the tests), because the mock server returns those examples.
 
@@ -173,6 +182,7 @@ GitHub Actions runs `.github/workflows/ci.yml` on every PR and on every push to 
 | Job | What it checks |
 |---|---|
 | Backend (lint, tests, API contract) | `uv sync --locked`, `ruff check`, `ruff format --check`, `pytest`. The tests also fail when `api/openapi.yaml` is out of date, is not valid OpenAPI, or has an example that does not match its schema. |
+| Frontend (lint, types, tests, build) | `pnpm install --frozen-lockfile`, generated API client matches `api/openapi.yaml`, `oxlint`, `prettier --check`, `tsc -b`, `vitest`, `vite build`. |
 | Backend image | Builds `backend/Dockerfile` and smoke-tests the container: `/health`, `/openapi.json`, a 501 stub, non-root user, `PORT` override. On pushes to `main` it also publishes `ghcr.io/beavershydraai/hydraai_codguard/backend` with tags `sha-<commit>` and `main`. |
 | Deploy (main only) | Copies the tested image from GHCR to Artifact Registry, deploys it to Cloud Run as `codguard-runtime` together with the jobs `codguard-train` and `codguard-monitor` (as `codguard-trainer`), then checks `/health` on the live URL (not `/healthz`: Cloud Run reserves it). Authenticates with Workload Identity Federation; no GCP key is stored in GitHub. |
 | Secret scan (gitleaks) | No keys or tokens in the PR's new commits. |

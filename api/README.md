@@ -6,22 +6,18 @@ confirmation page and external sales tools. It is OpenAPI 3.1, generated from th
 
 ## Use it from the frontend
 
-Generate TypeScript types:
+The frontend calls the API through a client generated with [Hey API](https://heyapi.dev)
+(`frontend/openapi-ts.config.ts`): typed SDK functions plus TanStack Query options.
 
 ```bash
-npx openapi-typescript api/openapi.yaml -o frontend/src/api/schema.d.ts
+cd frontend && pnpm generate:api      # writes frontend/src/api/gen/
 ```
 
-Call the API with the generated types, for example with `openapi-fetch`:
-
 ```ts
-import createClient from "openapi-fetch";
-import type { paths } from "./schema";
+import { useQuery } from "@tanstack/react-query";
+import { listOrdersOptions } from "@/api/gen/@tanstack/react-query.gen";
 
-const api = createClient<paths>({ baseUrl: import.meta.env.VITE_API_URL });
-const { data, error } = await api.GET("/api/v1/orders", {
-  params: { query: { status: ["pending_review"], limit: 50 } },
-});
+const { data } = useQuery(listOrdersOptions({ query: { status: ["pending_review"], limit: 50 } }));
 ```
 
 ## Mock server
@@ -55,8 +51,9 @@ npx @stoplight/prism-cli mock api/openapi.yaml        # http://127.0.0.1:4010
 
 1. Edit the Pydantic models or routes in `backend/`.
 2. Run `uv run python -m app.openapi_export` in `backend/`.
-3. Commit both. `uv run pytest` fails if `openapi.yaml` is out of date or an example does not
-   match its schema.
+3. Run `pnpm generate:api` in `frontend/` to regenerate the client.
+4. Commit all three. `uv run pytest` fails if `openapi.yaml` is out of date or an example does not
+   match its schema; the frontend CI job fails if `frontend/src/api/gen/` is out of date.
 
 Mention breaking changes (removed or renamed fields, new required fields) in the PR description
 so the frontend can follow.

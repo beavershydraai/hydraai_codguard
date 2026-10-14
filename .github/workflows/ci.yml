@@ -39,6 +39,44 @@ jobs:
       - name: Tests (includes API contract checks)
         run: uv run pytest -q
 
+  frontend:
+    name: Frontend (lint, types, tests, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6  # reads the version from packageManager in package.json
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: API client matches api/openapi.yaml
+        run: |
+          pnpm generate:api
+          if [ -n "$(git status --porcelain src/api/gen)" ]; then
+            git status --short src/api/gen
+            echo "::error::src/api/gen is out of date. Run 'pnpm generate:api' in frontend/ and commit the result."
+            exit 1
+          fi
+      - name: Lint
+        run: pnpm lint
+      - name: Format
+        run: pnpm format:check
+      - name: Type check
+        run: pnpm typecheck
+      - name: Tests
+        run: pnpm test
+      - name: Build
+        run: pnpm build
+
   image:
     name: Backend image (build, smoke test, publish on main)
     runs-on: ubuntu-latest
@@ -192,7 +230,7 @@ jobs:
   ci-result:
     name: CI result
     if: always()
-    needs: [backend, image, deploy, secrets, privacy]
+    needs: [backend, frontend, image, deploy, secrets, privacy]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

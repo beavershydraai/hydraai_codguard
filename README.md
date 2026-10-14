@@ -111,7 +111,7 @@ flowchart LR
 | Agent orchestration | Agent Development Kit (ADK) |
 | Risk model | BigQuery ML (boosted trees, with explanations per prediction) |
 | Backend | Python service on Cloud Run |
-| Frontend | Web app on Firebase Hosting |
+| Frontend | React + TypeScript on Vite: shadcn/ui and ReUI, TanStack Router and Query, Zustand, Hey API client; Firebase Hosting |
 | Data | Firestore (orders and app state, see [data model](docs/data-model.md)), Cloud Storage (training snapshots, models) |
 | Secrets | Secret Manager |
 | Delivery outcomes | GHN staging API, CSV import |
@@ -211,7 +211,7 @@ cod-guard/
 │   │   └── prompts/    # AI call system instruction + outcome tool
 │   └── tests/
 ├── docs/               # technical notes (Gemini Live integration)
-├── frontend/           # Shop web app + buyer confirmation page
+├── frontend/           # Shop web app + buyer confirmation page (Vite + React)
 ├── ml/                 # data prep, synthetic data generator, BigQuery ML SQL, backtest
 ├── data/
 │   └── seed/           # pseudonymised demo data
@@ -233,7 +233,7 @@ cod-guard/
 - Gemini API access on Google Cloud (Vertex AI / Gemini Enterprise Agent Platform)
 - BigQuery and Firestore enabled
 - `gcloud` CLI and Firebase CLI
-- Python 3.11+ and Node.js 20+
+- Python 3.11+ and Node.js 20+ with [pnpm](https://pnpm.io/) (`corepack enable` installs the version pinned in `frontend/package.json`)
 - (Optional) GHN staging account for delivery-status testing
 
 ### 1. Clone and configure
@@ -279,10 +279,14 @@ Endpoints are defined but return `501 not_implemented` until each one is built. 
 ### 3. Run the frontend locally
 
 ```bash
+npx @stoplight/prism-cli mock api/openapi.yaml   # mock API on :4010, from the repo root
 cd frontend
-npm install
-npm run dev
+cp .env.example .env.local
+pnpm install
+pnpm dev                                         # http://localhost:5173
 ```
+
+The dev server proxies `/api` to the Prism mock. Set `API_PROXY_TARGET=http://127.0.0.1:8080` to use the local backend instead. See [`frontend/README.md`](frontend/README.md) for the other commands.
 
 ### 4. Load demo data
 
