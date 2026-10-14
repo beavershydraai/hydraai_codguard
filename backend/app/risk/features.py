@@ -45,15 +45,6 @@ SIGNALS = {
 }
 
 
-def upgrade(features: dict) -> dict:
-    """Features stored before 15 Oct used `address_has_house_number` (1 = has one); the API name
-    `address_missing_house_number` is the inverse. ponytail: drop once those orders are gone."""
-    features = dict(features)  # a copy: the stored order is never changed
-    if "address_has_house_number" in features:
-        features["address_missing_house_number"] = 1 - features.pop("address_has_house_number")
-    return features
-
-
 def has_house_number(address: dict) -> int:
     """A number before the ward ('Số 12 ...', '12/3 ...'). Digits in 'Phường 5' do not count."""
     head = address.get("street") or address["raw"].split(",")[0]

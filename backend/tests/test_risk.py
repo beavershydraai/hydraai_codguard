@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from app.risk import artifacts, engine
-from app.risk.features import compute_features, has_house_number, upgrade
+from app.risk.features import compute_features, has_house_number
 from app.risk.jobs import monitor
 from app.risk.jobs.train import train
 from app.risk.model import explain1, explainer1, top_signals
@@ -22,14 +22,6 @@ def test_house_number_ignores_digits_in_the_ward():
     assert has_house_number({"street": "Số 12 đường A", "raw": "x"}) == 1
     assert has_house_number({"street": None, "raw": "gần chợ, Phường 5, Hà Nội"}) == 0
     assert has_house_number({"street": None, "raw": "12/3 hẻm B, Phường 5, Hà Nội"}) == 1
-
-
-def test_features_stored_under_the_old_name_are_upgraded():
-    assert upgrade({"address_has_house_number": 1, "is_night": 0}) == {
-        "is_night": 0,
-        "address_missing_house_number": 0,
-    }
-    assert upgrade({"address_missing_house_number": 1}) == {"address_missing_house_number": 1}
 
 
 def test_outcomes_known_after_the_order_are_not_used():
@@ -117,6 +109,13 @@ def test_candidate_must_beat_the_current_model(trained):
     docs, model, _, _ = trained
     _, report, _ = train(docs, NOW, model)
     assert report["promoted"] is False  # same data, same score: not better
+
+
+def test_a_model_with_other_columns_is_replaced_not_compared(trained):
+    docs, model, _, _ = trained
+    old = model | {"cols": [*model["cols"][:-1], "address_has_house_number"]}
+    _, report, _ = train(docs, NOW, old)
+    assert report["promoted"] is True and "current" not in report
 
 
 def test_engine_scores_with_the_latest_model(trained, tmp_path, monkeypatch):
