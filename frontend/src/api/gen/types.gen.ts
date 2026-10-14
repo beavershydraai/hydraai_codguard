@@ -753,6 +753,43 @@ export type LiftSeries = {
 }
 
 /**
+ * LoginRequest
+ */
+export type LoginRequest = {
+  /**
+   * Username
+   */
+  username: string
+  /**
+   * Password
+   */
+  password: string
+}
+
+/**
+ * LoginResponse
+ */
+export type LoginResponse = {
+  /**
+   * Access Token
+   *
+   * Send as `Authorization: Bearer <token>`.
+   */
+  access_token: string
+  /**
+   * Token Type
+   */
+  token_type?: 'bearer'
+  /**
+   * Expires At
+   *
+   * The token stops working after this time.
+   */
+  expires_at: string
+  user: Me
+}
+
+/**
  * Me
  */
 export type Me = {
@@ -1579,6 +1616,35 @@ export type TierPolicy = {
    */
   no_response_after_minutes?: number | null
 }
+
+export type LoginData = {
+  body: LoginRequest
+  path?: never
+  query?: never
+  url: '/api/v1/auth/login'
+}
+
+export type LoginErrors = {
+  /**
+   * Missing or invalid credentials.
+   */
+  401: ProblemDetail
+  /**
+   * Request body or parameters failed validation. See `errors`.
+   */
+  422: ProblemDetail
+}
+
+export type LoginError = LoginErrors[keyof LoginErrors]
+
+export type LoginResponses = {
+  /**
+   * Successful Response
+   */
+  200: LoginResponse
+}
+
+export type LoginResponse2 = LoginResponses[keyof LoginResponses]
 
 export type GetMeData = {
   body?: never

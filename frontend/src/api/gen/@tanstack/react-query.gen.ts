@@ -23,6 +23,7 @@ import {
   intakeOrder,
   listOrders,
   listPolicyVersions,
+  login,
   type Options,
   overrideOrder,
   recordDeliveryOutcomes,
@@ -77,6 +78,9 @@ import type {
   ListPolicyVersionsData,
   ListPolicyVersionsError,
   ListPolicyVersionsResponse,
+  LoginData,
+  LoginError,
+  LoginResponse2,
   OverrideOrderData,
   OverrideOrderError,
   OverrideOrderResponse,
@@ -105,6 +109,27 @@ import type {
   UpdateShopError,
   UpdateShopResponse,
 } from '../types.gen'
+
+/**
+ * Sign in to the shop app
+ *
+ * Exchanges a username and password for a bearer access token valid for 12 hours. A stand-in for Firebase Auth (E7.1): the only account is the admin account configured on the server.
+ */
+export const loginMutation = (
+  options?: Partial<Options<LoginData>>,
+): UseMutationOptions<LoginResponse2, LoginError, Options<LoginData>> => {
+  const mutationOptions: UseMutationOptions<LoginResponse2, LoginError, Options<LoginData>> = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await login({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      })
+      return data
+    },
+  }
+  return mutationOptions
+}
 
 export type QueryKey<TOptions extends Options> = [
   Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {

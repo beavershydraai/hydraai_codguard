@@ -52,6 +52,9 @@ import type {
   ListPolicyVersionsData,
   ListPolicyVersionsErrors,
   ListPolicyVersionsResponses,
+  LoginData,
+  LoginErrors,
+  LoginResponses,
   OverrideOrderData,
   OverrideOrderErrors,
   OverrideOrderResponses,
@@ -98,6 +101,23 @@ export type Options<
    */
   meta?: keyof ClientMeta extends never ? Record<string, unknown> : ClientMeta
 }
+
+/**
+ * Sign in to the shop app
+ *
+ * Exchanges a username and password for a bearer access token valid for 12 hours. A stand-in for Firebase Auth (E7.1): the only account is the admin account configured on the server.
+ */
+export const login = <ThrowOnError extends boolean = false>(
+  options: Options<LoginData, ThrowOnError>,
+): RequestResult<LoginResponses, LoginErrors, ThrowOnError> =>
+  (options.client ?? client).post<LoginResponses, LoginErrors, ThrowOnError>({
+    url: '/api/v1/auth/login',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  })
 
 /**
  * Current user
