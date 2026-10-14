@@ -112,7 +112,7 @@ These rules come from the README and the epics. Code and tests must enforce them
 - Editing an order before it ships triggers a rescore. A confirmed order is never contacted again.
 - A new order runs the pipeline at intake, with no one pressing anything: `load_order → score → decide → act`. Only the deterministic engine in `app/decision` picks the action; an LLM may write the wording of a message but never decides.
 - Every way out of the pipeline that is not a decision ends in review: a run that still fails after its retries, an action with no branch of its own, and an event the L4 table does not know. Nothing reaches the buyer on an error.
-- A send is claimed under `order_id + action` before it happens, so a retry, a redelivered webhook or a rerun never contacts the buyer twice.
+- A send is claimed before it happens, so a retry, a redelivered webhook or a rerun never contacts the buyer twice. A confirmation link or deposit request is claimed under `order_id + action`. Each of the two AI call attempts has its own claim (`order_id:ai_call:1`, `:2`) tied to the decision it carries out, and the attempt is recorded on the order (`attempts.ai_call`) so the no-response timer moves on to the second call or to review.
 - A policy change applies only to decisions made after the change.
 - Every manual override records who made it, when, and why, in the audit log.
 

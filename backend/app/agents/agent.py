@@ -225,9 +225,15 @@ def send_confirm(node_input: dict) -> dict:
 
 
 def call_buyer(node_input: dict) -> dict:
-    """CALL: hand the order to the voice agent (E5). The call itself is not placed here."""
+    """CALL: hand the order to the voice agent (E5). The call itself is not placed here. The
+    attempt is counted on the order, so the next unanswered timer knows how many calls were made."""
     pipe = current()
-    return contact.contact(pipe.log, node_input, DecisionAction.AI_CALL, pipe.now)
+    result = contact.contact(pipe.log, node_input, DecisionAction.AI_CALL, pipe.now)
+    if result["sent"]:
+        lifecycle.record_call_attempt(
+            pipe.store, node_input["order_id"], result["attempt"], result["sent_at"]
+        )
+    return result
 
 
 def request_deposit(node_input: dict) -> dict:

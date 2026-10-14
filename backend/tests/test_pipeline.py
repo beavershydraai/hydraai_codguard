@@ -192,6 +192,32 @@ def test_a_repeated_send_reports_the_first_one_instead_of_sending_again(pipe):
     assert len(pipe.log.claims) == 1
 
 
+def _call_decided(doc: dict, at) -> dict:
+    decision = Decision(decided_at=at, action=DecisionAction.AI_CALL, policy_version=1)
+    return doc | {"decision": decision.model_dump()}
+
+
+def test_each_call_attempt_is_claimed_once_by_its_own_decision(pipe):
+    """A rerun of a decision finds its own attempt, even after a later decision took the next
+    one, and a decision beyond the two attempts reaches nobody."""
+    doc = pipe.store.get("ord_test")
+    first, second, third = (_call_decided(doc, NOW + timedelta(minutes=30 * i)) for i in range(3))
+    action = DecisionAction.AI_CALL
+    results = [
+        contact.contact(pipe.log, first, action, NOW),
+        contact.contact(pipe.log, second, action, NOW + timedelta(minutes=30)),
+        contact.contact(pipe.log, first, action, NOW + timedelta(minutes=31)),  # a late rerun
+        contact.contact(pipe.log, third, action, NOW + timedelta(minutes=60)),
+    ]
+    assert [(r["sent"], r.get("attempt")) for r in results] == [
+        (True, 1),
+        (True, 2),
+        (False, 1),
+        (False, 2),
+    ]
+    assert sorted(pipe.log.claims) == ["ord_test:ai_call:1", "ord_test:ai_call:2"]
+
+
 @pytest.mark.asyncio
 async def test_an_order_that_is_not_stored_is_held_for_nobody(pipe):
     result = await run(pipe, "ord_missing")
@@ -285,11 +311,43 @@ async def test_an_unanswered_link_escalates_to_a_call_and_is_logged(pipe, monkey
         {"order_id": "ord_test", "type": "no_response"}, SHOP, pipeline=later
     )
     assert result["action"] == DecisionAction.AI_CALL
-    assert sorted(pipe.log.claims) == ["ord_test:ai_call", "ord_test:send_confirmation_link"]
+    assert sorted(pipe.log.claims) == ["ord_test:ai_call:1", "ord_test:send_confirmation_link"]
     assert [r["workflow"] for r in pipe.log.for_order("ord_test")] == [
         agent.ON_NEW_ORDER,
         agent.ON_CONTACT_EVENT,
     ]
+
+
+def next_action_at(pipe):
+    return Decision.model_validate(pipe.store.get("ord_test")["decision"]).next_action_at
+
+
+async def no_response(pipe, at):
+    """Fire the order's no-response timer at `at`."""
+    later = Pipeline(store=pipe.store, log=pipe.log, now=at)
+    event = {"order_id": "ord_test", "type": "no_response"}
+    return await run_contact_event(event, SHOP, pipeline=later)
+
+
+@pytest.mark.asyncio
+async def test_second_call_is_placed_then_review(pipe, monkeypatch):
+    """Two call attempts 30 minutes apart (E4.2), then a person decides. The second attempt used
+    to hit the first one's claim, and every later timer chose a call that was never placed."""
+    monkeypatch.setattr(engine, "score", scorer("high", "call"))
+    first = await run(pipe)
+    retry_at = next_action_at(pipe)
+    second = await no_response(pipe, retry_at)
+    replay = await no_response(pipe, retry_at)  # the same timer delivered again
+    last = await no_response(pipe, next_action_at(pipe))
+
+    assert first["sent"] is True
+    assert second["action"] == DecisionAction.AI_CALL and second["sent"] is True
+    assert replay["reason"] == "no_change"
+    assert last["action"] == DecisionAction.HOLD_FOR_REVIEW
+    order = pipe.store.get("ord_test")
+    assert order["status"] == OrderStatus.PENDING_REVIEW
+    assert sorted(pipe.log.claims) == ["ord_test:ai_call:1", "ord_test:ai_call:2"]
+    assert (first["attempt"], second["attempt"], order["attempts"]) == (1, 2, {"ai_call": 2})
 
 
 @pytest.mark.asyncio

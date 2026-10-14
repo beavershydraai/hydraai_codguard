@@ -409,6 +409,13 @@ def apply_buyer_response(
     return _transact(store, order_id, apply)
 
 
+def calls_made(doc: dict) -> int:
+    """AI calls already placed for the order: the attempts the pipeline recorded when it claimed
+    them (E4.7), or the call records E5 keeps, whichever counts more."""
+    started = sum(c.get("started_at") is not None for c in doc.get("calls", []))
+    return max((doc.get("attempts") or {}).get("ai_call", 0), started)
+
+
 def _no_response(
     doc: dict,
     now: datetime,
@@ -424,7 +431,7 @@ def _no_response(
     if not previous.next_action_at or now < previous.next_action_at or not doc.get("tier"):
         return
     if call_attempts is None:
-        call_attempts = sum(c.get("started_at") is not None for c in doc.get("calls", []))
+        call_attempts = calls_made(doc)
     _record_intervention(doc, engine.ACTION_NAME[previous.action])
     decision = decisions.escalate(
         RiskTier(doc["tier"]),
@@ -547,6 +554,20 @@ def hold_for_review(
         _move(doc, "decided" if doc.get("decision") is None else "rescored", decision.action)
         _set_decision(doc, decision)
         _event(doc, "decided", now, "Đã chuyển đơn hàng cho người bán duyệt.")
+        return doc
+
+    return _transact(store, order_id, apply)
+
+
+def record_call_attempt(store: OrderStore, order_id: str, attempt: int, now: datetime) -> dict:
+    """Count AI call number `attempt` as placed, so the next unanswered timer moves on to the
+    second attempt or to review (E4.7). Recording the same attempt again changes nothing."""
+
+    def apply(doc):
+        attempts = doc.get("attempts") or {}
+        if attempt > attempts.get("ai_call", 0):
+            doc["attempts"] = attempts | {"ai_call": attempt}
+            doc["updated_at"] = now
         return doc
 
     return _transact(store, order_id, apply)
