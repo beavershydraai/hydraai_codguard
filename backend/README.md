@@ -100,11 +100,11 @@ two LLM requests, one HTTP attempt per request and a 15-second timeout around th
 Assessment failures are not retried. Completed assessment metadata and validated reasons are
 stored with scoring and copied to the decision log.
 
-Model 1 training stores up to four feature rows from the training split as its SHAP background.
-`app/risk/model.py:explain1` uses bounded, approximate permutation SHAP on the complete
-calibrated failure probability, including isotonic calibration. The scoring snapshot carries
-`scoring.shap`; older model artifacts without a background report explanations unavailable.
-These contributions inform assessment and do not change the deterministic decision.
+`app/risk/model.py:explain1` computes exact TreeSHAP contributions of every Model 1 feature,
+rescaled to the boosted model's probability (before isotonic calibration, which keeps their order
+and sign). The scoring snapshot carries them as `scoring.shap`, and the five largest as
+`scoring.top_signals` for the API. An explanation error leaves `available: false` and never blocks
+scoring. These contributions inform assessment and do not change the deterministic decision.
 
 Contact branches reserve a send and return `mock: true`; the E5 channel integration still needs
 to perform the contact and deliver its result to `run_contact_event`. The graphs do not wait for
@@ -132,8 +132,8 @@ It covers ship, confirmation, retry and review paths, duplicate sends, decision-
 contact events and the second call followed by review. `tests/test_assessment.py` runs both real
 ADK agent roles with a fake LLM and checks evidence validation, redaction, budget and timeout.
 `tests/test_assessment_pipeline.py` checks assessment before persistence, immutable scoring
-inputs and review without contact on errors or stale snapshots. `tests/test_model_explanations.py`
-checks calibrated SHAP, additivity and unavailable legacy explanations. `tests/test_intake.py`
+inputs and review without contact on errors or stale snapshots. `tests/test_risk.py`
+checks SHAP additivity, the top signals and that an explanation error never blocks scoring. `tests/test_intake.py`
 checks the automatic intake trigger and returned decision status. These tests use mock contacts
 and model responses; they do not establish live Gemini calls, live-channel completion, Gemini
 Live compatibility or Cloud Run cold-start performance.

@@ -210,13 +210,13 @@ async def test_location_can_be_model_context_but_never_the_only_high_risk_reason
     assert not model.requests and not log.claims
 
 
-async def test_calibrated_shap_context_omits_unknown_keys_and_never_fabricates_values():
+async def test_shap_context_omits_unknown_keys_and_never_fabricates_values():
     doc = deepcopy(DOC)
     doc["scoring"]["shap"] = {
         "available": True,
-        "method": "permutation_shap",
-        "approximate": True,
-        "output": "calibrated_failure_probability",
+        "method": "tree_shap",
+        "approximate": False,
+        "output": "model_failure_probability",
         "base_value": 0.1,
         "prediction": 0.3,
         "contributions": {"phone_failed_all": 0.2, "unknown_numeric_id": 0.5},
@@ -227,9 +227,9 @@ async def test_calibrated_shap_context_omits_unknown_keys_and_never_fabricates_v
     shap = model.requests[0]["input"]["scoring"]["shap"]
     assert shap == {
         "available": True,
-        "method": "permutation_shap",
-        "approximate": True,
-        "output": "calibrated_failure_probability",
+        "method": "tree_shap",
+        "approximate": False,
+        "output": "model_failure_probability",
         "base_value": 0.1,
         "prediction": 0.3,
         "contributions": {"phone_failed_all": 0.2},

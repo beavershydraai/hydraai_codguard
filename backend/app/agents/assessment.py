@@ -94,8 +94,8 @@ def _context(doc: dict) -> dict:
             for k, v in shap.items()
             if (k in ("available", "approximate") and isinstance(v, bool))
             or (k in ("base_value", "prediction") and _numeric(v))
-            or (k == "method" and v == "permutation_shap")
-            or (k == "output" and v == "calibrated_failure_probability")
+            or (k == "method" and v == "tree_shap")
+            or (k == "output" and v == "model_failure_probability")
         }
         if isinstance(shap.get("contributions"), dict):
             clean["shap"]["contributions"] = {
@@ -175,8 +175,8 @@ async def _run(context: dict, *, shop_id: str, model: BaseLlm) -> list[dict]:
 
     instruction = (
         "You are an advisory COD-order evidence specialist. Use the supplied model probability, "
-        "signed calibrated SHAP contributions and order context to prioritize relevant facts. "
-        "SHAP is approximate evidence, not a new score; when unavailable, never invent "
+        "signed SHAP contributions and order context to prioritize relevant facts. "
+        "SHAP is evidence, not a new score; when unavailable, never invent "
         "contributions or infer buyer intent. Select at most 3 provided "
         "Vietnamese candidate reasons by copying text_vi and signal_keys exactly. "
         "Return only {reasons: [...]}; an empty list is valid. Never invent facts or write "

@@ -18,7 +18,14 @@ import pandas as pd
 from app.decision import policy
 from app.risk import artifacts
 from app.risk.features import compute_features
-from app.risk.model import FAIL_COST, expected_cost, explain1, predict1
+from app.risk.model import (
+    FAIL_COST,
+    expected_cost,
+    explain1,
+    explainer1,
+    predict1,
+    top_signals,
+)
 from app.schemas.enums import DecisionAction, RiskTier
 
 log = logging.getLogger(__name__)
@@ -109,6 +116,14 @@ def score(doc: dict, history: list[dict]) -> dict | None:
     model1 = models["model1"]
     features = compute_features(doc, history, doc["placed_at"], model1["enc"])
     p = float(predict1(model1, pd.DataFrame([features]))[0])
+    try:
+        if "explainer" not in models:  # built once per loaded model
+            models["explainer"] = explainer1(model1)
+        shap = explain1(model1, models["explainer"], features)
+        signals = top_signals(features, shap["contributions"])
+    except Exception:  # an explanation problem must not stop the order being scored
+        log.exception("Could not explain the score of %s", doc.get("order_id"))
+        shap, signals = {"available": False, "method": "tree_shap", "contributions": {}}, []
     decision = {"random_slice": False, "action_probability": 1.0} | decide(
         features, p, doc["buyer_phone_hash"] is not None, models
     )
@@ -124,7 +139,8 @@ def score(doc: dict, history: list[dict]) -> dict | None:
             "expected_loss_vnd": expected_loss(p),
             "chosen_by": decision["chosen_by"],
             "features": features,
-            "shap": explain1(model1, pd.DataFrame([features])),
+            "shap": shap,
+            "top_signals": signals,
             "model_version": model1["version"],
             "scored_at": datetime.now(UTC),
         },
