@@ -1,5 +1,12 @@
 import type { LinkProps } from '@tanstack/react-router'
-import { ChartLineIcon, ClipboardCheckIcon, HouseIcon, PackageIcon, SettingsIcon } from 'lucide-react'
+import {
+  ChartLineIcon,
+  ClipboardCheckIcon,
+  FlaskConicalIcon,
+  HouseIcon,
+  PackageIcon,
+  SettingsIcon,
+} from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import type { RiskTier } from '@/api/gen'
@@ -43,5 +50,6 @@ export const TIER_SHORTCUTS: TierShortcut[] = [
 // ── Nav Secondary ──
 
 export const NAV_SECONDARY: NavItem[] = [
+  { id: 'demo', label: 'Demo', icon: <FlaskConicalIcon />, to: '/demo' },
   { id: 'settings', label: 'Cài đặt', icon: <SettingsIcon />, to: '/settings' },
 ]
