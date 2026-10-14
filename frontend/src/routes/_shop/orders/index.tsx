@@ -45,6 +45,7 @@ const listQuery = ({ tier }: OrdersSearch): ListOrdersData['query'] => ({
 })
 
 export const Route = createFileRoute('/_shop/orders/')({
+  staticData: { crumb: 'Đơn hàng' },
   validateSearch: (search: Record<string, unknown>): OrdersSearch => ({
     tier: TIERS.includes(search.tier as RiskTier) ? (search.tier as RiskTier) : undefined,
   }),

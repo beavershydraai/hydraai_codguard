@@ -39,6 +39,7 @@ frontend/       Shop web app + buyer confirmation page (Vite + React, Firebase H
   src/routes/   TanStack Router file routes; _shop/ is the shop layout, c/ the public buyer page
   src/api/gen/  Hey API client generated from api/openapi.yaml (do not edit)
   src/components/ui/, src/components/reui/  shadcn and ReUI registry components
+  src/components/blocks/  ReUI blocks adapted to the app: app-shell-1 (shop layout), auth-4 (login)
 ml/             Data prep, synthetic data generator, BigQuery ML SQL, backtest
 data/seed/      Pseudonymised demo data only
 infra/          Deployment and Firebase config
@@ -50,7 +51,8 @@ scripts/        Demo reset, abuse simulation, call test runner
 - Backend: Python 3.11+, ASGI app served by uvicorn (`app.main:app`)
 - Frontend: Node.js 20+, pnpm, React 19 + TypeScript on Vite, Tailwind CSS v4, shadcn/ui and ReUI components, TanStack Router (file-based) and TanStack Query, Zustand for client state, Hey API for the API client
 - Use ReUI's `data-grid` for data tables, not a hand-rolled `<table>`. Install registry components with the shadcn CLI rather than writing or editing them by hand (see `frontend/README.md`).
-- Server state lives in TanStack Query through the generated `*Options` helpers; Zustand only holds client state such as the auth token.
+- Server state lives in TanStack Query through the generated `*Options` helpers; Zustand only holds client state (auth token, theme).
+- Sign-in is a development stub until Firebase Auth lands (E7.1): `src/lib/auth.ts` stores `VITE_DEV_AUTH_TOKEN`. Never set that variable in a production build.
 - AI: Gemini (signal extraction and reasons), Gemini Live API (voice), Agent Development Kit (orchestration)
 - Data: BigQuery ML boosted trees (risk model), BigQuery (training data, analytics), Firestore (app state)
 - Secrets in Secret Manager; region `asia-southeast1`. Exception: Gemini Live API sessions run in `GEMINI_LIVE_LOCATION` (`us-central1`), because the Live API is not served from Asia regions.

@@ -4,6 +4,7 @@ import { ComingSoon } from '@/components/coming-soon'
 import { PageHeader } from '@/components/page-header'
 
 export const Route = createFileRoute('/_shop/settings')({
+  staticData: { crumb: 'Cài đặt' },
   component: SettingsPage,
 })
 

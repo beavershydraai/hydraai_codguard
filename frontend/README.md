@@ -50,8 +50,17 @@ const { data, error } = useQuery(listOrdersOptions({ query: { tier: ['high'], li
 ```
 
 Base URL and auth are set in `src/api/client-config.ts`: the bearer token comes from the Zustand
-auth store. Until Firebase Auth is wired (E7.1) it is `VITE_DEV_AUTH_TOKEN`. Errors are thrown as
-the parsed `ProblemDetail` body; `src/components/query-error.tsx` shows them.
+auth store. A 401 from the API signs the user out. Errors are thrown as the parsed `ProblemDetail`
+body; `src/components/query-error.tsx` shows them.
+
+## Signing in
+
+`/login` (ReUI `auth-4`) signs in with email and password. Every shop route sits under the
+`_shop` layout, which sends signed-out users to `/login?redirect=…` and back afterwards.
+
+Firebase Auth is not wired yet (E7.1). Until then `signIn` in `src/lib/auth.ts` accepts any
+credentials when `VITE_DEV_AUTH_TOKEN` is set and stores that token; without it, sign-in fails
+with a message. Never set `VITE_DEV_AUTH_TOKEN` in a production build.
 
 ## Adding components
 
@@ -61,6 +70,9 @@ the parsed `ProblemDetail` body; `src/components/query-error.tsx` shows them.
   Without the mirror, change the `@reui` entry to `https://reui.io/r/{style}/{name}.json`.
 - Files under `src/components/ui/` and `src/components/reui/` come from the registries. Prefer
   reinstalling over editing them; ReUI files are skipped by oxlint and Prettier.
+- Blocks under `src/components/blocks/` are installed once and then adapted (real data, routes,
+  Vietnamese copy), so they are linted and formatted like our own code. Do not reinstall them over
+  the adapted files.
 
 ## Routes
 

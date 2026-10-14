@@ -11,7 +11,13 @@
     ],
     "no-unused-vars": "error"
   },
-  "ignorePatterns": ["dist", "src/routeTree.gen.ts", "src/api/gen", "src/components/reui"],
+  "ignorePatterns": [
+    "dist",
+    "src/routeTree.gen.ts",
+    "src/api/gen",
+    "src/components/reui",
+    "src/hooks/use-mobile.ts"
+  ],
   "overrides": [
     {
       "files": ["src/routes/**", "src/components/ui/**"],

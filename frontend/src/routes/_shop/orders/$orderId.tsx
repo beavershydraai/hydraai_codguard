@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/page-header'
 import { QueryError } from '@/components/query-error'
 
 export const Route = createFileRoute('/_shop/orders/$orderId')({
+  staticData: { crumb: 'Chi tiết đơn' },
   loader: ({ context, params }) =>
     context.queryClient.prefetchQuery(getOrderOptions({ path: { order_id: params.orderId } })),
   component: OrderDetailPage,

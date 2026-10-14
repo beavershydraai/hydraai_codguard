@@ -1,14 +1,20 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 type AuthState = {
   /** Firebase ID token sent as `Authorization: Bearer`. */
   token: string | null
-  setToken: (token: string | null) => void
+  setToken: (token: string) => void
+  signOut: () => void
 }
 
-// Firebase Auth is not wired yet (E7.1). Until then a token from VITE_DEV_AUTH_TOKEN lets the
-// app talk to the Prism mock, which accepts any bearer token.
-export const useAuthStore = create<AuthState>()((set) => ({
-  token: import.meta.env.VITE_DEV_AUTH_TOKEN || null,
-  setToken: (token) => set({ token }),
-}))
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      token: null,
+      setToken: (token) => set({ token }),
+      signOut: () => set({ token: null }),
+    }),
+    { name: 'codguard-auth' },
+  ),
+)

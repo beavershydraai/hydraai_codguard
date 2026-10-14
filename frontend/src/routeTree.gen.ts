@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ShopRouteImport } from './routes/_shop'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as ShopIndexRouteImport } from './routes/_shop/index'
 import { Route as ShopReviewRouteImport } from './routes/_shop/review'
 import { Route as ShopSettingsRouteImport } from './routes/_shop/settings'
@@ -19,6 +20,11 @@ import { Route as ShopOrdersOrderIdRouteImport } from './routes/_shop/orders/$or
 
 const ShopRoute = ShopRouteImport.update({
   id: '/_shop',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ShopIndexRoute = ShopIndexRouteImport.update({
@@ -54,6 +60,7 @@ const ShopOrdersOrderIdRoute = ShopOrdersOrderIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof ShopIndexRoute
+  '/login': typeof LoginRoute
   '/review': typeof ShopReviewRoute
   '/settings': typeof ShopSettingsRoute
   '/c/$token': typeof CTokenRoute
@@ -61,6 +68,7 @@ export interface FileRoutesByFullPath {
   '/orders/': typeof ShopOrdersIndexRoute
 }
 export interface FileRoutesByTo {
+  '/login': typeof LoginRoute
   '/review': typeof ShopReviewRoute
   '/settings': typeof ShopSettingsRoute
   '/c/$token': typeof CTokenRoute
@@ -71,6 +79,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_shop': typeof ShopRouteWithChildren
+  '/login': typeof LoginRoute
   '/_shop/review': typeof ShopReviewRoute
   '/_shop/settings': typeof ShopSettingsRoute
   '/c/$token': typeof CTokenRoute
@@ -82,6 +91,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/login'
     | '/review'
     | '/settings'
     | '/c/$token'
@@ -89,10 +99,17 @@ export interface FileRouteTypes {
     | '/orders/'
   fileRoutesByTo: FileRoutesByTo
   to:
-    '/review' | '/settings' | '/c/$token' | '/' | '/orders/$orderId' | '/orders'
+    | '/login'
+    | '/review'
+    | '/settings'
+    | '/c/$token'
+    | '/'
+    | '/orders/$orderId'
+    | '/orders'
   id:
     | '__root__'
     | '/_shop'
+    | '/login'
     | '/_shop/review'
     | '/_shop/settings'
     | '/c/$token'
@@ -103,6 +120,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   ShopRoute: typeof ShopRouteWithChildren
+  LoginRoute: typeof LoginRoute
   CTokenRoute: typeof CTokenRoute
 }
 
@@ -113,6 +131,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof ShopRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_shop/': {
@@ -180,6 +205,7 @@ const ShopRouteWithChildren = ShopRoute._addFileChildren(ShopRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   ShopRoute: ShopRouteWithChildren,
+  LoginRoute: LoginRoute,
   CTokenRoute: CTokenRoute,
 }
 export const routeTree = rootRouteImport
