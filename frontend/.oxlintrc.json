@@ -16,7 +16,8 @@
     "src/routeTree.gen.ts",
     "src/api/gen",
     "src/components/reui",
-    "src/hooks/use-mobile.ts"
+    "src/hooks/use-mobile.ts",
+    "src/hooks/use-file-upload.ts"
   ],
   "overrides": [
     {

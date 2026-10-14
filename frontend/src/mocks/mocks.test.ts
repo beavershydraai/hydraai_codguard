@@ -90,6 +90,17 @@ describe('MockDb', () => {
     expect(() => db.respond(order.confirmation_token!, { action: 'confirm' })).toThrow()
   })
 
+  it('imports 1,000 orders without errors (E7.2)', () => {
+    const header = 'external_id,channel,buyer_name,buyer_phone,address,item_name,quantity,unit_price_vnd'
+    const rows = Array.from(
+      { length: 1000 },
+      (_, i) => `BULK-${i},website,Khách ${i},+84000${String(i).padStart(6, '0')},"Số ${i}, phường Mẫu, Hà Nội",Áo,1,189000`,
+    )
+    const result = db.importOrders([header, ...rows].join('\n'))
+    expect(result).toMatchObject({ received: 1000, imported: 1000, duplicates: 0, rejected: [] })
+    expect(db.list({ q: 'BULK-999' }).items).toHaveLength(1)
+  })
+
   it('imports orders from CSV and reports bad rows', () => {
     const csv =
       'external_id,channel,buyer_name,buyer_phone,address,item_name,quantity,unit_price_vnd\n' +

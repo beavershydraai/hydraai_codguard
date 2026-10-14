@@ -242,6 +242,7 @@ export function OrdersDataGrid({
   filters,
   onFiltersChange,
   onRefresh,
+  headerActions,
 }: {
   orders: OrderSummary[]
   /** Orders matching on the server; `orders` holds the newest page of them. */
@@ -250,6 +251,8 @@ export function OrdersDataGrid({
   filters: OrderFilters
   onFiltersChange: (filters: OrderFilters) => void
   onRefresh: () => void
+  /** Buttons in the frame header, like the block's "Add customer" button. */
+  headerActions?: ReactNode
 }) {
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 25 })
   const [sorting, setSorting] = useState<SortingState>([])
@@ -330,6 +333,7 @@ export function OrdersDataGrid({
                 {filteredData.length} / {total} đơn đã chấm điểm rủi ro bom hàng
               </FrameDescription>
             </div>
+            {headerActions && <div className="flex flex-wrap items-center gap-2">{headerActions}</div>}
           </FrameHeader>
           <FramePanel className="bg-card p-0! shadow-none!">
             <div className="px-4 py-3">
