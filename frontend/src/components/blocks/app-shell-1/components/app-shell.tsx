@@ -16,6 +16,8 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/s
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
+import { MockBadge } from '@/components/mock-badge'
+
 import { AppSidebar } from './app-sidebar'
 
 /** Breadcrumb trail from the `crumb` in each matched route's staticData. */
@@ -72,6 +74,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="flex items-center gap-2 px-4">
               <SidebarTrigger className="-ml-1 md:hidden" />
               <RouteBreadcrumb />
+            </div>
+            <div className="ml-auto px-4">
+              <MockBadge />
             </div>
           </header>
 

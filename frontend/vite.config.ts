@@ -15,9 +15,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    // Same-origin API calls in development. Defaults to the Prism mock (see api/README.md);
-    // set API_PROXY_TARGET=http://127.0.0.1:8080 to use the local backend instead.
-    proxy: { '/api': process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:4010' },
+    // Same-origin API calls in development, to the local backend by default. Set
+    // API_PROXY_TARGET=http://127.0.0.1:4010 to use the Prism mock (see api/README.md).
+    proxy: { '/api': process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:8080' },
   },
   test: {
     environment: 'jsdom',
