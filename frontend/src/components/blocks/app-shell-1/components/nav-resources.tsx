@@ -22,7 +22,7 @@ function ResourceItem({ shortcut, isActive }: { shortcut: TierShortcut; isActive
   return (
     <SidebarMenuItem>
       <SidebarMenuButton tooltip={`Rủi ro ${shortcut.name}`} isActive={isActive} asChild>
-        <Link to="/orders" search={{ tier: shortcut.tier }}>
+        <Link to="/orders" search={{ tier: [shortcut.tier] }}>
           <ResourceDot color={shortcut.color} />
           <span className="min-w-0 truncate">{shortcut.name}</span>
         </Link>
@@ -34,7 +34,8 @@ function ResourceItem({ shortcut, isActive }: { shortcut: TierShortcut; isActive
 function ResourceList() {
   // Highlights the shortcut matching the order inbox's tier filter.
   const search = useSearch({ strict: false })
-  const activeTier = 'tier' in search ? search.tier : undefined
+  const tiers = 'tier' in search ? search.tier : undefined
+  const activeTier = tiers?.length === 1 ? tiers[0] : undefined
   return (
     <SidebarGroupContent id="tier-shortcuts-list">
       <SidebarMenu className="gap-0.25">

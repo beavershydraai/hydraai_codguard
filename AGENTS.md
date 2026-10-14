@@ -39,7 +39,7 @@ frontend/       Shop web app + buyer confirmation page (Vite + React, Firebase H
   src/routes/   TanStack Router file routes; _shop/ is the shop layout, c/ the public buyer page
   src/api/gen/  Hey API client generated from api/openapi.yaml (do not edit)
   src/components/ui/, src/components/reui/  shadcn and ReUI registry components
-  src/components/blocks/  ReUI blocks adapted to the app: app-shell-1 (shop layout), auth-4 (login)
+  src/components/blocks/  ReUI blocks adapted to the app: app-shell-1 (shop layout), auth-4 (login), data-grid-base-1 (order table)
 ml/             Data prep, synthetic data generator, BigQuery ML SQL, backtest
 data/seed/      Pseudonymised demo data only
 infra/          Deployment and Firebase config

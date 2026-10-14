@@ -1,4 +1,4 @@
-import type { DecisionAction, OrderStatus, RiskTier } from '@/api/gen'
+import type { DecisionAction, OrderStatus, RiskTier, SalesChannel } from '@/api/gen'
 
 // Vietnamese UI labels, copied from the enum descriptions in api/openapi.yaml.
 
@@ -28,6 +28,14 @@ export const DECISION_ACTION_LABELS: Record<DecisionAction, string> = {
   require_deposit: 'Yêu cầu cọc',
   hold_for_review: 'Chờ duyệt',
   cancel: 'Hủy đơn',
+}
+
+export const SALES_CHANNEL_LABELS: Record<SalesChannel, string> = {
+  facebook: 'Facebook',
+  tiktok: 'TikTok',
+  zalo: 'Zalo',
+  website: 'Website',
+  other: 'Khác',
 }
 
 const vnd = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' })
