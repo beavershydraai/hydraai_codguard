@@ -168,7 +168,7 @@ async def test_verifier_cannot_add_evidence_the_analyst_did_not_select():
     doc["scoring"]["features"]["address_has_house_number"] = 0
     invented_selection = {
         "text_vi": "Địa chỉ thiếu số nhà.",
-        "signal_keys": ["address_has_house_number"],
+        "signal_keys": ["address_missing_house_number"],
     }
     model = FakeModel(responses=[{"reasons": [REASON]}, {"reasons": [invented_selection]}])
     with pytest.raises(ValueError):
@@ -196,8 +196,9 @@ async def test_candidate_reasons_describe_only_actual_feature_values(features, r
     doc["scoring"]["features"] = features
     model = FakeModel(responses=[{"reasons": []}, {"reasons": []}])
     await assess(doc, model=model)
+    api_key = {"address_has_house_number": "address_missing_house_number"}  # as in top_signals
     assert model.requests[0]["input"]["candidates"] == [
-        {"text_vi": reason, "signal_keys": list(features)}
+        {"text_vi": reason, "signal_keys": [api_key.get(k, k) for k in features]}
     ]
 
 
@@ -352,3 +353,21 @@ async def test_the_agents_read_plain_vietnamese():
     text = model.requests[0]["text"]
     assert "\\u" not in text
     assert any(c["text_vi"] in text for c in model.requests[0]["input"]["candidates"])
+
+
+def test_every_reason_cites_a_key_that_top_signals_uses():
+    """The E3.3 reason check matches reasons to `top_signals` by key, so the names must agree."""
+    from app.agents.assessment import _candidates
+    from app.risk.features import SIGNALS
+    from app.risk.model import top_signals
+
+    features = {k: 0 for k in SIGNALS} | {
+        "phone_failed_all": 1,
+        "phone_outcomes_all": 2,
+        "phone_orders_24h": 3,
+        "cod_vs_phone_avg_ratio": 2,
+    }
+    every = top_signals(features, dict.fromkeys(SIGNALS, 1.0), top=len(SIGNALS))
+    cited = {key for reason in _candidates(features) for key in reason["signal_keys"]}
+    assert "address_missing_house_number" in cited
+    assert cited <= {s["key"] for s in every}

@@ -47,7 +47,7 @@ def install_assessor(monkeypatch, assess):
 async def test_intake_graph_runs_both_real_agents_and_saves_their_verified_reason(
     pipe, monkeypatch
 ):
-    reason = {"text_vi": "Địa chỉ thiếu số nhà.", "signal_keys": ["address_has_house_number"]}
+    reason = {"text_vi": "Địa chỉ thiếu số nhà.", "signal_keys": ["address_missing_house_number"]}
     model = FakeModel(responses=[{"reasons": [reason]}, {"reasons": [reason]}])
     assess = real_assessment.assess
 

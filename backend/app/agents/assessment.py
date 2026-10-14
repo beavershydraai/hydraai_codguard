@@ -146,7 +146,7 @@ def _candidates(features: dict) -> list[dict]:
             raise ValueError("Conflicting new-phone evidence")
         add("SĐT chưa có đơn hàng trước đây.", "phone_is_new")
     if features.get("address_has_house_number") == 0:
-        add("Địa chỉ thiếu số nhà.", "address_has_house_number")
+        add("Địa chỉ thiếu số nhà.", "address_missing_house_number")  # API key, as in top_signals
     parts = count("address_parts_filled")
     if parts is not None and parts < 3:
         add(f"Địa chỉ mới có {parts} trên 3 phần thông tin cần thiết.", "address_parts_filled")
