@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ShopRouteImport } from './routes/_shop'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as ShopIndexRouteImport } from './routes/_shop/index'
 import { Route as ShopBacktestRouteImport } from './routes/_shop/backtest'
 import { Route as ShopDemoRouteImport } from './routes/_shop/demo'
@@ -27,6 +28,11 @@ const ShopRoute = ShopRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ShopIndexRoute = ShopIndexRouteImport.update({
@@ -73,6 +79,7 @@ const ShopOrdersOrderIdRoute = ShopOrdersOrderIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof ShopIndexRoute
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
   '/backtest': typeof ShopBacktestRoute
   '/demo': typeof ShopDemoRoute
   '/review': typeof ShopReviewRoute
@@ -83,6 +90,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
   '/backtest': typeof ShopBacktestRoute
   '/demo': typeof ShopDemoRoute
   '/review': typeof ShopReviewRoute
@@ -96,6 +104,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_shop': typeof ShopRouteWithChildren
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
   '/_shop/backtest': typeof ShopBacktestRoute
   '/_shop/demo': typeof ShopDemoRoute
   '/_shop/review': typeof ShopReviewRoute
@@ -110,6 +119,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/onboarding'
     | '/backtest'
     | '/demo'
     | '/review'
@@ -120,6 +130,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/onboarding'
     | '/backtest'
     | '/demo'
     | '/review'
@@ -132,6 +143,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_shop'
     | '/login'
+    | '/onboarding'
     | '/_shop/backtest'
     | '/_shop/demo'
     | '/_shop/review'
@@ -145,6 +157,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   ShopRoute: typeof ShopRouteWithChildren
   LoginRoute: typeof LoginRoute
+  OnboardingRoute: typeof OnboardingRoute
   CTokenRoute: typeof CTokenRoute
 }
 
@@ -162,6 +175,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_shop/': {
@@ -248,6 +268,7 @@ const ShopRouteWithChildren = ShopRoute._addFileChildren(ShopRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   ShopRoute: ShopRouteWithChildren,
   LoginRoute: LoginRoute,
+  OnboardingRoute: OnboardingRoute,
   CTokenRoute: CTokenRoute,
 }
 export const routeTree = rootRouteImport

@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
   BanIcon,
@@ -6,12 +7,14 @@ import {
   PackageXIcon,
   PhoneOffIcon,
   PiggyBankIcon,
+  SparklesIcon,
   type LucideIcon,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 
 import type { DashboardSummary } from '@/api/gen'
+import { getShopOptions } from '@/api/gen/@tanstack/react-query.gen'
 import { Badge } from '@/components/reui/badge'
 import { Frame, FramePanel } from '@/components/reui/frame'
 import { Button } from '@/components/ui/button'
@@ -22,6 +25,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { DECISION_ACTION_LABELS, formatPercent, formatVnd } from '@/lib/labels'
 import { cn } from '@/lib/utils'
+import { useOnboardingStore } from '@/stores/onboarding'
 
 import { type Period, PERIODS } from './data'
 
@@ -73,6 +77,8 @@ export function RoiDashboard({
             </TabsList>
           </Tabs>
         </div>
+
+        <SetupBanner />
 
         {empty ? (
           <EmptyDashboard />
@@ -326,6 +332,31 @@ function EmptyDashboard() {
         </div>
         <Button asChild>
           <Link to="/orders">Đi tới Đơn hàng</Link>
+        </Button>
+      </FramePanel>
+    </Frame>
+  )
+}
+
+/** Points a new shop owner at the setup wizard until they finish or skip it (E7.1). */
+function SetupBanner() {
+  const { data: shop } = useQuery(getShopOptions())
+  const done = useOnboardingStore((s) => (shop ? s.done.includes(shop.id) : true))
+  if (!shop || done) return null
+  return (
+    <Frame>
+      <FramePanel className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <SparklesIcon className="size-5 text-primary" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-medium">Thiết lập shop trong 1 phút</p>
+            <p className="text-xs text-muted-foreground">
+              Chi phí giao thất bại, giờ liên hệ và policy mặc định.
+            </p>
+          </div>
+        </div>
+        <Button size="sm" asChild>
+          <Link to="/onboarding">Bắt đầu</Link>
         </Button>
       </FramePanel>
     </Frame>
