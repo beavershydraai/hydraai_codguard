@@ -65,7 +65,7 @@ def order_document(
                 "at": now,
                 "type": "created",
                 "actor": "system",
-                "message_vi": "Đã tạo đơn hàng.",
+                "message_vi": "Order created.",
                 "reason": None,
             }
         ],

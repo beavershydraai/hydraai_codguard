@@ -16,7 +16,7 @@ from tests.test_intake import FakeDecisionLog
 
 NOW = datetime(2026, 10, 14, 12, tzinfo=UTC)
 REASON = {
-    "text_vi": "SĐT này có 2 trên 4 đơn giao thất bại do người mua trước đây.",
+    "text_vi": "This phone has 2 of 4 past orders that failed because of the buyer.",
     "signal_keys": ["phone_failed_all", "phone_outcomes_all"],
 }
 DOC = {
@@ -141,11 +141,11 @@ async def test_prompts_omit_identifiers_personal_data_and_unknown_features():
 @pytest.mark.parametrize(
     "response",
     [
-        {"reasons": [{"text_vi": "Người mua thường xuyên hủy đơn.", "signal_keys": ["fake"]}]},
+        {"reasons": [{"text_vi": "The buyer often cancels orders.", "signal_keys": ["fake"]}]},
         {"reasons": [REASON], "action": "ai_call"},
         {"reasons": [REASON], "risk_score": 99},
         {"reasons": [REASON | {"signal_keys": ["phone_failed_all"]}]},
-        {"reasons": [REASON | {"text_vi": "SĐT này có 4 đơn giao thất bại."}]},
+        {"reasons": [REASON | {"text_vi": "This phone has 4 failed deliveries."}]},
     ],
 )
 async def test_invalid_analyst_output_stops_before_the_verifier(response):
@@ -167,7 +167,7 @@ async def test_verifier_cannot_add_evidence_the_analyst_did_not_select():
     doc = deepcopy(DOC)
     doc["scoring"]["features"]["address_missing_house_number"] = 1
     invented_selection = {
-        "text_vi": "Địa chỉ thiếu số nhà.",
+        "text_vi": "The address is missing a house number.",
         "signal_keys": ["address_missing_house_number"],
     }
     model = FakeModel(responses=[{"reasons": [REASON]}, {"reasons": [invented_selection]}])
@@ -184,11 +184,14 @@ async def test_duplicate_reasons_are_returned_once():
 @pytest.mark.parametrize(
     ("features", "reason"),
     [
-        ({"phone_is_new": 1}, "SĐT chưa có đơn hàng trước đây."),
-        ({"address_missing_house_number": 1}, "Địa chỉ thiếu số nhà."),
-        ({"address_parts_filled": 2}, "Địa chỉ mới có 2 trên 3 phần thông tin cần thiết."),
-        ({"phone_orders_24h": 3}, "SĐT có 3 đơn hàng trước đó trong 24 giờ."),
-        ({"cod_vs_phone_avg_ratio": 2}, "Tiền COD bằng 2 lần mức trung bình đơn trước của SĐT."),
+        ({"phone_is_new": 1}, "This phone has no past orders."),
+        ({"address_missing_house_number": 1}, "The address is missing a house number."),
+        ({"address_parts_filled": 2}, "The address has only 2 of the 3 required parts."),
+        ({"phone_orders_24h": 3}, "This phone placed 3 other orders in the last 24 hours."),
+        (
+            {"cod_vs_phone_avg_ratio": 2},
+            "The COD amount is 2 times the phone's average past order.",
+        ),
     ],
 )
 async def test_candidate_reasons_describe_only_actual_feature_values(features, reason):

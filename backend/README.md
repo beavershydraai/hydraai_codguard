@@ -25,10 +25,14 @@ with tags `sha-<commit>` and `main`.
 |---|---|
 | `app/main.py` | App factory, OpenAPI settings |
 | `app/api/v1/` | Routes: `shop_app.py` (shop web app), `external.py` (intake, buyer page, demo) |
+| `app/api/v1/auth.py` | `POST /auth/login` for the shop app |
+| `app/api/security.py` | Security schemes and `CurrentUser`, the dependency that verifies the bearer token |
+| `app/auth.py` | Admin account from the environment, token signing and verification |
 | `app/api/errors.py` | Problem-details errors and the shared error responses |
 | `app/schemas/` | Request and response models with examples |
 | `app/data/` | Order record (`docs/data-model.md`): phone normalisation and hashing, the Firestore document, the training label and snapshot row |
 | `app/risk/` | Scoring engine (features, Model 1, exact TreeSHAP on the pre-calibration probability, hard rules, tier, action) and the jobs `jobs/train.py`, `jobs/monitor.py` (`tasks/E2.3-risk-features.md`) |
+| `app/decision/inbox.py` | Order inbox for `GET /orders`: status/tier filters, search, sort and cursor paging over one shop's orders |
 | `app/decision/` | Order lifecycle (E4.1): nine statuses, transactional edits and rescoring, buyer/call/delivery outcomes, confirmed-order guard, order-detail view. Policy engine (E4.2): action per tier, expected-loss gate and escalation |
 | `app/agents/` | ADK workflows (E4.7), two advisory assessment agents, runners, decision log and contact claims; contact channels return `mock: true` |
 | `config/cod_guard_rules_apac.yaml` | Rule set: the policy engine reads `tier_policy`; the ADK routing and log read `baseline_alignment.api_actions` and `metadata.rule_set_version`. Tests also inspect `enums.outcomes`. The image copies this folder; `tests/test_rules_file.py` checks consistency |
@@ -36,6 +40,53 @@ with tags `sha-<commit>` and `main`.
 | `Dockerfile` | Production image: uv-built virtualenv, non-root user, listens on `$PORT` |
 
 See `../api/README.md` for how the frontend uses the contract.
+
+## Order inbox and order page (E7.2, E7.3)
+
+`GET /api/v1/orders` and `GET /api/v1/orders/{order_id}` read the signed-in user's shop only;
+another shop's order answers 404. The inbox runs one Firestore query per request (`shop_id`, and
+`placed_at` when `placed_from`/`placed_to` are given), then filters by status and tier, searches and
+sorts in `app/decision/inbox.py`: the tier sits inside `scoring` and the COD amount is derived,
+so Firestore cannot do it. That suits demo-sized shops (a few thousand orders each).
+
+- Search `q` ignores case and Vietnamese diacritics on the buyer name, order id and external id,
+  and matches phones written as `09…`, `+84 9…` or any three or more consecutive digits.
+- `next_cursor` is an offset tied to the filters and sort it came from; reusing it with other
+  filters answers 422.
+- The query needs the composite index (`shop_id`, `placed_at` descending) from
+  `infra/firestore.indexes.json`. Create it once per database, for example:
+
+  ```bash
+  gcloud firestore indexes composite create --project=ai-codguard --database=vn-synthetic \
+    --collection-group=orders \
+    --field-config=field-path=shop_id,order=ascending \
+    --field-config=field-path=placed_at,order=descending
+  ```
+
+Running it locally needs Firestore credentials: `gcloud auth application-default login`.
+
+## Sign-in (stand-in for Firebase Auth, E7.1)
+
+`POST /api/v1/auth/login` takes `{"username", "password"}` and returns a bearer token (HS256 JWT,
+valid 12 hours) plus the user. There is one account, read from the environment:
+
+| Variable | Use |
+|---|---|
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | The account (`admin@gmail.com` / `admin12345` in `.env.example`, local only) |
+| `AUTH_TOKEN_SECRET` | HMAC key for the tokens; changing it signs everyone out |
+| `ADMIN_SHOP_ID`, `ADMIN_EMAIL` | Optional: the account's shop (default `shop_demo`) and email (default: the username if it is an email) |
+
+Sign-in is disabled until the first three are set. A route that reads or changes shop data takes a
+`user: CurrentUser` parameter, which answers 401 for a missing, invalid or expired token and
+gives the route the user's `shop_id` and role. `GET /api/v1/me` is the first such route. The
+router-level `bearer_auth` dependency only declares the scheme in the contract; it checks nothing.
+
+```bash
+ADMIN_USERNAME=admin@gmail.com ADMIN_PASSWORD=admin12345 AUTH_TOKEN_SECRET=dev \
+  uv run uvicorn app.main:app --reload --port 8080
+curl -s -X POST localhost:8080/api/v1/auth/login -H 'content-type: application/json' \
+  -d '{"username": "admin@gmail.com", "password": "admin12345"}'
+```
 
 ## Order lifecycle services (E4.1)
 
@@ -55,8 +106,8 @@ An invalid-phone hard rule can still hold a confirmed order for review; it sched
 Staff decisions retain their status during rescoring. In the demo, increasing `prepaid_vnd` on an
 engine-decided order awaiting a deposit releases it after rescoring, unless the phone is invalid.
 
-Shop order-detail and edit routes stay at `501 not_implemented` until Firebase token verification can
-provide a trusted shop identity. The lifecycle functions are available for integration by those routes;
+Shop order-detail and edit routes stay at `501 not_implemented` until they are wired to the lifecycle;
+the trusted shop identity now comes from `CurrentUser` (see "Sign-in"). The lifecycle functions are available for integration by those routes;
 buyer-page tokens, call sessions, contact limits and timer scheduling belong to their own epics.
 
 ## ADK orchestration (E4.7)
@@ -75,7 +126,7 @@ buyer-page tokens, call sessions, contact limits and timer scheduling belong to 
 `app/agents/assessment.py` runs two real ADK `Agent` roles in sequence: `risk_analyst` selects
 reasons and `evidence_verifier` checks that proposal. They receive only numeric features,
 scoring results, available SHAP contributions and limited order context, without names, phone
-numbers, addresses or free text. They may select at most three canonical Vietnamese reasons
+numbers, addresses or free text. They may select at most three canonical English reasons
 backed by feature values; validation rejects altered wording, unsupported signals and decision
 fields. The verifier may only keep or remove the analyst's reasons. No LLM chooses or changes
 the score, tier or action. Message composition and voice remain E5 integration work.

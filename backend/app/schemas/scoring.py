@@ -14,7 +14,7 @@ class Signal(ApiModel):
 
     key: str = Field(examples=["phone_return_rate"])
     group: SignalGroup
-    label_vi: str = Field(examples=["Tỷ lệ hoàn của SĐT"])
+    label_vi: str = Field(examples=["Return rate of the phone"])
     value: str | float | int | bool = Field(examples=[0.5])
     contribution: float = Field(
         description="Signed contribution to the failure probability. Positive raises risk.",
@@ -23,10 +23,10 @@ class Signal(ApiModel):
 
 
 class Reason(ApiModel):
-    """A plain-Vietnamese reason written by Gemini. Each reason cites the signals it is based on;
+    """A plain-English reason written by Gemini. Each reason cites the signals it is based on;
     reasons that do not match a real signal are rejected before they reach the API."""
 
-    text_vi: str = Field(max_length=200, examples=["SĐT này đã hoàn 2 trên 4 đơn trước đây."])
+    text_vi: str = Field(max_length=200, examples=["This phone returned 2 of its 4 past orders."])
     signal_keys: list[str] = Field(min_length=1, examples=[["phone_return_rate"]])
 
 
@@ -51,25 +51,25 @@ class RiskScore(ApiModel):
                         {
                             "key": "phone_return_rate",
                             "group": "phone_history",
-                            "label_vi": "Tỷ lệ hoàn của SĐT",
+                            "label_vi": "Return rate of the phone",
                             "value": 0.5,
                             "contribution": 0.18,
                         },
                         {
                             "key": "address_missing_house_number",
                             "group": "address_quality",
-                            "label_vi": "Địa chỉ thiếu số nhà",
+                            "label_vi": "Address missing a house number",
                             "value": True,
                             "contribution": 0.07,
                         },
                     ],
                     "reasons": [
                         {
-                            "text_vi": "SĐT này đã hoàn 2 trên 4 đơn trước đây.",
+                            "text_vi": "This phone returned 2 of its 4 past orders.",
                             "signal_keys": ["phone_return_rate"],
                         },
                         {
-                            "text_vi": "Địa chỉ thiếu số nhà.",
+                            "text_vi": "The address is missing a house number.",
                             "signal_keys": ["address_missing_house_number"],
                         },
                     ],

@@ -12,8 +12,8 @@ from app.schemas.scoring import Decision, RiskScore
 
 _ITEM_EXAMPLE = {
     "sku": "AT-123-M",
-    "name": "Áo thun basic",
-    "variant": "Size M, màu đen",
+    "name": "Basic T-shirt",
+    "variant": "Size M, black",
     "quantity": 2,
     "unit_price_vnd": 150000,
 }
@@ -37,7 +37,7 @@ _CREATE_EXAMPLE = {
     "discount_vnd": 0,
     "prepaid_vnd": 0,
     "placed_at": "2026-10-09T10:15:00+07:00",
-    "conversation_text": "Khách: còn size M màu đen không shop? Shop: còn ạ. Khách: chốt 2 cái.",
+    "conversation_text": "Buyer: do you still have size M in black? Shop: yes. Buyer: I'll take 2.",
     "note": None,
 }
 
@@ -170,7 +170,7 @@ class OrderEvent(ApiModel):
     actor: str = Field(
         description="system, buyer, or the staff member's email.", examples=["system"]
     )
-    message_vi: str = Field(examples=["Chấm điểm: 41/100 (Cao)."])
+    message_vi: str = Field(examples=["Scored 41/100 (High)."])
     reason: str | None = Field(default=None, description="Required reason for overrides.")
 
 
@@ -217,21 +217,21 @@ def _detail_example() -> dict:
                 "at": "2026-10-09T10:16:31+07:00",
                 "type": "call_completed",
                 "actor": "system",
-                "message_vi": "Cuộc gọi AI: Đã sửa địa chỉ.",
+                "message_vi": "AI call: address changed.",
                 "reason": None,
             },
             {
                 "at": "2026-10-09T10:15:05+07:00",
                 "type": "decided",
                 "actor": "system",
-                "message_vi": "Quyết định: AI gọi xác nhận.",
+                "message_vi": "Decision: confirm by AI call.",
                 "reason": None,
             },
             {
                 "at": "2026-10-09T10:15:04+07:00",
                 "type": "scored",
                 "actor": "system",
-                "message_vi": "Chấm điểm: 41/100 (Cao).",
+                "message_vi": "Scored 41/100 (High).",
                 "reason": None,
             },
         ],
@@ -277,7 +277,9 @@ class OverrideRequest(ApiModel):
     model_config = ConfigDict(
         extra="forbid",
         json_schema_extra={
-            "examples": [{"action": "ship_now", "reason": "Khách quen, đã gọi xác nhận qua Zalo."}]
+            "examples": [
+                {"action": "ship_now", "reason": "Regular buyer, confirmed by phone on Zalo."}
+            ]
         },
     )
 

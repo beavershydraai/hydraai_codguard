@@ -2,7 +2,7 @@
 
 from app.risk.model import FAIL_COST
 from app.schemas.enums import HardRule
-from app.schemas.orders import OrderDetail, OrderEvent
+from app.schemas.orders import OrderDetail, OrderEvent, OrderSummary
 from app.schemas.scoring import RiskScore
 
 _ENGINE_HARD_RULES = {
@@ -34,17 +34,53 @@ def _risk_score(order_id: str, raw: dict) -> RiskScore:
     )
 
 
-def order_detail(doc: dict) -> OrderDetail:
-    """Current score and every earlier run, without changing the stored document."""
-    current = _risk_score(doc["order_id"], doc["scoring"]) if doc.get("scoring") else None
-    runs = [_risk_score(doc["order_id"], run) for run in doc.get("score_history", [])]
-    if current:
-        runs.append(current)
-    total = (
+def _current_score(doc: dict) -> RiskScore | None:
+    return _risk_score(doc["order_id"], doc["scoring"]) if doc.get("scoring") else None
+
+
+def _total_vnd(doc: dict) -> int:
+    return (
         sum(item["quantity"] * item["unit_price_vnd"] for item in doc["items"])
         - doc["discount_vnd"]
         + doc["shipping_fee_vnd"]
     )
+
+
+def order_summary(doc: dict) -> OrderSummary:
+    """Inbox row: the same figures as order_detail, without histories."""
+    current = _current_score(doc)
+    total = _total_vnd(doc)
+    decision = doc.get("decision")
+    return OrderSummary(
+        **{name: doc[name] for name in _SUMMARY_FIELDS if name in doc},
+        id=doc["order_id"],
+        total_vnd=total,
+        cod_amount_vnd=max(total - doc["prepaid_vnd"], 0),
+        tier=current.tier if current else None,
+        risk_score=current.risk_score if current else None,
+        current_action=decision["action"] if decision else None,
+    )
+
+
+_SUMMARY_FIELDS = (
+    "external_id",
+    "channel",
+    "buyer_name",
+    "buyer_phone",
+    "is_gift",
+    "status",
+    "placed_at",
+    "updated_at",
+)
+
+
+def order_detail(doc: dict) -> OrderDetail:
+    """Current score and every earlier run, without changing the stored document."""
+    current = _current_score(doc)
+    runs = [_risk_score(doc["order_id"], run) for run in doc.get("score_history", [])]
+    if current:
+        runs.append(current)
+    total = _total_vnd(doc)
     decision = doc.get("decision")
     fields = {
         name: doc[name]

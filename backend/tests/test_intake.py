@@ -40,6 +40,16 @@ class FakeStore:
         self.docs[order_id] = deepcopy(result)
         return result
 
+    def for_shop(self, shop_id, placed_from=None, placed_to=None):
+        docs = [
+            deepcopy(d)
+            for d in self.docs.values()
+            if d["shop_id"] == shop_id
+            and (placed_from is None or d["placed_at"] >= placed_from)
+            and (placed_to is None or d["placed_at"] <= placed_to)
+        ]
+        return sorted(docs, key=lambda d: d["placed_at"], reverse=True)
+
     def history(self, phone_hash, before):
         return [
             d

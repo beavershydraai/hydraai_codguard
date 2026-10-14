@@ -49,7 +49,7 @@ COD Guard targets **social-commerce and website sellers** (Facebook, TikTok live
 
 1. **Order in:** a COD order arrives by file import or through the order intake API.
 2. **Score:** COD Guard estimates the probability of failed delivery, assigns a risk tier and calculates the expected loss in VND.
-3. **Explain:** Gemini writes up to 3 short reasons in Vietnamese, based only on signals actually present on the order.
+3. **Explain:** Gemini writes up to 3 short reasons in plain English, based only on signals actually present on the order.
 4. **Act:** the decision engine picks the cheapest action worth taking, based on the shop's policy and the expected loss.
 5. **Verify:** if needed, an AI voice assistant (Gemini Live) or a confirmation page lets the buyer confirm, edit or cancel the order.
 6. **Learn:** delivery outcomes flow back to update phone history and improve the model.
@@ -60,12 +60,12 @@ COD Guard targets **social-commerce and website sellers** (Facebook, TikTok live
 
 - **Risk score and tier** (0–100; Low / Medium / High / Very High) for every COD order, with plain-language reasons
 - **Expected-loss decisions:** contacts the buyer only when it is worth the cost, so genuine buyers are rarely disturbed
-- **AI confirmation call** in natural Vietnamese:
+- **AI confirmation call** in natural English (Vietnamese available):
   - discloses that it is an AI and names the shop;
   - lets the buyer confirm, edit or cancel;
   - reads changes back before ending;
   - records exactly one of 7 outcomes.
-- **Buyer confirmation page** (no login): Confirm / Edit address / Cancel / *"I did not place this order"*
+- **Buyer confirmation page** (no login): Confirm / Change address / Cancel / *"I didn't order this"*
 - **Anti-abuse protection:** contact limits per phone number, order batching, quiet hours, and automatic blocking when someone reports fake orders
 - **Gift-order handling:** verifies with the buyer, never the recipient
 - **Review queue and overrides** for staff, with an audit log
@@ -111,7 +111,7 @@ flowchart LR
 | Agent orchestration | Agent Development Kit (ADK) |
 | Risk model | BigQuery ML (boosted trees, with explanations per prediction) |
 | Backend | Python service on Cloud Run |
-| Frontend | Web app on Firebase Hosting |
+| Frontend | React + TypeScript on Vite: shadcn/ui and ReUI, TanStack Router and Query, Zustand, Hey API client; Firebase Hosting |
 | Data | Firestore (orders and app state, see [data model](docs/data-model.md)), Cloud Storage (training snapshots, models) |
 | Secrets | Secret Manager |
 | Delivery outcomes | GHN staging API, CSV import |
@@ -211,7 +211,7 @@ cod-guard/
 │   │   └── prompts/    # AI call system instruction + outcome tool
 │   └── tests/
 ├── docs/               # technical notes (Gemini Live integration)
-├── frontend/           # Shop web app + buyer confirmation page
+├── frontend/           # Shop web app + buyer confirmation page (Vite + React)
 ├── ml/                 # data prep, synthetic data generator, BigQuery ML SQL, backtest
 ├── data/
 │   └── seed/           # pseudonymised demo data
@@ -233,7 +233,7 @@ cod-guard/
 - Gemini API access on Google Cloud (Vertex AI / Gemini Enterprise Agent Platform)
 - BigQuery and Firestore enabled
 - `gcloud` CLI and Firebase CLI
-- Python 3.11+ and Node.js 20+
+- Python 3.11+ and Node.js 20+ with [pnpm](https://pnpm.io/) (`corepack enable` installs the version pinned in `frontend/package.json`)
 - (Optional) GHN staging account for delivery-status testing
 
 ### 1. Clone and configure
@@ -258,7 +258,20 @@ GHN_API_BASE_URL=<ghn-staging-url>      # optional
 GHN_API_TOKEN=<from-secret-manager>     # optional, never commit
 ```
 
-### 2. Run the backend locally
+### 2. Run everything with make
+
+```bash
+cp .env.example .env    # once: backend settings, including the demo sign-in admin@gmail.com / admin12345
+make install            # uv sync + pnpm install
+make dev                # backend :8080 + frontend :5173 answering every API call from the in-browser mock
+make dev API=backend    # frontend calls the backend; endpoints still at 501 use the mock (Firestore needs `gcloud auth application-default login`)
+```
+
+`make dev` prefixes each server's output with `[api]` or `[web]`; Ctrl-C stops them all. Sign in with `admin@gmail.com` / `admin12345`.
+`make help` lists the other targets (`test`, `lint`, `generate`). The sections below run each part
+by hand.
+
+### 2a. Run the backend locally
 
 Requires [uv](https://docs.astral.sh/uv/), which also installs Python 3.12.
 
@@ -275,15 +288,18 @@ It shows each node's input, output and session state for a run, which is the qui
 why an order took the branch it did. Posting an order to `/api/v1/intake/orders` runs the same
 graph without the UI.
 
-Endpoints are defined but return `501 not_implemented` until each one is built. To work on the frontend before that, run the mock server described in [`api/README.md`](api/README.md).
+Endpoints are defined but return `501 not_implemented` until each one is built. The frontend answers those from its in-browser mock (see [`frontend/README.md`](frontend/README.md)); [`api/README.md`](api/README.md) also describes a Prism server for the contract's fixed examples.
 
-### 3. Run the frontend locally
+### 2b. Run the frontend locally
 
 ```bash
 cd frontend
-npm install
-npm run dev
+cp .env.example .env.local
+pnpm install
+pnpm dev                                         # http://localhost:5173
 ```
+
+The dev server proxies `/api` to the local backend; endpoints it still answers with 501 are served by the in-browser mock. `VITE_API_MOCK=all pnpm dev` runs without a backend. See [`frontend/README.md`](frontend/README.md) for the mock and the other commands.
 
 ### 4. Load demo data
 

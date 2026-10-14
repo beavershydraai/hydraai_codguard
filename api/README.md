@@ -6,25 +6,27 @@ confirmation page and external sales tools. It is OpenAPI 3.1, generated from th
 
 ## Use it from the frontend
 
-Generate TypeScript types:
+The frontend calls the API through a client generated with [Hey API](https://heyapi.dev)
+(`frontend/openapi-ts.config.ts`): typed SDK functions plus TanStack Query options.
 
 ```bash
-npx openapi-typescript api/openapi.yaml -o frontend/src/api/schema.d.ts
+cd frontend && pnpm generate:api      # writes frontend/src/api/gen/
 ```
 
-Call the API with the generated types, for example with `openapi-fetch`:
-
 ```ts
-import createClient from "openapi-fetch";
-import type { paths } from "./schema";
+import { useQuery } from "@tanstack/react-query";
+import { listOrdersOptions } from "@/api/gen/@tanstack/react-query.gen";
 
-const api = createClient<paths>({ baseUrl: import.meta.env.VITE_API_URL });
-const { data, error } = await api.GET("/api/v1/orders", {
-  params: { query: { status: ["pending_review"], limit: 50 } },
-});
+const { data } = useQuery(listOrdersOptions({ query: { status: ["pending_review"], limit: 50 } }));
 ```
 
 ## Mock server
+
+The frontend has its own stateful mock (`frontend/src/mocks/`) that answers endpoints the
+backend still returns 501 for; see `frontend/README.md`. Prism below serves the contract's fixed
+examples, which is useful to check the contract itself.
+
+### Prism
 
 The backend returns `501 not_implemented` for endpoints that are not built yet. Until then, run
 a mock server that answers with the examples in the contract:
@@ -46,7 +48,8 @@ npx @stoplight/prism-cli mock api/openapi.yaml        # http://127.0.0.1:4010
 - Errors: `application/problem+json` (RFC 9457) with a machine-readable `code`, plus `errors`
   for validation and `block_reasons` for `contact_blocked`.
 - Lists: cursor pagination. Pass `next_cursor` back as `cursor`.
-- Auth: Firebase ID token (`Authorization: Bearer`) for the shop app; `X-Api-Key` for the
+- Auth: the shop app signs in with `POST /api/v1/auth/login` and sends the returned token as
+  `Authorization: Bearer` (Firebase ID tokens will replace it, E7.1); `X-Api-Key` for the
   intake API; the buyer confirmation page uses the token in its URL.
 - Phone numbers in examples use the invalid prefix `+84000…` on purpose. Never put a real
   phone number in examples, fixtures or tests.
@@ -55,8 +58,9 @@ npx @stoplight/prism-cli mock api/openapi.yaml        # http://127.0.0.1:4010
 
 1. Edit the Pydantic models or routes in `backend/`.
 2. Run `uv run python -m app.openapi_export` in `backend/`.
-3. Commit both. `uv run pytest` fails if `openapi.yaml` is out of date or an example does not
-   match its schema.
+3. Run `pnpm generate:api` in `frontend/` to regenerate the client.
+4. Commit all three. `uv run pytest` fails if `openapi.yaml` is out of date or an example does not
+   match its schema; the frontend CI job fails if `frontend/src/api/gen/` is out of date.
 
 Mention breaking changes (removed or renamed fields, new required fields) in the PR description
 so the frontend can follow.

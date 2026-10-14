@@ -205,9 +205,7 @@ def _apply_score(
     staff_decision = doc.get("decision")
     doc.update(fields)
     doc["scoring"]["scored_at"] = now
-    _event(
-        doc, "scored", now, "Đã chấm điểm lại đơn hàng." if previous else "Đã chấm điểm đơn hàng."
-    )
+    _event(doc, "scored", now, "Order rescored." if previous else "Order scored.")
     if staff:
         _set_decision(doc, Decision.model_validate(staff_decision))
         return
@@ -227,7 +225,7 @@ def _apply_score(
     )
     _move(doc, "rescored" if previous else "decided", decision.action)
     _set_decision(doc, decision)
-    _event(doc, "decided", now, "Đã cập nhật quyết định cho đơn hàng.")
+    _event(doc, "decided", now, "Decision updated.")
 
 
 def prepare_score(store: OrderStore, doc: dict) -> dict | None:
@@ -341,7 +339,7 @@ def _edit(
     if deposit_paid:
         _record_intervention(doc, "deposit")
     doc.update(changed)
-    _event(doc, "edited", now, "Đã sửa đơn hàng.", actor)
+    _event(doc, "edited", now, "Order edited.", actor)
     scored = _score(store, doc, now, settings=settings, policy=policy)
     if not scored:
         if doc.get("scoring"):
@@ -395,7 +393,7 @@ def _confirm(doc: dict, via: str, now: datetime) -> None:
     if not doc.get("confirmation"):
         doc["confirmation"] = {"at": now, "via": via}
         _release(doc, now, confirmed=True)
-        _event(doc, "buyer_responded", now, "Người mua đã xác nhận đơn hàng.", "buyer")
+        _event(doc, "buyer_responded", now, "Buyer confirmed the order.", "buyer")
 
 
 def _cancel(doc: dict, reason: str, now: datetime) -> None:
@@ -415,7 +413,13 @@ def _cancel(doc: dict, reason: str, now: datetime) -> None:
             expected_loss_vnd=previous.get("expected_loss_vnd"),
         ),
     )
-    _event(doc, "buyer_responded", now, "Người mua đã hủy hoặc báo không đặt đơn hàng.", "buyer")
+    _event(
+        doc,
+        "buyer_responded",
+        now,
+        "Buyer cancelled the order or said they did not place it.",
+        "buyer",
+    )
 
 
 def apply_buyer_response(
@@ -453,7 +457,7 @@ def apply_buyer_response(
                 _move(doc, "buyer_confirmed")
                 _release(doc, now, confirmed=True)
                 _event(
-                    doc, "buyer_responded", now, "Người mua đã sửa và xác nhận đơn hàng.", "buyer"
+                    doc, "buyer_responded", now, "Buyer edited and confirmed the order.", "buyer"
                 )
             else:
                 _confirm(doc, "link", now)
@@ -504,7 +508,7 @@ def _no_response(
     if decision:
         _move(doc, "no_response", decision.action)
         _set_decision(doc, decision)
-        _event(doc, "decided", now, "Đã xử lý đơn hàng chưa được phản hồi.")
+        _event(doc, "decided", now, "Handled an order with no buyer response.")
 
 
 def on_no_response(
@@ -557,7 +561,7 @@ def apply_call_outcome(
                     doc,
                     "buyer_responded",
                     now,
-                    "Người mua đã sửa và xác nhận qua cuộc gọi.",
+                    "Buyer edited and confirmed the order on the call.",
                     "buyer",
                 )
             else:
@@ -578,7 +582,9 @@ def apply_call_outcome(
                     action=DecisionAction.HOLD_FOR_REVIEW,
                 )
                 _set_decision(doc, decision)
-                _event(doc, "call_completed", now, "Cuộc gọi chưa xác nhận được người mua.")
+                _event(
+                    doc, "call_completed", now, "The call did not reach a decision from the buyer."
+                )
         return doc
 
     return _transact(store, order_id, apply)
@@ -614,7 +620,7 @@ def hold_for_review(
         )
         _move(doc, "decided" if doc.get("decision") is None else "rescored", decision.action)
         _set_decision(doc, decision)
-        _event(doc, "decided", now, "Đã chuyển đơn hàng cho người bán duyệt.")
+        _event(doc, "decided", now, "Order sent to the shop for review.")
         return doc
 
     return _transact(store, order_id, apply)
@@ -640,7 +646,7 @@ def mark_shipped(store: OrderStore, order_id: str, now: datetime) -> dict:
     def apply(doc):
         if doc["status"] != OrderStatus.SHIPPED:
             _move(doc, "shipped")
-            _event(doc, "status_changed", now, "Đã gửi đơn hàng cho hãng vận chuyển.")
+            _event(doc, "status_changed", now, "Order handed to the carrier.")
         return doc
 
     return _transact(store, order_id, apply)
@@ -664,11 +670,11 @@ def apply_delivery(
             raise InvalidTransition("Cannot replace a terminal delivery result")
         if doc["status"] == OrderStatus.CLEARED_TO_SHIP:
             _move(doc, "shipped")
-            _event(doc, "status_changed", now, "Đã gửi đơn hàng cho hãng vận chuyển.")
+            _event(doc, "status_changed", now, "Order handed to the carrier.")
         event = "delivered" if outcome.result == DeliveryResult.DELIVERED else "delivery_failed"
         _move(doc, event)
         doc.update(fields)
-        _event(doc, "delivery_result", now, "Đã ghi nhận kết quả giao hàng.")
+        _event(doc, "delivery_result", now, "Delivery result recorded.")
         return doc
 
     return _transact(store, order_id, apply)

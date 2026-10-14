@@ -9,11 +9,61 @@ info:
 
     - Money is integer VND in fields ending `_vnd`.
     - Times are ISO 8601 with offset; shops operate in Vietnam time (`+07:00`).
-    - Enum values are English snake_case. Each enum's description lists its Vietnamese UI labels.
+    - Enum values are English snake_case. Each enum's description lists its English UI labels.
     - Errors use `application/problem+json` (RFC 9457) with a machine-readable `code`.
     - Lists use cursor pagination: pass `next_cursor` back as `cursor`.
   version: 0.1.0
 paths:
+  /api/v1/auth/login:
+    post:
+      tags:
+      - auth
+      summary: Sign in to the shop app
+      description: 'Exchanges a username and password for a bearer access token valid for 12 hours. A
+        stand-in for Firebase Auth (E7.1): the only account is the admin account configured on the server.'
+      operationId: login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Wrong username or password.
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Validation error
+                status: 422
+                code: validation_error
+                errors:
+                - loc:
+                  - body
+                  - password
+                  msg: String should have at least 1 character
+                  type: string_too_short
   /api/v1/me:
     get:
       tags:
@@ -38,9 +88,9 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
   /api/v1/shop:
     get:
       tags:
@@ -65,9 +115,9 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
     patch:
       tags:
       - shop
@@ -97,7 +147,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
         '403':
           description: Authenticated but not allowed (e.g. staff changing policy).
           content:
@@ -128,7 +178,7 @@ paths:
                   msg: String should match pattern '^\+?[0-9]{9,15}$'
                   type: string_pattern_mismatch
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
   /api/v1/shop/policy:
     get:
       tags:
@@ -153,9 +203,9 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
     put:
       tags:
       - shop
@@ -187,7 +237,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
         '403':
           description: Authenticated but not allowed (e.g. staff changing policy).
           content:
@@ -218,7 +268,7 @@ paths:
                   msg: String should match pattern '^\+?[0-9]{9,15}$'
                   type: string_pattern_mismatch
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
   /api/v1/shop/policy/versions:
     get:
       tags:
@@ -246,9 +296,9 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
   /api/v1/orders:
     get:
       tags:
@@ -257,7 +307,7 @@ paths:
       description: Filter by status and tier. The manual review queue is `status=pending_review`.
       operationId: list_orders
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
       parameters:
       - name: status
         in: query
@@ -350,7 +400,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
         '422':
@@ -377,7 +427,7 @@ paths:
       description: Scoring runs asynchronously; poll the order to see the score.
       operationId: create_order
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -400,7 +450,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
         '409':
@@ -476,7 +526,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
         '422':
           description: Request body or parameters failed validation. See `errors`.
           content:
@@ -495,7 +545,7 @@ paths:
                   msg: String should match pattern '^\+?[0-9]{9,15}$'
                   type: string_pattern_mismatch
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
   /api/v1/orders/{order_id}:
     get:
       tags:
@@ -503,7 +553,7 @@ paths:
       summary: 'Order page: score, reasons, decision, contacts, calls, timeline'
       operationId: get_order
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
       parameters:
       - name: order_id
         in: path
@@ -531,7 +581,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
         '404':
@@ -570,7 +620,7 @@ paths:
       description: Triggers a new scoring run. 409 `order_not_editable` once shipped.
       operationId: update_order
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
       parameters:
       - name: order_id
         in: path
@@ -604,7 +654,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
         '404':
@@ -656,7 +706,7 @@ paths:
       description: Recorded in the audit log. The action must be in `allowed_overrides` of the order.
       operationId: override_order
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
       parameters:
       - name: order_id
         in: path
@@ -690,7 +740,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
         '404':
@@ -743,7 +793,7 @@ paths:
         the call is not allowed.'
       operationId: start_call
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
       parameters:
       - name: order_id
         in: path
@@ -771,7 +821,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
         '404':
@@ -814,7 +864,7 @@ paths:
       summary: Call status and result (poll during a live call)
       operationId: get_call
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
       parameters:
       - name: call_id
         in: path
@@ -840,7 +890,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
         '404':
@@ -892,7 +942,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
         '422':
           description: Request body or parameters failed validation. See `errors`.
           content:
@@ -911,7 +961,7 @@ paths:
                   msg: String should match pattern '^\+?[0-9]{9,15}$'
                   type: string_pattern_mismatch
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
   /api/v1/delivery-outcomes/import:
     post:
       tags:
@@ -954,7 +1004,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
         '422':
           description: Request body or parameters failed validation. See `errors`.
           content:
@@ -973,7 +1023,7 @@ paths:
                   msg: String should match pattern '^\+?[0-9]{9,15}$'
                   type: string_pattern_mismatch
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
   /api/v1/dashboard/summary:
     get:
       tags:
@@ -981,7 +1031,7 @@ paths:
       summary: ROI dashboard
       operationId: get_dashboard_summary
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
       parameters:
       - name: from
         in: query
@@ -1013,7 +1063,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
         '422':
@@ -1057,9 +1107,9 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
   /api/v1/intake/orders:
     post:
       tags:
@@ -1093,7 +1143,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
         '422':
           description: Request body or parameters failed validation. See `errors`.
           content:
@@ -1279,7 +1329,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
         '403':
           description: Authenticated but not allowed (e.g. staff changing policy).
           content:
@@ -1305,7 +1355,7 @@ paths:
                 code: rate_limited
                 detail: Demo rate limit reached. Try again in a minute.
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
   /api/v1/demo/spam-simulation:
     post:
       tags:
@@ -1330,7 +1380,7 @@ paths:
                 title: Unauthorized
                 status: 401
                 code: unauthorized
-                detail: Missing or expired Firebase ID token.
+                detail: Missing or expired access token.
         '403':
           description: Authenticated but not allowed (e.g. staff changing policy).
           content:
@@ -1356,7 +1406,7 @@ paths:
                 code: rate_limited
                 detail: Demo rate limit reached. Try again in a minute.
       security:
-      - firebaseAuth: []
+      - bearerAuth: []
 components:
   schemas:
     ActionCount:
@@ -1521,8 +1571,8 @@ components:
       - not_ordered
       title: BuyerAction
       description: |-
-        Action on the buyer confirmation page. confirm: Xác nhận · edit_address: Sửa địa chỉ ·
-        cancel: Hủy · not_ordered: Tôi không đặt
+        Action on the buyer confirmation page. confirm: Confirm · edit_address: Change address ·
+        cancel: Cancel · not_ordered: I didn't order this
     BuyerItem:
       properties:
         name:
@@ -1613,13 +1663,13 @@ components:
         cod_amount_vnd: 330000
         expires_at: '2026-10-11T10:15:06+07:00'
         items:
-        - name: Áo thun basic
+        - name: Basic T-shirt
           quantity: 2
-          variant: Size M, màu đen
+          variant: Size M, black
         order_ref: A7K2
         phone_masked: +84******001
         recipient_name_masked: Nguyễn V** A
-        shop_name: Shop Thời Trang Mẫu
+        shop_name: Sample Fashion Shop
     BuyerResponse:
       properties:
         action:
@@ -1654,7 +1704,7 @@ components:
       title: BuyerResponseResult
       examples:
       - action: confirm
-        message_vi: Cảm ơn bạn. Đơn hàng đã được xác nhận.
+        message_vi: Thank you. Your order is confirmed.
     Call:
       properties:
         id:
@@ -1760,7 +1810,7 @@ components:
         queued_at: '2026-10-09T10:15:06+07:00'
         started_at: '2026-10-09T10:15:20+07:00'
         status: completed
-        summary_vi: Người mua nghe máy, xác nhận đơn và sửa số nhà từ 12 thành 15.
+        summary_vi: Buyer confirmed and changed the house number to 15.
     CallChange:
       properties:
         order_id:
@@ -1812,8 +1862,8 @@ components:
       description: |-
         Exactly one result per completed call (the voice tool's uppercase values map 1:1).
 
-        confirmed: Xác nhận · edited: Đã sửa · cancelled: Hủy · not_ordered: Không đặt ·
-        no_answer: Không nghe máy · wrong_person: Nhầm người · unclear: Không rõ
+        confirmed: Confirmed · edited: Edited · cancelled: Cancelled · not_ordered: Not ordered ·
+        no_answer: No answer · wrong_person: Wrong person · unclear: Unclear
     CallStatus:
       type: string
       enum:
@@ -1896,13 +1946,14 @@ components:
       description: |-
         Why the buyer was not contacted.
 
-        expected_loss_below_cost: lỗ dự kiến thấp hơn chi phí liên hệ ·
-        daily_call_limit: đã có 1 cuộc gọi AI tới SĐT này trong 24 giờ ·
-        outside_contact_hours: ngoài giờ liên hệ ·
-        phone_blocked: SĐT bị chặn 30 ngày sau "Tôi không đặt" ·
-        phone_trusted: SĐT đang được tin tưởng 7 ngày sau khi xác nhận ·
-        already_confirmed: đơn đã xác nhận · batched: gộp vào lần liên hệ của đơn khác trong 15 phút ·
-        attempts_exhausted: đã gọi đủ 2 lần
+        expected_loss_below_cost: expected loss below the cost of contact ·
+        daily_call_limit: this phone already had an AI call in the last 24 hours ·
+        outside_contact_hours: outside contact hours ·
+        phone_blocked: phone blocked for 30 days after "I didn't order this" ·
+        phone_trusted: phone trusted for 7 days after a confirmation ·
+        already_confirmed: order already confirmed ·
+        batched: batched into another order's contact within 15 minutes ·
+        attempts_exhausted: both call attempts used
     ContactChannel:
       type: string
       enum:
@@ -1911,8 +1962,8 @@ components:
       - deposit_request
       title: ContactChannel
       description: |-
-        How the buyer was contacted. ai_call: AI gọi · confirmation_link: Link xác nhận ·
-        deposit_request: Yêu cầu cọc
+        How the buyer was contacted. ai_call: AI call · confirmation_link: Confirmation link ·
+        deposit_request: Deposit request
     ContactHours:
       properties:
         start:
@@ -1964,7 +2015,7 @@ components:
         estimated_savings_vnd:
           type: integer
           title: Estimated Savings Vnd
-          description: Estimate (ước tính). May be negative.
+          description: Estimate (UI label 'estimated'). May be negative.
         good_orders_contacted_rate:
           type: number
           maximum: 1.0
@@ -2076,8 +2127,8 @@ components:
       description: |-
         Action chosen by the decision engine or a staff override.
 
-        ship_now: Gửi ngay · send_confirmation_link: Gửi link xác nhận · ai_call: AI gọi ·
-        require_deposit: Yêu cầu cọc · hold_for_review: Chờ duyệt · cancel: Hủy đơn
+        ship_now: Ship now · send_confirmation_link: Send confirmation link · ai_call: AI call ·
+        require_deposit: Require deposit · hold_for_review: Hold for review · cancel: Cancel order
     DeliveryImportResult:
       properties:
         received:
@@ -2176,8 +2227,8 @@ components:
         Delivery result from the carrier. Only refused and unreachable count as a failed
         delivery for training; carrier_issue and shop_issue do not.
 
-        delivered: Giao thành công · refused: Người mua từ chối nhận ·
-        unreachable: Không liên lạc được · carrier_issue: Lỗi hãng vận chuyển · shop_issue: Lỗi shop
+        delivered: Delivered · refused: Buyer refused · unreachable: Buyer unreachable ·
+        carrier_issue: Carrier issue · shop_issue: Shop issue
     DemoResetResult:
       properties:
         seed:
@@ -2379,6 +2430,62 @@ components:
       - policy
       - points
       title: LiftSeries
+    LoginRequest:
+      properties:
+        username:
+          type: string
+          maxLength: 100
+          minLength: 1
+          title: Username
+        password:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Password
+      additionalProperties: false
+      type: object
+      required:
+      - username
+      - password
+      title: LoginRequest
+      examples:
+      - password: admin12345
+        username: admin@gmail.com
+    LoginResponse:
+      properties:
+        access_token:
+          type: string
+          title: Access Token
+          description: 'Send as `Authorization: Bearer <token>`.'
+        token_type:
+          type: string
+          const: bearer
+          title: Token Type
+          default: bearer
+        expires_at:
+          type: string
+          format: date-time
+          title: Expires At
+          description: The token stops working after this time.
+        user:
+          $ref: '#/components/schemas/Me'
+      additionalProperties: false
+      type: object
+      required:
+      - access_token
+      - expires_at
+      - user
+      title: LoginResponse
+      examples:
+      - access_token: example-access-token
+        expires_at: '2026-10-15T08:00:00+07:00'
+        token_type: bearer
+        user:
+          display_name: Admin
+          email: admin@gmail.com
+          role: owner
+          shop_id: shop_demo
+          user_id: usr_admin
     Me:
       properties:
         user_id:
@@ -2406,7 +2513,7 @@ components:
       - shop_id
       title: Me
       examples:
-      - display_name: Chủ shop
+      - display_name: Shop owner
         email: owner@example.com
         role: owner
         shop_id: shp_01
@@ -2519,16 +2626,16 @@ components:
         buyer_name: Nguyễn Văn A
         buyer_phone: '+84000000001'
         channel: facebook
-        conversation_text: 'Khách: còn size M màu đen không shop? Shop: còn ạ. Khách: chốt 2 cái.'
+        conversation_text: 'Buyer: do you still have size M in black? Shop: yes. Buyer: I''ll take 2.'
         discount_vnd: 0
         external_id: FB-20261009-0042
         is_gift: false
         items:
-        - name: Áo thun basic
+        - name: Basic T-shirt
           quantity: 2
           sku: AT-123-M
           unit_price_vnd: 150000
-          variant: Size M, màu đen
+          variant: Size M, black
         placed_at: '2026-10-09T10:15:00+07:00'
         prepaid_vnd: 0
         shipping_fee_vnd: 30000
@@ -2720,7 +2827,7 @@ components:
           queued_at: '2026-10-09T10:15:06+07:00'
           started_at: '2026-10-09T10:15:20+07:00'
           status: completed
-          summary_vi: Người mua nghe máy, xác nhận đơn và sửa số nhà từ 12 thành 15.
+          summary_vi: Buyer confirmed and changed the house number to 15.
         channel: facebook
         cod_amount_vnd: 330000
         contacts:
@@ -2741,10 +2848,10 @@ components:
           reasons:
           - signal_keys:
             - phone_return_rate
-            text_vi: SĐT này đã hoàn 2 trên 4 đơn trước đây.
+            text_vi: This phone returned 2 of its 4 past orders.
           - signal_keys:
             - address_missing_house_number
-            text_vi: Địa chỉ thiếu số nhà.
+            text_vi: The address is missing a house number.
           risk_score: 41
           scored_at: '2026-10-09T10:15:04+07:00'
           status: scored
@@ -2753,12 +2860,12 @@ components:
           - contribution: 0.18
             group: phone_history
             key: phone_return_rate
-            label_vi: Tỷ lệ hoàn của SĐT
+            label_vi: Return rate of the phone
             value: 0.5
           - contribution: 0.07
             group: address_quality
             key: address_missing_house_number
-            label_vi: Địa chỉ thiếu số nhà
+            label_vi: Address missing a house number
             value: true
         decision:
           action: ai_call
@@ -2775,11 +2882,11 @@ components:
         id: ord_01
         is_gift: false
         items:
-        - name: Áo thun basic
+        - name: Basic T-shirt
           quantity: 2
           sku: AT-123-M
           unit_price_vnd: 150000
-          variant: Size M, màu đen
+          variant: Size M, black
         placed_at: '2026-10-09T10:15:00+07:00'
         prepaid_vnd: 0
         risk_score: 41
@@ -2793,10 +2900,10 @@ components:
           reasons:
           - signal_keys:
             - phone_return_rate
-            text_vi: SĐT này đã hoàn 2 trên 4 đơn trước đây.
+            text_vi: This phone returned 2 of its 4 past orders.
           - signal_keys:
             - address_missing_house_number
-            text_vi: Địa chỉ thiếu số nhà.
+            text_vi: The address is missing a house number.
           risk_score: 41
           scored_at: '2026-10-09T10:15:04+07:00'
           status: scored
@@ -2805,12 +2912,12 @@ components:
           - contribution: 0.18
             group: phone_history
             key: phone_return_rate
-            label_vi: Tỷ lệ hoàn của SĐT
+            label_vi: Return rate of the phone
             value: 0.5
           - contribution: 0.07
             group: address_quality
             key: address_missing_house_number
-            label_vi: Địa chỉ thiếu số nhà
+            label_vi: Address missing a house number
             value: true
         shipping_fee_vnd: 30000
         status: awaiting_confirmation
@@ -2818,15 +2925,15 @@ components:
         timeline:
         - actor: system
           at: '2026-10-09T10:16:31+07:00'
-          message_vi: 'Cuộc gọi AI: Đã sửa địa chỉ.'
+          message_vi: 'AI call: address changed.'
           type: call_completed
         - actor: system
           at: '2026-10-09T10:15:05+07:00'
-          message_vi: 'Quyết định: AI gọi xác nhận.'
+          message_vi: 'Decision: confirm by AI call.'
           type: decided
         - actor: system
           at: '2026-10-09T10:15:04+07:00'
-          message_vi: 'Chấm điểm: 41/100 (Cao).'
+          message_vi: Scored 41/100 (High).
           type: scored
         total_vnd: 330000
         updated_at: '2026-10-09T10:16:31+07:00'
@@ -2860,7 +2967,7 @@ components:
           type: string
           title: Message Vi
           examples:
-          - 'Chấm điểm: 41/100 (Cao).'
+          - Scored 41/100 (High).
         reason:
           anyOf:
           - type: string
@@ -2954,9 +3061,9 @@ components:
       description: |-
         Order lifecycle state.
 
-        new: Mới · cleared_to_ship: Được gửi · awaiting_confirmation: Chờ xác nhận ·
-        awaiting_deposit: Chờ cọc · pending_review: Chờ duyệt · cancelled: Đã hủy ·
-        shipped: Đã gửi · delivered: Giao thành công · delivery_failed: Giao thất bại
+        new: New · cleared_to_ship: Cleared to ship · awaiting_confirmation: Awaiting confirmation ·
+        awaiting_deposit: Awaiting deposit · pending_review: Pending review · cancelled: Cancelled ·
+        shipped: Shipped · delivered: Delivered · delivery_failed: Delivery failed
     OrderSummary:
       properties:
         id:
@@ -3126,7 +3233,7 @@ components:
       description: Staff decision that replaces the engine's. Recorded in the audit log.
       examples:
       - action: ship_now
-        reason: Khách quen, đã gọi xác nhận qua Zalo.
+        reason: Regular buyer, confirmed by phone on Zalo.
     Policy:
       properties:
         version:
@@ -3201,7 +3308,7 @@ components:
         monthly_savings_vnd:
           type: integer
           title: Monthly Savings Vnd
-          description: Estimate (ước tính) for orders_per_day.
+          description: Estimate (UI label 'estimated') for orders_per_day.
       additionalProperties: false
       type: object
       required:
@@ -3295,7 +3402,7 @@ components:
           maxLength: 200
           title: Text Vi
           examples:
-          - SĐT này đã hoàn 2 trên 4 đơn trước đây.
+          - This phone returned 2 of its 4 past orders.
         signal_keys:
           items:
             type: string
@@ -3311,7 +3418,7 @@ components:
       - signal_keys
       title: Reason
       description: |-
-        A plain-Vietnamese reason written by Gemini. Each reason cites the signals it is based on;
+        A plain-English reason written by Gemini. Each reason cites the signals it is based on;
         reasons that do not match a real signal are rejected before they reach the API.
     RiskScore:
       properties:
@@ -3407,10 +3514,10 @@ components:
         reasons:
         - signal_keys:
           - phone_return_rate
-          text_vi: SĐT này đã hoàn 2 trên 4 đơn trước đây.
+          text_vi: This phone returned 2 of its 4 past orders.
         - signal_keys:
           - address_missing_house_number
-          text_vi: Địa chỉ thiếu số nhà.
+          text_vi: The address is missing a house number.
         risk_score: 41
         scored_at: '2026-10-09T10:15:04+07:00'
         status: scored
@@ -3419,12 +3526,12 @@ components:
         - contribution: 0.18
           group: phone_history
           key: phone_return_rate
-          label_vi: Tỷ lệ hoàn của SĐT
+          label_vi: Return rate of the phone
           value: 0.5
         - contribution: 0.07
           group: address_quality
           key: address_missing_house_number
-          label_vi: Địa chỉ thiếu số nhà
+          label_vi: Address missing a house number
           value: true
     RiskTier:
       type: string
@@ -3434,14 +3541,14 @@ components:
       - high
       - very_high
       title: RiskTier
-      description: 'Risk tier. low: Thấp · medium: Trung bình · high: Cao · very_high: Rất cao'
+      description: 'Risk tier. low: Low · medium: Medium · high: High · very_high: Very high'
     Role:
       type: string
       enum:
       - owner
       - staff
       title: Role
-      description: 'Shop role. owner: Chủ shop (đổi được policy và chi phí) · staff: Nhân viên'
+      description: 'Shop role. owner: Shop owner (can change the policy and costs) · staff: Staff'
     SalesChannel:
       type: string
       enum:
@@ -3484,7 +3591,7 @@ components:
       - created_at: '2026-10-09T09:00:00+07:00'
         id: shp_01
         intake_api_key_last4: a1b2
-        name: Shop Thời Trang Mẫu
+        name: Sample Fashion Shop
         settings:
           ai_call_cost_vnd: 1500
           confirmation_link_cost_vnd: 300
@@ -3595,7 +3702,7 @@ components:
           type: string
           title: Label Vi
           examples:
-          - Tỷ lệ hoàn của SĐT
+          - Return rate of the phone
         value:
           anyOf:
           - type: string
@@ -3633,9 +3740,9 @@ components:
       - payment
       title: SignalGroup
       description: |-
-        Signal group. phone_history: Lịch sử SĐT · address_quality: Chất lượng địa chỉ ·
-        order_behavior: Hành vi đặt hàng · conversation: Hội thoại · velocity: Tần suất bất thường ·
-        context: Ngữ cảnh · payment: Thanh toán
+        Signal group. phone_history: Phone history · address_quality: Address quality ·
+        order_behavior: Ordering behaviour · conversation: Sales conversation ·
+        velocity: Unusual frequency · context: Context · payment: Payment
     SpamSimulationResult:
       properties:
         orders_created:
@@ -3701,9 +3808,10 @@ components:
       - action
       title: TierPolicy
   securitySchemes:
-    firebaseAuth:
+    bearerAuth:
       type: http
-      description: 'Firebase ID token of a shop user (role in custom claims: owner or staff).'
+      description: Access token of a shop user from `POST /api/v1/auth/login` (role owner or staff). Firebase
+        ID tokens will replace it (E7.1).
       scheme: bearer
       bearerFormat: JWT
     intakeApiKey:
@@ -3712,6 +3820,8 @@ components:
       in: header
       name: X-Api-Key
 tags:
+- name: auth
+  description: Sign-in for the shop app.
 - name: me
   description: Signed-in user.
 - name: shop
