@@ -203,10 +203,10 @@ cod-guard/
 ├── api/                # OpenAPI contract (generated from backend, used by frontend)
 ├── backend/            # Cloud Run service: API, decision engine, ADK agents
 │   ├── app/            # FastAPI app: routes and request/response schemas
-│   │   └── decision/   # order lifecycle, rescoring, confirmed-order guard and tier policy
+│   │   ├── decision/   # order lifecycle, rescoring, confirmed-order guard and tier policy
+│   │   └── agents/     # ADK orchestration: the two workflows and the decision log
 │   ├── config/         # rule set YAML (tier_policy is the part in use)
 │   ├── scoring/        # hard rules, expected loss, model calls
-│   ├── agents/         # ADK orchestration
 │   ├── voice/          # Gemini Live session handling
 │   │   └── prompts/    # AI call system instruction + outcome tool
 │   └── tests/
@@ -266,7 +266,13 @@ cd backend
 uv sync
 uv run uvicorn app.main:app --reload --port 8080   # API docs at http://localhost:8080/docs
 uv run pytest
+uv run adk web app                                 # inspect the pipeline node by node
 ```
+
+`adk web app` opens the Agent Development Kit UI and lists the pipeline under the name `agents`.
+It shows each node's input, output and session state for a run, which is the quickest way to see
+why an order took the branch it did. Posting an order to `/api/v1/intake/orders` runs the same
+graph without the UI.
 
 Endpoints are defined but return `501 not_implemented` until each one is built. To work on the frontend before that, run the mock server described in [`api/README.md`](api/README.md).
 

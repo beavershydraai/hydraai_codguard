@@ -18,7 +18,7 @@ import pandas as pd
 from app.decision import policy
 from app.risk import artifacts
 from app.risk.features import compute_features
-from app.risk.model import FAIL_COST, expected_cost, predict1
+from app.risk.model import FAIL_COST, expected_cost, explain1, predict1
 from app.schemas.enums import DecisionAction, RiskTier
 
 log = logging.getLogger(__name__)
@@ -124,6 +124,7 @@ def score(doc: dict, history: list[dict]) -> dict | None:
             "expected_loss_vnd": expected_loss(p),
             "chosen_by": decision["chosen_by"],
             "features": features,
+            "shap": explain1(model1, pd.DataFrame([features])),
             "model_version": model1["version"],
             "scored_at": datetime.now(UTC),
         },

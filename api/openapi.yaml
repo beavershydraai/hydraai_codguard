@@ -1066,7 +1066,8 @@ paths:
       - intake
       summary: Receive an order from an external sales tool
       description: 'Idempotent on `external_id`: a repeat returns the existing order with `duplicate:
-        true`.'
+        true`. A new order runs the E4.7 pipeline before the response, so its status is already the one
+        the decision engine chose.'
       operationId: intake_order
       requestBody:
         content:

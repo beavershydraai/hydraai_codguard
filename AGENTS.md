@@ -28,9 +28,9 @@ api/            OpenAPI contract (generated from backend/, used by frontend/)
 backend/        Python service on Cloud Run: API, decision engine, ADK agents
   app/          FastAPI app: routes (api/v1/) and request/response schemas (schemas/)
     decision/   order lifecycle, rescoring, confirmed-order guard (E4.1) and tier policy (E4.2)
+    agents/     ADK workflows (E4.7), advisory assessment and the decision log
   config/       rule set YAML; only `tier_policy` is read by the code so far
   scoring/      hard rules, expected loss, model calls
-  agents/       ADK orchestration
   voice/        Gemini Live session handling
     prompts/    AI call system instruction and the record_call_outcome tool
   tests/
@@ -51,6 +51,9 @@ scripts/        Demo reset, abuse simulation, call test runner
 - Secrets in Secret Manager; region `asia-southeast1`. Exception: Gemini Live API sessions run in `GEMINI_LIVE_LOCATION` (`us-central1`), because the Live API is not served from Asia regions.
 - Model IDs come from environment variables (`GEMINI_MODEL`, `GEMINI_LIVE_MODEL`). Never hard-code them.
 - Before changing voice code or the call prompt, read `docs/gemini-live.md`. Live models changed in September 2026 (`gemini-3.8-live`), and older tutorials use config that 3.8 rejects.
+- The pipeline is written against `google-adk` 2.x (`>=2.11,<3` in `backend/pyproject.toml`). ADK 2.0 replaced the template workflows with a graph engine: most tutorials online are still 1.x, and the 1.x pattern (`SequentialAgent`, subclassing `BaseAgent` and overriding `_run_async_impl`) is ignored without an error on 2.x. Use `Workflow` with function nodes.
+- ADK caps `websockets` below 16 and `opentelemetry-api` at 1.42.1, and its `google-genai` dependency caps `tenacity` below 9.2. The `opentelemetry-api` cap also holds `fastapi` and `google-api-core` back. The Gemini Live client (E5) therefore runs on `websockets` 15.x.
+- ADK runs synchronous nodes on the event loop. The intake route is a sync endpoint, so FastAPI runs it in a worker thread and `asyncio.run` gives each run its own loop there. Do not turn the route into `async def` while the nodes make blocking Firestore calls: they would then block every request on the instance.
 
 ## Commands
 
@@ -61,6 +64,7 @@ Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 | Install backend dependencies | `uv sync` |
 | Backend dev server | `uv run uvicorn app.main:app --reload --port 8080` (docs at `/docs`) |
 | Backend tests | `uv run pytest` |
+| Inspect the ADK pipeline | `uv run adk web app` (the pipeline is listed as `agents`) |
 | Backend lint and format | `uv run ruff check . && uv run ruff format --check .` |
 | Export the API contract | `uv run python -m app.openapi_export` (writes `api/openapi.yaml`) |
 | Train the risk model | `uv run python -m app.risk.jobs.train` (env `FIRESTORE_DATABASE`, and `MODEL_BUCKET` or a local `MODEL_DIR`); in the cloud: `gcloud run jobs execute codguard-train` |
@@ -108,6 +112,9 @@ These rules come from the README and the epics. Code and tests must enforce them
 
 - Order states: Mới, Được gửi, Chờ xác nhận, Chờ cọc, Chờ duyệt, Đã hủy, Đã gửi, Giao thành công, Giao thất bại.
 - Editing an order before it ships triggers a rescore. A confirmed order is never contacted again.
+- A new order runs the pipeline at intake, with no one pressing anything: `load_order → score → assess_order → decide → act`. The assessment uses two advisory agents when `GEMINI_MODEL` is set; it validates evidence-backed reasons before the decision is saved. Only the deterministic engine in `app/decision` picks the action; an LLM may write the wording of a message but never decides.
+- Every way out of the pipeline that is not a decision ends in review: a run that still fails after its retries, an action with no branch of its own, and an event the L4 table does not know. Nothing reaches the buyer on an error.
+- A send is claimed before it happens, so a retry, a redelivered webhook or a rerun never contacts the buyer twice. A confirmation link or deposit request is claimed under `order_id + action`. Each of the two AI call attempts has its own claim (`order_id:ai_call:1`, `:2`) tied to the decision it carries out, and the attempt is recorded on the order (`attempts.ai_call`) so the no-response timer moves on to the second call or to review.
 - A policy change applies only to decisions made after the change.
 - Every manual override records who made it, when, and why, in the audit log.
 

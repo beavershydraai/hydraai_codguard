@@ -6,11 +6,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Security, status
 
+from app.agents.agent import Pipeline
+from app.agents.log import DecisionLog, get_decision_log
+from app.agents.runner import run_new_order_sync
 from app.api.errors import ApiError, NotImplementedYet, problem_example, problem_responses
 from app.api.security import firebase_auth, intake_api_key
 from app.data.orders import order_document
 from app.data.store import OrderStore, get_store, order_id_for, phone_key, shop_for_key
-from app.decision.lifecycle import score_order
 from app.schemas.confirm import BuyerOrderView, BuyerResponse, BuyerResponseResult
 from app.schemas.demo import DemoResetResult, SpamSimulationResult
 from app.schemas.enums import ErrorCode
@@ -29,12 +31,14 @@ intake_router = APIRouter(
     responses=problem_responses(401, 422),
     summary="Receive an order from an external sales tool",
     description="Idempotent on `external_id`: a repeat returns the existing order "
-    "with `duplicate: true`.",
+    "with `duplicate: true`. A new order runs the E4.7 pipeline before the response, so its "
+    "status is already the one the decision engine chose.",
 )
 def intake_order(
     body: OrderCreate,
     api_key: Annotated[str | None, Security(intake_api_key)],
     store: Annotated[OrderStore, Depends(get_store)],
+    decision_log: Annotated[DecisionLog, Depends(get_decision_log)],
 ) -> IntakeAccepted:
     shop_id = shop_for_key(api_key)
     if shop_id is None:
@@ -46,10 +50,11 @@ def intake_order(
     existing = store.create(doc)
     if existing:
         return IntakeAccepted(order_id=order_id, status=existing["status"], duplicate=True)
-    try:  # a scoring problem must never lose the order: it stays stored, unscored
-        doc = score_order(store, doc)
+    try:  # a pipeline problem must never lose the order: it stays stored, for review or unscored
+        run_new_order_sync(order_id, shop_id, pipeline=Pipeline(store=store, log=decision_log))
+        doc = store.get(order_id) or doc
     except Exception:
-        log.exception("Scoring failed for %s", order_id)
+        log.exception("The pipeline failed for %s", order_id)
     return IntakeAccepted(order_id=order_id, status=doc["status"], duplicate=False)
 
 

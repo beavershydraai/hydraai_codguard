@@ -22,6 +22,7 @@ NOT_IN_SNAPSHOT = {
     "confirmation",
     "cancel",
     "intervention",
+    "attempts",
 }
 
 

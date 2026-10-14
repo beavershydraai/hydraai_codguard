@@ -55,6 +55,7 @@ One document per order. It is a top-level collection with a `shop_id` field rath
 | `score_history` | array of map | rescore (E4.1) | Earlier `scoring` maps, newest first; starts empty. `OrderDetail.score_history` combines the current score with these earlier runs |
 | `confirmation` | map \| null | buyer response, call outcome (E4.1) | `at`, `via` (`link` or `call`); set once after confirmation or a buyer correction. A confirmed order is never contacted again |
 | `intervention` | optional map | completed buyer response, call outcome, deposit update (E4.1) | First completed contact assignment: `tier`, `contact_action`, `random_slice`, `action_probability`, original address `province`, plus the original scoring `features` and `probability` when available. Saved before a response or deposit update replaces the current score or decision; preserved on later edits |
+| `attempts` | optional map | ADK pipeline (E4.7) | `ai_call`: the number of the last AI call attempt the pipeline claimed (1 or 2). The no-response timer counts it, or the started calls E5 records if they are more, to choose the second attempt or review |
 | `cancel` | map \| null | buyer response, staff override | `reason` (`cancelled`, `not_ordered`, `shop`), `at`, `by`; buyer cancellation reasons count as failure labels, `shop` alone does not |
 | `timeline` | array of map | lifecycle (E4.1) | `OrderEvent` entries, newest first; starts with `created` |
 | `delivery` | map \| null | `DeliveryOutcome` | `result`, `carrier`, `tracking_code`, `occurred_at` (UTC) |
@@ -86,7 +87,8 @@ One row per order whose buyer cancellation or delivery result gives a label. It 
 job from Firestore:
 
 - copy every field except `buyer_name`, `recipient_name`, `buyer_phone`, `recipient_phone`, `scoring`,
-  `status`, `decision`, `score_history`, `timeline`, `confirmation`, `cancel` and `intervention`;
+  `status`, `decision`, `score_history`, `timeline`, `confirmation`, `cancel`, `intervention` and
+  `attempts`;
 - flatten `address.*` to `address_*` and `delivery.*` to `delivery_*`; keep `items` as a list column;
 - add the label `is_failed`.
 
