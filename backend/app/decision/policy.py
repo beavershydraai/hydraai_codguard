@@ -73,7 +73,7 @@ def follow_up(
         wait = (
             CALL_RETRY_GAP_MINUTES
             if action == DecisionAction.AI_CALL
-            else rule.no_response_after_minutes
+            else rule.no_response_after_minutes or CALL_RETRY_GAP_MINUTES
         )
         return DecisionAction.HOLD_FOR_REVIEW, wait
     return None, None
@@ -86,11 +86,27 @@ def decide(
     *,
     settings: ShopSettings | None = None,
     policy: Policy | None = None,
+    confirmed: bool = False,
+    action: DecisionAction | None = None,
 ) -> Decision:
-    """The first decision for a scored order."""
+    """The decision for a scored order, preserving an action selected by a scoring hard rule.
+
+    A confirmed buyer is never contacted again, even after the order is rescored.
+    """
+    if action == DecisionAction.CANCEL:
+        raise ValueError("only the buyer or the shop cancels an order")
     policy = policy or default_policy()
-    action = tier_rule(policy, tier).action
-    return _decision(action, tier, expected_loss_vnd, now, 0, settings or ShopSettings(), policy)
+    action = action or tier_rule(policy, tier).action
+    return _decision(
+        action,
+        tier,
+        expected_loss_vnd,
+        now,
+        0,
+        settings or ShopSettings(),
+        policy,
+        confirmed=confirmed,
+    )
 
 
 def escalate(
@@ -102,11 +118,20 @@ def escalate(
     call_attempts: int = 0,
     settings: ShopSettings | None = None,
     policy: Policy | None = None,
+    confirmed: bool = False,
+    action: DecisionAction | None = None,
 ) -> Decision | None:
     """The decision when the buyer did not respond to `unanswered` in time, or None when nothing
-    follows. `call_attempts` counts the AI calls already made for this order."""
+    follows. `call_attempts` counts the AI calls already made for this order. A saved scheduled
+    `action` survives a later policy change; the new decision's follow-up uses today's policy.
+    """
+    if action == DecisionAction.CANCEL:
+        raise ValueError("only the buyer or the shop cancels an order")
+    if confirmed:
+        return None
     policy = policy or default_policy()
-    action, _ = follow_up(tier_rule(policy, tier), unanswered, call_attempts)
+    if action is None:
+        action, _ = follow_up(tier_rule(policy, tier), unanswered, call_attempts)
     if action is None:
         return None
     return _decision(
@@ -122,10 +147,15 @@ def _decision(
     call_attempts: int,
     settings: ShopSettings,
     policy: Policy,
+    *,
+    confirmed: bool = False,
 ) -> Decision:
     cost = contact_cost(action, settings)
     blocks = []
-    if action == DecisionAction.AI_CALL and call_attempts >= MAX_CALL_ATTEMPTS:
+    if confirmed and cost is not None:
+        action, cost = DecisionAction.SHIP_NOW, None
+        blocks = [ContactBlockReason.ALREADY_CONFIRMED]
+    elif action == DecisionAction.AI_CALL and call_attempts >= MAX_CALL_ATTEMPTS:
         action, cost = DecisionAction.HOLD_FOR_REVIEW, None
         blocks = [ContactBlockReason.ATTEMPTS_EXHAUSTED]
     elif cost is not None and expected_loss_vnd <= cost:  # contact only when it pays for itself

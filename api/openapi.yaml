@@ -2327,7 +2327,11 @@ components:
       - status
       - duplicate
       title: IntakeAccepted
-      description: Order accepted from an external sales tool. Scoring runs asynchronously.
+      description: |-
+        Order accepted from an external sales tool, with its current lifecycle status.
+
+        Scoring and the first decision are saved when a model is available. Otherwise the
+        order remains new and unscored.
       examples:
       - duplicate: false
         order_id: ord_01

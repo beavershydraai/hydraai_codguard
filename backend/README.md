@@ -1,7 +1,7 @@
 # COD Guard backend
 
-FastAPI service. For now it holds the API contract: every endpoint is defined with its request
-and response schemas and returns `501 not_implemented` until it is built.
+FastAPI service with an API contract, order intake, scoring and lifecycle services. Endpoints that
+are not yet wired to their services return `501 not_implemented`.
 
 ```bash
 uv sync                                            # installs Python 3.12 and dependencies
@@ -29,9 +29,29 @@ with tags `sha-<commit>` and `main`.
 | `app/schemas/` | Request and response models with examples |
 | `app/data/` | Order record (`docs/data-model.md`): phone normalisation and hashing, the Firestore document, the training label and snapshot row |
 | `app/risk/` | Scoring engine (features, Model 1, hard rules, tier, action) and the jobs `jobs/train.py`, `jobs/monitor.py` (`tasks/E2.3-risk-features.md`) |
-| `app/decision/` | Policy engine (E4.2): action per tier, no contact when the expected loss does not cover its cost, escalation when the buyer does not respond |
+| `app/decision/` | Order lifecycle (E4.1): nine statuses, transactional edits and rescoring, buyer/call/delivery outcomes, confirmed-order guard, order-detail view. Policy engine (E4.2): action per tier, expected-loss gate and escalation |
 | `config/cod_guard_rules_apac.yaml` | Rule set. Only the `tier_policy` section is read by the code today; the image copies this folder. `tests/test_rules_file.py` keeps the rest in line with AGENTS.md, `ShopSettings` and the engines |
 | `tests/` | Contract and app tests |
 | `Dockerfile` | Production image: uv-built virtualenv, non-root user, listens on `$PORT` |
 
 See `../api/README.md` for how the frontend uses the contract.
+
+## Order lifecycle services (E4.1)
+
+`app/decision/lifecycle.py` applies all order transitions through `OrderStore.transact`, so the state
+read, scoring history, current decision and timeline change together. Intake uses `score_order`;
+`edit_order` checks the shop and editable state, then rescores only when a field changes. Buyer and call
+results use `apply_buyer_response` and `apply_call_outcome`. Timers use `on_no_response`; shipping and
+carrier results use `mark_shipped` and `apply_delivery`.
+
+Confirmation is stored once. A later edit still records a fresh score, but cannot schedule another
+contact for a confirmed order. `app/decision/views.py` exposes the current score and prior runs through
+`order_detail(doc)` without changing the stored document.
+
+An invalid-phone hard rule can still hold a confirmed order for review; it schedules no contact.
+Staff decisions retain their status during rescoring. In the demo, increasing `prepaid_vnd` on an
+engine-decided order awaiting a deposit releases it after rescoring, unless the phone is invalid.
+
+Shop order-detail and edit routes stay at `501 not_implemented` until Firebase token verification can
+provide a trusted shop identity. The lifecycle functions are available for integration by those routes;
+buyer-page tokens, call sessions, contact limits and timer scheduling belong to their own epics.

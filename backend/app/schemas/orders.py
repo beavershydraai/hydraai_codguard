@@ -314,7 +314,11 @@ class ImportResult(ApiModel):
 
 
 class IntakeAccepted(ApiModel):
-    """Order accepted from an external sales tool. Scoring runs asynchronously."""
+    """Order accepted from an external sales tool, with its current lifecycle status.
+
+    Scoring and the first decision are saved when a model is available. Otherwise the
+    order remains new and unscored.
+    """
 
     model_config = ConfigDict(
         json_schema_extra={

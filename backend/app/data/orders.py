@@ -9,7 +9,20 @@ from app.schemas.orders import OrderCreate
 
 VN_TIME = timezone(timedelta(hours=7))  # Asia/Ho_Chi_Minh has no daylight saving
 BUYER_FAILURES = {DeliveryResult.REFUSED, DeliveryResult.UNREACHABLE}
-NOT_IN_SNAPSHOT = {"buyer_name", "recipient_name", "buyer_phone", "recipient_phone", "scoring"}
+NOT_IN_SNAPSHOT = {
+    "buyer_name",
+    "recipient_name",
+    "buyer_phone",
+    "recipient_phone",
+    "scoring",
+    "status",
+    "decision",
+    "score_history",
+    "timeline",
+    "confirmation",
+    "cancel",
+    "intervention",
+}
 
 
 def to_utc(at: datetime) -> datetime:
@@ -42,6 +55,19 @@ def order_document(
         "recipient_phone_hash": recipient_hash,
         "status": OrderStatus.NEW.value,
         "scoring": None,
+        "decision": None,
+        "score_history": [],
+        "confirmation": None,
+        "cancel": None,
+        "timeline": [
+            {
+                "at": now,
+                "type": "created",
+                "actor": "system",
+                "message_vi": "Đã tạo đơn hàng.",
+                "reason": None,
+            }
+        ],
         "delivery": None,
         "created_at": now,
         "updated_at": now,
@@ -81,7 +107,7 @@ def final_state(doc: dict) -> tuple[int | None, datetime | None]:
 
 
 def snapshot_row(doc: dict) -> dict | None:
-    """One flat training row without names, raw phones or the old score; None if unlabelled."""
+    """One flat training row without personal data or lifecycle state; None if unlabelled."""
     delivery = doc.get("delivery") or {}
     label, _ = final_state(doc)
     if label is None:

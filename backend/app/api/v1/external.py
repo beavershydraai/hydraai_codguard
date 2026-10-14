@@ -10,10 +10,10 @@ from app.api.errors import ApiError, NotImplementedYet, problem_example, problem
 from app.api.security import firebase_auth, intake_api_key
 from app.data.orders import order_document
 from app.data.store import OrderStore, get_store, order_id_for, phone_key, shop_for_key
-from app.risk.engine import score
+from app.decision.lifecycle import score_order
 from app.schemas.confirm import BuyerOrderView, BuyerResponse, BuyerResponseResult
 from app.schemas.demo import DemoResetResult, SpamSimulationResult
-from app.schemas.enums import ErrorCode, OrderStatus
+from app.schemas.enums import ErrorCode
 from app.schemas.orders import IntakeAccepted, OrderCreate
 
 log = logging.getLogger(__name__)
@@ -47,17 +47,10 @@ def intake_order(
     if existing:
         return IntakeAccepted(order_id=order_id, status=existing["status"], duplicate=True)
     try:  # a scoring problem must never lose the order: it stays stored, unscored
-        history = (
-            store.history(doc["buyer_phone_hash"], doc["placed_at"])
-            if doc["buyer_phone_hash"]
-            else []
-        )
-        fields = score(doc, history)
-        if fields:
-            store.update(order_id, fields)
+        doc = score_order(store, doc)
     except Exception:
         log.exception("Scoring failed for %s", order_id)
-    return IntakeAccepted(order_id=order_id, status=OrderStatus.NEW, duplicate=False)
+    return IntakeAccepted(order_id=order_id, status=doc["status"], duplicate=False)
 
 
 public_router = APIRouter(prefix="/public", tags=["public"])
