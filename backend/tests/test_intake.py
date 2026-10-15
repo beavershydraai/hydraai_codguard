@@ -85,7 +85,7 @@ class FakeDecisionLog:
 @pytest.fixture
 def api(monkeypatch, tmp_path):
     monkeypatch.delenv("GEMINI_MODEL", raising=False)
-    monkeypatch.setenv("INTAKE_API_KEYS", "key-a:shop_a,key-b:shop_b")
+    monkeypatch.setenv("INTAKE_API_KEYS", "key-a:shop_a,key-b:shop_b,key-t:shop_a:noagents")
     monkeypatch.setenv("PHONE_HASH_KEY", "test-key")
     monkeypatch.setenv("MODEL_DIR", str(tmp_path))  # no model yet
     engine._cache.update(at=0.0, models=None)
@@ -119,6 +119,15 @@ def test_intake_stores_a_normalised_order(api):
     assert doc["shop_id"] == "shop_a"
     assert doc["buyer_phone"] == "+84000000001"
     assert doc["buyer_phone_hash"]
+
+
+def test_a_noagents_test_key_marks_the_order_to_skip_the_agents(api):
+    client, store = api
+    tested = post(client, "key-t", ORDER | {"external_id": "TEST-1"}).json()
+    normal = post(client, "key-a", ORDER | {"external_id": "TEST-2"}).json()
+    assert store.docs[tested["order_id"]]["shop_id"] == "shop_a"
+    assert store.docs[tested["order_id"]]["skip_agents"] is True
+    assert "skip_agents" not in store.docs[normal["order_id"]]
 
 
 def test_intake_is_idempotent_on_external_id_per_shop(api):

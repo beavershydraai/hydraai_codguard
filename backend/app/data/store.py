@@ -97,9 +97,26 @@ def phone_key() -> bytes:
     return os.environ["PHONE_HASH_KEY"].encode()
 
 
+def _intake_keys() -> dict[str, tuple[str, bool]]:
+    """INTAKE_API_KEYS: `key:shop` entries, or `key:shop:noagents` for a test key whose orders
+    skip the Gemini agents (the order simulator's default)."""
+    keys = {}
+    for entry in os.environ.get("INTAKE_API_KEYS", "").split(","):
+        parts = entry.split(":")
+        if len(parts) >= 2:
+            keys[parts[0]] = (parts[1], parts[2:3] == ["noagents"])
+    return keys
+
+
 def shop_for_key(api_key: str | None) -> str | None:
-    pairs = (p.split(":", 1) for p in os.environ.get("INTAKE_API_KEYS", "").split(",") if ":" in p)
-    return dict(pairs).get(api_key) if api_key else None
+    entry = _intake_keys().get(api_key) if api_key else None
+    return entry[0] if entry else None
+
+
+def agents_for_key(api_key: str | None) -> bool:
+    """False for a `noagents` test key: its orders are scored and decided without Gemini."""
+    entry = _intake_keys().get(api_key) if api_key else None
+    return not (entry and entry[1])
 
 
 def order_id_for(shop_id: str, external_id: str | None) -> str:

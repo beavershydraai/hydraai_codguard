@@ -49,6 +49,7 @@ One document per order. It is a top-level collection with a `shop_id` field rath
 | `prepaid_vnd` | int | `OrderCreate.prepaid_vnd` | Deposit or prepayment |
 | `conversation_text` | string \| null | `OrderCreate.conversation_text` | |
 | `note` | string \| null | `OrderCreate.note` | |
+| `skip_agents` | bool, absent unless true | intake key | Sent with a `noagents` test key (`INTAKE_API_KEYS` entry `key:shop:noagents`): the pipeline skips the Gemini assessment |
 | `status` | string | lifecycle (E4.1) | One of the nine `OrderStatus` values; `new` on creation. Only the lifecycle service changes it |
 | `scoring` | map \| null | scoring (E2.4, E2.5) | Latest run: `probability`, `risk_score`, `tier`, `expected_loss_vnd`, `chosen_by`, `hard_rules`, `top_signals`, `shap`, `reasons`, `assessment`, `model_version`, `scored_at`, and `features`, the exact inputs the model saw. `shap` = exact TreeSHAP of every feature (`base_value`, `prediction`, `contributions`, before calibration); `reasons` = up to 3 reasons the Gemini assessment picked; `assessment` = its status, agents and model. `expected_loss_vnd` = probability × 60,000 VND until E2.5 uses the shop's costs. `top_signals` = the 5 features with the largest SHAP values for this order, rescaled to probability (positive raises risk) |
 | `decision` | map \| null | lifecycle (E4.1), policy (E4.2) | Current `Decision`: `decided_at`, `action`, `policy_version`, `expected_loss_vnd`, `contact_cost_vnd`, `block_reasons`, `next_action`, `next_action_at`, `decided_by`. Null until decided |

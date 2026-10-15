@@ -5,13 +5,15 @@ its three branches to the live intake API at random (exponential) intervals unti
 so the order list and the dashboard keep moving. In the cloud it is the Cloud Run job
 `codguard-simulate`, which costs nothing while it is not running.
 
-- By default every order has an `external_id` starting with `SIM-`: the pipeline scores and
-  decides it but skips the Gemini assessment, which keeps the daily quota for people trying the
-  app. `--agents` uses `SIMAI-` instead, so the two agents run (and use the quota).
-- The branch is in the order note (`branch_1 HCM`, shown on the order page) and the external_id.
+- By default it posts with the shop's `noagents` test key: the pipeline scores and decides every
+  order but skips the Gemini assessment, which keeps the daily quota for people trying the app.
+  `--agents` posts with the normal key, so the two agents run (and use the quota).
+- Orders look like the shop's own: `external_id` is channel, date and a number (`FB-20261015-
+  482913`); the branch is in the order note (`branch_1 HCM`, shown on the order page).
 - Most phones reuse the +84000 range of the vn-synthetic history, so buyers arrive with past
   orders, some of them at other shops.
-- The shop's API key comes from INTAKE_API_KEYS (`key:shop_id,...`), the secret the service reads.
+- The shop's API keys come from INTAKE_API_KEYS (`key:shop_id[:noagents],...`), the secret the
+  service reads.
 
 Every share and price below is a simulation assumption, not data from shops.
 """
@@ -23,7 +25,6 @@ import random
 import time
 import urllib.error
 import urllib.request
-import uuid
 from datetime import UTC, datetime
 
 from app.data.orders import VN_TIME
@@ -36,6 +37,7 @@ BRANCHES = {
     "branch_3 DN": (15, {"Đà Nẵng": 100}),
 }
 CHANNELS = {"facebook": 40, "tiktok": 25, "zalo": 15, "website": 15, "other": 5}
+CODE = {"facebook": "FB", "tiktok": "TT", "zalo": "ZL", "website": "WEB", "other": "OTH"}
 ITEMS = [  # name, price range in thousand VND
     ("Cotton T-shirt", 159, 219),
     ("Floral dress", 289, 369),
@@ -78,7 +80,7 @@ def pick(rng: random.Random, weights: dict) -> str:
     return rng.choices(list(weights), list(weights.values()))[0]
 
 
-def make_order(rng: random.Random, now: datetime, agents: bool = False) -> dict:
+def make_order(rng: random.Random, now: datetime) -> dict:
     """One random order of the demo shop, valid against the intake schema (OrderCreate)."""
     branch = pick(rng, {name: share for name, (share, _) in BRANCHES.items()})
     province = pick(rng, BRANCHES[branch][1])
@@ -97,10 +99,11 @@ def make_order(rng: random.Random, now: datetime, agents: bool = False) -> dict:
         )
     total = sum(i["quantity"] * i["unit_price_vnd"] for i in items) + 30_000
     prepaid = rng.choices([0, 50_000, total], [90, 5, 5])[0]  # COD, small deposit, fully prepaid
-    tag = uuid.UUID(int=rng.getrandbits(128)).hex[:12]
+    channel = pick(rng, CHANNELS)
+    day = now.astimezone(VN_TIME).strftime("%Y%m%d")
     return {
-        "external_id": f"{'SIMAI' if agents else 'SIM'}-{branch.split()[0]}-{tag}",
-        "channel": pick(rng, CHANNELS),
+        "external_id": f"{CODE[channel]}-{day}-{rng.randrange(10**6):06d}",
+        "channel": channel,
         "buyer_name": f"{rng.choice(SURNAMES)} {rng.choice(GIVEN)}",
         "buyer_phone": phone,
         "is_gift": rng.random() < 0.04,
@@ -120,10 +123,13 @@ def make_order(rng: random.Random, now: datetime, agents: bool = False) -> dict:
     }
 
 
-def shop_key(env: str) -> str | None:
-    """The demo shop's key in INTAKE_API_KEYS (`key:shop,...`)."""
-    pairs = (p.split(":", 1) for p in env.split(",") if ":" in p)
-    return next((key for key, shop in pairs if shop == SHOP_ID), None)
+def shop_key(env: str, agents: bool) -> str | None:
+    """The demo shop's normal key (agents) or its `noagents` test key, from INTAKE_API_KEYS."""
+    for entry in env.split(","):
+        key, *rest = entry.split(":")
+        if rest[:1] == [SHOP_ID] and (rest[1:2] == ["noagents"]) != agents:
+            return key
+    return None
 
 
 def post(url: str, key: str, order: dict) -> dict:
@@ -145,15 +151,16 @@ def main() -> None:
     parser.add_argument("--agents", action="store_true", help="run the Gemini agents (uses quota)")
     args = parser.parse_args()
     url = os.environ["INTAKE_URL"].rstrip("/")
-    key = shop_key(os.environ["INTAKE_API_KEYS"])
+    key = shop_key(os.environ["INTAKE_API_KEYS"], args.agents)
     if key is None:
-        raise SystemExit(f"INTAKE_API_KEYS has no key for {SHOP_ID}")
+        kind = "normal" if args.agents else "noagents test"
+        raise SystemExit(f"INTAKE_API_KEYS has no {kind} key for {SHOP_ID}")
     rng = random.Random(args.seed)
     deadline = time.monotonic() + args.minutes * 60
     sent = 0
     while (wait := rng.expovariate(args.orders_per_hour / 3600)) < deadline - time.monotonic():
         time.sleep(wait)
-        order = make_order(rng, datetime.now(UTC), args.agents)
+        order = make_order(rng, datetime.now(UTC))
         try:
             result = post(url, key, order)
         except (
