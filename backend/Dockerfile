@@ -12,7 +12,9 @@ RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --no-dev
 COPY app ./app
 
 FROM python:3.12-slim
-RUN useradd --create-home --uid 10001 app
+RUN useradd --create-home --uid 10001 app \
+    && install -d -o app -g app /var/lib/codguard/outbox
+# /var/lib/codguard/outbox: the call controller's undelivered results (a volume on the VM).
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
 COPY --from=build /app/app ./app
