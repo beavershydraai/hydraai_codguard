@@ -56,6 +56,16 @@ export function defaultPolicy(effectiveFrom: string): Policy {
         no_response_after_minutes: 1440,
       },
     ],
+    automation: {
+      mode: 'auto',
+      min_risk_score: null,
+      cod_ranges: [],
+      channels: null,
+      branches: null,
+      call_window: null,
+      max_attempts: 2,
+      retry_after_minutes: 30,
+    },
   }
 }
 

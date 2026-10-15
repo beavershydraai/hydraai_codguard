@@ -1,9 +1,11 @@
-"""Tier policy (E4.2): the action for each risk tier, the expected-loss gate, and what follows
-when the buyer does not respond.
+"""Tier policy (E4.2): the action for each risk tier, the expected-loss gate, what follows
+when the buyer does not respond, and the shop's call automation: which AI calls the agent places
+by itself and which it only suggests to the shop.
 
 The default policy is the `tier_policy` section of config/cod_guard_rules_apac.yaml, validated
-with the API's Policy model. Contact protection beyond the call attempt limit (contact hours,
-one call per phone per day, batching) is E4.3.
+with the API's Policy model; a shop's own versions are stored by app/data/policies.py. Contact
+protection beyond the call attempt limit (contact hours, one call per phone per day, batching)
+is E4.3 and applies to every call, automatic or confirmed by the shop.
 """
 
 from datetime import datetime, timedelta
@@ -12,13 +14,22 @@ from pathlib import Path
 
 import yaml
 
-from app.schemas.enums import ContactBlockReason, DecisionAction, RiskTier
+from app.data import branches
+from app.risk.features import cod_amount
+from app.schemas.enums import (
+    CallAutomationMode,
+    ContactBlockReason,
+    DecisionAction,
+    RiskTier,
+    Weekday,
+)
 from app.schemas.scoring import Decision
-from app.schemas.shops import Policy, ShopSettings, TierPolicy
+from app.schemas.shops import CallAutomation, Policy, ShopSettings, TierPolicy
 
 RULES_FILE = Path(__file__).resolve().parents[2] / "config" / "cod_guard_rules_apac.yaml"
-MAX_CALL_ATTEMPTS = 2
+MAX_CALL_ATTEMPTS = 2  # contact protection: no order is called more often, whoever asks
 CALL_RETRY_GAP_MINUTES = 30
+UPGRADABLE = (DecisionAction.SHIP_NOW, DecisionAction.SEND_CONFIRMATION_LINK)
 CONTACT_COST_FIELD = {  # the ShopSettings field that prices each way of contacting the buyer
     DecisionAction.SEND_CONFIRMATION_LINK: "confirmation_link_cost_vnd",
     DecisionAction.AI_CALL: "ai_call_cost_vnd",
@@ -62,21 +73,59 @@ def contact_cost(action: DecisionAction, settings: ShopSettings) -> int | None:
 
 
 def follow_up(
-    rule: TierPolicy, action: DecisionAction, calls_made: int
+    rule: TierPolicy,
+    action: DecisionAction,
+    calls_made: int,
+    automation: CallAutomation | None = None,
 ) -> tuple[DecisionAction | None, int | None]:
     """What to do, and after how many minutes, if the buyer does not respond to `action`."""
-    if action == DecisionAction.AI_CALL and calls_made < MAX_CALL_ATTEMPTS:
-        return DecisionAction.AI_CALL, CALL_RETRY_GAP_MINUTES
+    auto = automation or CallAutomation()
+    if action == DecisionAction.AI_CALL and calls_made < auto.max_attempts:
+        return DecisionAction.AI_CALL, auto.retry_after_minutes
     if action == rule.action:
         return rule.if_no_response, rule.no_response_after_minutes
     if action in CONTACT_COST_FIELD:  # the escalation went unanswered too: a person decides
         wait = (
-            CALL_RETRY_GAP_MINUTES
+            auto.retry_after_minutes
             if action == DecisionAction.AI_CALL
-            else rule.no_response_after_minutes or CALL_RETRY_GAP_MINUTES
+            else rule.no_response_after_minutes or auto.retry_after_minutes
         )
         return DecisionAction.HOLD_FOR_REVIEW, wait
     return None, None
+
+
+def automation_blocks(
+    automation: CallAutomation, order: dict | None, now: datetime
+) -> list[ContactBlockReason]:
+    """Why the agent may not place an AI call for `order` by itself now; empty when it may.
+    Without an order (a bare policy check) nothing blocks."""
+    if order is None:
+        return []
+    auto, reason, blocks = automation, ContactBlockReason, []
+    if auto.mode == CallAutomationMode.SUGGEST:
+        blocks.append(reason.MANUAL_APPROVAL)
+    score = (order.get("scoring") or {}).get("risk_score")
+    if auto.min_risk_score is not None and (score is None or score < auto.min_risk_score):
+        blocks.append(reason.BELOW_CALL_THRESHOLD)
+    currency = order.get("currency") or branches.country_of(order).currency
+    cod = cod_amount(order)
+    for r in auto.cod_ranges:
+        if r.currency == currency and not (
+            (r.min_cod is None or cod >= r.min_cod) and (r.max_cod is None or cod <= r.max_cod)
+        ):
+            blocks.append(reason.COD_OUT_OF_RANGE)
+    if auto.channels is not None and order.get("channel") not in auto.channels:
+        blocks.append(reason.CHANNEL_NOT_AUTOMATED)
+    branch = order.get("branch_id") or branches.default_branch()
+    if auto.branches is not None and branch not in auto.branches:
+        blocks.append(reason.BRANCH_NOT_AUTOMATED)
+    window = auto.call_window
+    if window:
+        local = now.astimezone(branches.country_of(order).tz)
+        day = list(Weekday)[local.weekday()]
+        if day not in window.days or not window.start <= local.strftime("%H:%M") < window.end:
+            blocks.append(reason.OUTSIDE_CALL_WINDOW)
+    return blocks
 
 
 def decide(
@@ -88,24 +137,41 @@ def decide(
     policy: Policy | None = None,
     confirmed: bool = False,
     action: DecisionAction | None = None,
+    order: dict | None = None,
 ) -> Decision:
     """The decision for a scored order, preserving an action selected by a scoring hard rule.
 
-    A confirmed buyer is never contacted again, even after the order is rescored.
+    A confirmed buyer is never contacted again, even after the order is rescored. With the
+    `order`, the shop's call automation applies: a score at or above its threshold turns a
+    ship-now or link decision into an AI call when the call pays for itself, and an AI call
+    outside its rules becomes a suggestion for the shop.
     """
     if action == DecisionAction.CANCEL:
         raise ValueError("only the buyer or the shop cancels an order")
     policy = policy or default_policy()
+    settings = settings or ShopSettings()
     action = action or tier_rule(policy, tier).action
+    threshold = policy.automation.min_risk_score
+    score = ((order or {}).get("scoring") or {}).get("risk_score")
+    if (
+        threshold is not None
+        and score is not None
+        and score >= threshold
+        and action in UPGRADABLE
+        and not confirmed
+        and expected_loss_vnd > contact_cost(DecisionAction.AI_CALL, settings)
+    ):
+        action = DecisionAction.AI_CALL
     return _decision(
         action,
         tier,
         expected_loss_vnd,
         now,
         0,
-        settings or ShopSettings(),
+        settings,
         policy,
         confirmed=confirmed,
+        order=order,
     )
 
 
@@ -120,10 +186,12 @@ def escalate(
     policy: Policy | None = None,
     confirmed: bool = False,
     action: DecisionAction | None = None,
+    order: dict | None = None,
 ) -> Decision | None:
     """The decision when the buyer did not respond to `unanswered` in time, or None when nothing
     follows. `call_attempts` counts the AI calls already made for this order. A saved scheduled
-    `action` survives a later policy change; the new decision's follow-up uses today's policy.
+    `action` survives a later policy change; the new decision's follow-up uses today's policy,
+    and so does the call automation (with the `order`).
     """
     if action == DecisionAction.CANCEL:
         raise ValueError("only the buyer or the shop cancels an order")
@@ -131,11 +199,18 @@ def escalate(
         return None
     policy = policy or default_policy()
     if action is None:
-        action, _ = follow_up(tier_rule(policy, tier), unanswered, call_attempts)
+        action, _ = follow_up(tier_rule(policy, tier), unanswered, call_attempts, policy.automation)
     if action is None:
         return None
     return _decision(
-        action, tier, expected_loss_vnd, now, call_attempts, settings or ShopSettings(), policy
+        action,
+        tier,
+        expected_loss_vnd,
+        now,
+        call_attempts,
+        settings or ShopSettings(),
+        policy,
+        order=order,
     )
 
 
@@ -149,20 +224,25 @@ def _decision(
     policy: Policy,
     *,
     confirmed: bool = False,
+    order: dict | None = None,
 ) -> Decision:
+    auto = policy.automation
     cost = contact_cost(action, settings)
-    blocks = []
+    blocks, suggested = [], None
     if confirmed and cost is not None:
         action, cost = DecisionAction.SHIP_NOW, None
         blocks = [ContactBlockReason.ALREADY_CONFIRMED]
-    elif action == DecisionAction.AI_CALL and call_attempts >= MAX_CALL_ATTEMPTS:
+    elif action == DecisionAction.AI_CALL and call_attempts >= auto.max_attempts:
         action, cost = DecisionAction.HOLD_FOR_REVIEW, None
         blocks = [ContactBlockReason.ATTEMPTS_EXHAUSTED]
     elif cost is not None and expected_loss_vnd <= cost:  # contact only when it pays for itself
         action, cost = DecisionAction.SHIP_NOW, None
         blocks = [ContactBlockReason.EXPECTED_LOSS_BELOW_COST]
+    elif action == DecisionAction.AI_CALL and (blocks := automation_blocks(auto, order, now)):
+        # Outside the shop's call automation: suggest the call, a person starts it.
+        action, cost, suggested = DecisionAction.HOLD_FOR_REVIEW, None, DecisionAction.AI_CALL
     calls_made = call_attempts + (action == DecisionAction.AI_CALL)
-    next_action, wait = follow_up(tier_rule(policy, tier), action, calls_made)
+    next_action, wait = follow_up(tier_rule(policy, tier), action, calls_made, auto)
     return Decision(
         decided_at=now,
         action=action,
@@ -172,4 +252,5 @@ def _decision(
         block_reasons=blocks,
         next_action=next_action,
         next_action_at=now + timedelta(minutes=wait) if next_action else None,
+        suggested_action=suggested,
     )

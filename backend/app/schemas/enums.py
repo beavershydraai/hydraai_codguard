@@ -95,7 +95,13 @@ class ContactBlockReason(StrEnum):
     phone_trusted: phone trusted for 7 days after a confirmation ·
     already_confirmed: order already confirmed ·
     batched: batched into another order's contact within 15 minutes ·
-    attempts_exhausted: both call attempts used
+    attempts_exhausted: both call attempts used ·
+    manual_approval: the shop approves every AI call (call automation mode "suggest") ·
+    below_call_threshold: risk score below the shop's auto-call threshold ·
+    cod_out_of_range: amount to collect outside the shop's auto-call range ·
+    channel_not_automated: the shop does not auto-call orders from this sales channel ·
+    branch_not_automated: the shop does not auto-call orders of this branch ·
+    outside_call_window: outside the hours or days the shop allows automatic calls
     """
 
     EXPECTED_LOSS_BELOW_COST = "expected_loss_below_cost"
@@ -106,6 +112,35 @@ class ContactBlockReason(StrEnum):
     ALREADY_CONFIRMED = "already_confirmed"
     BATCHED = "batched"
     ATTEMPTS_EXHAUSTED = "attempts_exhausted"
+    MANUAL_APPROVAL = "manual_approval"
+    BELOW_CALL_THRESHOLD = "below_call_threshold"
+    COD_OUT_OF_RANGE = "cod_out_of_range"
+    CHANNEL_NOT_AUTOMATED = "channel_not_automated"
+    BRANCH_NOT_AUTOMATED = "branch_not_automated"
+    OUTSIDE_CALL_WINDOW = "outside_call_window"
+
+
+class CallAutomationMode(StrEnum):
+    """Who starts an AI call the engine chooses.
+
+    auto: the agent calls by itself when the order is inside the shop's automation rules ·
+    suggest: the agent only suggests the call; the shop confirms it
+    """
+
+    AUTO = "auto"
+    SUGGEST = "suggest"
+
+
+class Weekday(StrEnum):
+    """Day of the week. mon · tue · wed · thu · fri · sat · sun"""
+
+    MON = "mon"
+    TUE = "tue"
+    WED = "wed"
+    THU = "thu"
+    FRI = "fri"
+    SAT = "sat"
+    SUN = "sun"
 
 
 class CallStatus(StrEnum):

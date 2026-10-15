@@ -146,6 +146,7 @@ These rules come from the README and the epics. Code and tests must enforce them
 - Every way out of the pipeline that is not a decision ends in review: a run that still fails after its retries, an action with no branch of its own, and an event the L4 table does not know. Nothing reaches the buyer on an error.
 - A send is claimed before it happens, so a retry, a redelivered webhook or a rerun never contacts the buyer twice. A confirmation link or deposit request is claimed under `order_id + action`. Each of the two AI call attempts has its own claim (`order_id:ai_call:1`, `:2`) tied to the decision it carries out, and the attempt is recorded on the order (`attempts.ai_call`) so the no-response timer moves on to the second call or to review.
 - A policy change applies only to decisions made after the change.
+- Call automation (`automation` in the shop's policy, `GET/PUT /shop/policy`): the shop sets which AI calls the agent places by itself: mode `auto` or `suggest`, a risk-score threshold, an amount range per currency, sales channels, branches, a call window with days (branch local time), attempts (1 or 2) and the gap between them (at least 30 minutes). The defaults are the tier policy above. A call the engine picks outside these rules is not placed: the order waits in review with `suggested_action: ai_call` and the reasons in `block_reasons`, and the shop confirms it with `POST /orders/{id}/calls`. The threshold may also turn a ship-now or link decision into a call, only when the call pays for itself. Contact protection applies on top: automation can narrow it, never widen it.
 - Every manual override records who made it, when, and why, in the audit log.
 
 ### Contact protection
@@ -155,7 +156,7 @@ These rules come from the README and the epics. Code and tests must enforce them
 | AI calls per phone number, across all shops | At most 1 per 24 hours |
 | Orders to the same phone batched into one contact | Within 15 minutes |
 | Contact hours | 08:00–21:00, Vietnam time (`Asia/Ho_Chi_Minh`) |
-| Call attempts per order | 2, at least 30 minutes apart |
+| Call attempts per order | 2, at least 30 minutes apart (a shop may lower or slow its automatic calls) |
 | After *"I didn't order this"* | Block the phone for 30 days, all shops |
 | After a confirmed order | Trust the phone for 7 days, same shop |
 | Gift orders | Verify with the buyer only, never the recipient |
