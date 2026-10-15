@@ -14,6 +14,7 @@ from app.api.security import CurrentUser, bearer_auth
 from app.calls.service import CallService, get_call_service
 from app.data import order_csv
 from app.data.orders import to_utc
+from app.data.policies import PolicyStore, VersionTaken, get_policy_store
 from app.data.store import OrderStore, get_store
 from app.decision import lifecycle
 from app.decision.inbox import InvalidCursor, order_page
@@ -22,7 +23,7 @@ from app.risk import artifacts
 from app.schemas.calls import Call
 from app.schemas.dashboard import BacktestResult, DashboardSummary
 from app.schemas.delivery import DeliveryImportResult, DeliveryOutcomeBatch
-from app.schemas.enums import ContactBlockReason, ErrorCode, OrderStatus, RiskTier
+from app.schemas.enums import ContactBlockReason, ErrorCode, OrderStatus, RiskTier, Role
 from app.schemas.orders import (
     ImportResult,
     ImportRowError,
@@ -76,26 +77,39 @@ async def update_shop(body: ShopUpdate) -> Shop:
     raise NotImplementedYet("update_shop")
 
 
+Policies = Annotated[PolicyStore, Depends(get_policy_store)]
+
+
 @shop_router.get(
     "/policy",
     response_model=Policy,
     responses=problem_responses(401),
-    summary="Tier policy in force",
+    summary="Tier policy and call automation in force",
 )
-async def get_policy() -> Policy:
-    raise NotImplementedYet("get_policy")
+def get_policy(user: CurrentUser, policies: Policies) -> Policy:
+    return policies.current(user.shop_id)
 
 
 @shop_router.put(
     "/policy",
     response_model=Policy,
-    responses=problem_responses(401, 403, 422),
-    summary="Replace the tier policy (owner only)",
+    responses=problem_responses(401, 403, 409, 422),
+    summary="Replace the tier policy and call automation (owner only)",
     description="Creates a new version. It applies only to decisions made after "
-    "`effective_from`; earlier decisions keep their version.",
+    "`effective_from`; earlier decisions keep their version. `automation` sets which AI calls "
+    "the agent places by itself; the calls it leaves out wait in review as suggestions.",
 )
-async def update_policy(body: PolicyUpdate) -> Policy:
-    raise NotImplementedYet("update_policy")
+def update_policy(body: PolicyUpdate, user: CurrentUser, policies: Policies) -> Policy:
+    if user.role != Role.OWNER:
+        raise ApiError(403, ErrorCode.FORBIDDEN, "Forbidden", "Only the owner changes the policy.")
+    try:
+        return policies.save(user.shop_id, body, user.email, datetime.now(UTC))
+    except ValueError as error:
+        raise ApiError(422, ErrorCode.VALIDATION_ERROR, "Validation error", str(error)) from None
+    except VersionTaken:
+        raise ApiError(
+            409, ErrorCode.CONFLICT, "Conflict", "The policy changed meanwhile. Reload it."
+        ) from None
 
 
 @shop_router.get(
@@ -104,8 +118,8 @@ async def update_policy(body: PolicyUpdate) -> Policy:
     responses=problem_responses(401),
     summary="All policy versions, newest first (audit)",
 )
-async def list_policy_versions() -> list[Policy]:
-    raise NotImplementedYet("list_policy_versions")
+def list_policy_versions(user: CurrentUser, policies: Policies) -> list[Policy]:
+    return policies.versions(user.shop_id)
 
 
 # ---------------------------------------------------------------- orders
@@ -189,9 +203,12 @@ def create_order(
     store: Annotated[OrderStore, Depends(get_store)],
     decision_log: Annotated[DecisionLog, Depends(get_decision_log)],
     calls: Annotated[CallService | None, Depends(get_call_service)],
+    policies: Policies,
 ) -> OrderSummary:
     # Sync, like the intake route: the pipeline's nodes make blocking Firestore calls.
-    pipeline = Pipeline(store=store, log=decision_log, calls=calls)
+    pipeline = Pipeline(
+        store=store, log=decision_log, calls=calls, policy=policies.current(user.shop_id)
+    )
     doc, duplicate = receive(
         body,
         user.shop_id,
@@ -224,6 +241,7 @@ def import_orders(
     user: CurrentUser,
     store: Annotated[OrderStore, Depends(get_store)],
     decision_log: Annotated[DecisionLog, Depends(get_decision_log)],
+    policies: Policies,
 ) -> ImportResult:
     now = datetime.now(UTC)
     try:
@@ -244,7 +262,9 @@ def import_orders(
             orders.append(parsed)
     # A file is a batch: its orders skip the Gemini assessment, which keeps the daily quota, and
     # their AI calls stay simulated, so one upload cannot queue hundreds of real calls.
-    pipeline = Pipeline(store=store, log=decision_log, assess=False)
+    pipeline = Pipeline(
+        store=store, log=decision_log, assess=False, policy=policies.current(user.shop_id)
+    )
 
     def duplicate(order: OrderCreate) -> bool:
         _, known = receive(
@@ -298,9 +318,16 @@ def update_order(
     body: OrderUpdate,
     user: CurrentUser,
     store: Annotated[OrderStore, Depends(get_store)],
+    policies: Policies,
 ) -> OrderDetail:
     doc = lifecycle.edit_order(
-        store, order_id, user.shop_id, body, datetime.now(UTC), actor=user.email
+        store,
+        order_id,
+        user.shop_id,
+        body,
+        datetime.now(UTC),
+        actor=user.email,
+        policy=policies.current(user.shop_id),
     )
     return order_detail(doc)
 

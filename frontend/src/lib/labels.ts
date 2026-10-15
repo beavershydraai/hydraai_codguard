@@ -83,6 +83,11 @@ export const BLOCK_REASON_LABELS: Record<ContactBlockReason, string> = {
   already_confirmed: 'Order already confirmed',
   batched: 'Batched with another order to the same phone within 15 minutes',
   attempts_exhausted: 'Both call attempts used',
+  manual_approval: 'The shop confirms every AI call',
+  below_auto_call_tier: 'Risk tier below the one the shop auto-calls from',
+  cod_out_of_range: 'Amount outside the auto-call range',
+  channel_not_automated: 'No automatic calls for this sales channel',
+  outside_call_window: 'Outside the hours set for automatic calls',
 }
 
 export const HARD_RULE_LABELS: Record<HardRule, string> = {

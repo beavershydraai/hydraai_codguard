@@ -238,7 +238,7 @@ export const updateShopMutation = (
 export const getPolicyQueryKey = (options?: Options<GetPolicyData>) => createQueryKey('getPolicy', options)
 
 /**
- * Tier policy in force
+ * Tier policy and call automation in force
  */
 export const getPolicyOptions = (options?: Options<GetPolicyData>) =>
   queryOptions<GetPolicyResponse, GetPolicyError, GetPolicyResponse, ReturnType<typeof getPolicyQueryKey>>({
@@ -255,9 +255,9 @@ export const getPolicyOptions = (options?: Options<GetPolicyData>) =>
   })
 
 /**
- * Replace the tier policy (owner only)
+ * Replace the tier policy and call automation (owner only)
  *
- * Creates a new version. It applies only to decisions made after `effective_from`; earlier decisions keep their version.
+ * Creates a new version. It applies only to decisions made after `effective_from`; earlier decisions keep their version. `automation` sets which AI calls the agent places by itself; the calls it leaves out wait in review as suggestions.
  */
 export const updatePolicyMutation = (
   options?: Partial<Options<UpdatePolicyData>>,

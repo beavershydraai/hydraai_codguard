@@ -27,6 +27,7 @@ from app.calls import jobs
 from app.calls.pubsub import PubSubPublisher
 from app.calls.store import CallNotFound, CallStore, get_call_store
 from app.data import branches
+from app.data.policies import PolicyStore, get_policy_store
 from app.data.store import OrderStore, get_store
 from app.decision import lifecycle
 from app.decision.policy import MAX_CALL_ATTEMPTS
@@ -43,6 +44,7 @@ from app.schemas.enums import (
     ErrorCode,
 )
 from app.schemas.orders import OrderUpdate
+from app.schemas.shops import Policy
 from app.schemas.telephony import CallJob, CallResult, CallStatusUpdate
 
 log = logging.getLogger(__name__)
@@ -142,12 +144,17 @@ class CallService:
     calls: CallStore
     log: DecisionLog
     publisher: Publisher
+    policies: PolicyStore | None = None  # None: the default policy
+
+    def policy(self, shop_id: str) -> Policy | None:
+        return self.policies.current(shop_id) if self.policies else None
 
     # ------------------------------------------------------------------ starting a call
 
     def start_for_shop(self, order_id: str, shop_id: str, actor: str, now: datetime) -> Call:
-        """POST /orders/{id}/calls: the shop asks for a call now. Returns the call, or the one
-        already running for the order."""
+        """POST /orders/{id}/calls: the shop asks for a call now, or confirms the call the engine
+        suggested (call automation). Returns the call, or the one already running for the
+        order."""
         doc = self.orders.get(order_id)
         if doc is None or doc.get("shop_id") != shop_id:
             raise ApiError(404, ErrorCode.NOT_FOUND, "Not found", f"Order {order_id} not found.")
@@ -165,6 +172,9 @@ class CallService:
         attempt = self._claim(doc, now, actor)
         if attempt is None:
             raise _blocked([ContactBlockReason.ATTEMPTS_EXHAUSTED])
+        lifecycle.accept_suggested_call(
+            self.orders, order_id, actor, now, policy=self.policy(shop_id)
+        )
         return self._place(doc, attempt, now, actor)
 
     def start_for_pipeline(self, order_id: str, attempt: int, now: datetime) -> dict:
@@ -375,7 +385,9 @@ class CallService:
         from app.agents.agent import Pipeline  # the pipeline imports this module
         from app.agents.runner import run_contact_event
 
-        pipeline = Pipeline(store=self.orders, log=self.log, calls=self)
+        pipeline = Pipeline(
+            store=self.orders, log=self.log, calls=self, policy=self.policy(shop_id)
+        )
         asyncio.run(run_contact_event(event, shop_id, pipeline=pipeline))
 
     # ------------------------------------------------------------------ reading and expiry
@@ -464,4 +476,5 @@ def get_call_service() -> CallService | None:
         calls=get_call_store(),
         log=get_decision_log(),
         publisher=_publisher(topic),
+        policies=get_policy_store(),
     )

@@ -66,6 +66,7 @@ def order_summary(doc: dict) -> OrderSummary:
         tier=current.tier if current else None,
         risk_score=current.risk_score if current else None,
         current_action=decision["action"] if decision else None,
+        suggested_action=(decision or {}).get("suggested_action"),
     )
 
 
@@ -127,6 +128,7 @@ def order_detail(doc: dict) -> OrderDetail:
         tier=current.tier if current else None,
         risk_score=current.risk_score if current else None,
         current_action=decision["action"] if decision else None,
+        suggested_action=(decision or {}).get("suggested_action"),
         current_score=current,
         score_history=sorted(runs, key=lambda run: run.scored_at, reverse=True),
         decision=decision,

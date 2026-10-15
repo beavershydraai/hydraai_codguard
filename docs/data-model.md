@@ -19,6 +19,7 @@
 |---|---|---|
 | Firestore, collection `orders` | Every order: what came in, its status, its latest score and its delivery result | The backend on every request; the training job |
 | Firestore, collection `calls` | Every AI call: its job, progress, result and transcript | The backend (`app/calls/`) |
+| Firestore, `shops/{shop_id}/policy_versions/{version}` | Every version of a shop's tier policy and call automation | The backend on every decision (`app/data/policies.py`) |
 | Cloud Storage, `snapshots/v{n}/orders.parquet` | A frozen copy of the labelled orders used for one training run | Training, backtest (E9) |
 | Cloud Storage, `models/v{n}/`, `models/latest` | Model file, metrics, feature list | The backend at startup |
 
@@ -56,7 +57,7 @@ One document per order. It is a top-level collection with a `shop_id` field rath
 | `skip_agents` | bool, absent unless true | intake key | Sent with a `noagents` test key (`INTAKE_API_KEYS` entry `key:shop:noagents`): the pipeline skips the Gemini assessment |
 | `status` | string | lifecycle (E4.1) | One of the nine `OrderStatus` values; `new` on creation. Only the lifecycle service changes it |
 | `scoring` | map \| null | scoring (E2.4, E2.5) | Latest run: `probability`, `risk_score`, `tier`, `expected_loss_vnd`, `chosen_by`, `hard_rules`, `top_signals`, `shap`, `reasons`, `assessment`, `model_version`, `scored_at`, and `features`, the exact inputs the model saw. `shap` = exact TreeSHAP of every feature (`base_value`, `prediction`, `contributions`, before calibration); `reasons` = up to 3 reasons the Gemini assessment picked; `assessment` = its status, agents and model. `expected_loss_vnd` = probability × 60,000 VND until E2.5 uses the shop's costs. `top_signals` = the 5 features with the largest SHAP values for this order, rescaled to probability (positive raises risk) |
-| `decision` | map \| null | lifecycle (E4.1), policy (E4.2) | Current `Decision`: `decided_at`, `action`, `policy_version`, `expected_loss_vnd`, `contact_cost_vnd`, `block_reasons`, `next_action`, `next_action_at`, `decided_by`. Null until decided |
+| `decision` | map \| null | lifecycle (E4.1), policy (E4.2) | Current `Decision`: `decided_at`, `action`, `policy_version`, `expected_loss_vnd`, `contact_cost_vnd`, `block_reasons`, `next_action`, `next_action_at`, `suggested_action` (an AI call left to the shop by its call automation), `decided_by`. Null until decided |
 | `score_history` | array of map | rescore (E4.1) | Earlier `scoring` maps, newest first; starts empty. `OrderDetail.score_history` combines the current score with these earlier runs |
 | `confirmation` | map \| null | buyer response, call outcome (E4.1) | `at`, `via` (`link` or `call`); set once after confirmation or a buyer correction. A confirmed order is never contacted again |
 | `intervention` | optional map | completed buyer response, call outcome, deposit update (E4.1) | First completed contact assignment: `tier`, `contact_action`, `random_slice`, `action_probability`, original address `province`, plus the original scoring `features` and `probability` when available. Saved before a response or deposit update replaces the current score or decision; preserved on later edits |
@@ -106,6 +107,15 @@ One document per AI call attempt, written by `app/calls/` (docs/call-controller.
 | `expired` | bool | The backend failed the call itself (`controller_error`) because the controller stopped reporting; a late result still replaces it |
 
 - Contact rules query `phone_hash == h` (a single-field index, no composite index needed) and filter by time in Python.
+
+## Firestore: `shops/{shop_id}/policy_versions/{version}`
+
+One document per policy version a shop saved (`PUT /shop/policy`), the API's `Policy` as JSON:
+`version`, `effective_from`, `updated_by`, `tiers` and `automation` (call automation). The ID is the
+version, zero-padded to six digits, and is created atomically, so two changes cannot take the same
+number. A shop without documents runs the default policy (version 1, from
+`config/cod_guard_rules_apac.yaml`). Versions are never edited or deleted: an order's
+`decision.policy_version` always names the version it was decided under.
 
 ## Training snapshot: `orders.parquet`
 
