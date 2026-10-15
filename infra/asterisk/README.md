@@ -113,6 +113,12 @@ On Windows, allow calls in from the Mesh once, in PowerShell as administrator:
 New-NetFirewallRule -DisplayName "Zoiper via Cloudflare Mesh" -Direction Inbound -Protocol UDP -RemoteAddress 100.96.0.0/12 -Action Allow
 ```
 
+## 5. Talk to the Gemini agent
+
+The script also turns on ARI for the call controller: HTTP on `127.0.0.1:8088` only, user `codguard`, password kept across re-runs. It replaces Asterisk's `http.conf` and `ari.conf` (the originals stay as `*.orig`) and writes the controller's settings to `/etc/codguard/controller.env` (root only).
+
+To have the Gemini agent call your softphone with a sample order, follow "Try a Gemini call from a softphone" in [docs/call-controller.md](../../docs/call-controller.md).
+
 ## Troubleshooting
 
 | Problem | Check |
@@ -123,4 +129,5 @@ New-NetFirewallRule -DisplayName "Zoiper via Cloudflare Mesh" -Direction Inbound
 | Asterisk's call does not ring on Windows | The firewall rule above |
 | `300` hangs up at once | Asterisk could not find the file: the Asterisk console shows the error |
 | Keys do nothing on `301` | Zoiper DTMF must be RFC-2833 |
+| The script stops at "ARI did not start" | `sudo docker exec asterisk asterisk -rx "http show status"`: ARI needs `res_ari` and the HTTP server on 127.0.0.1:8088 |
 | The script stops at "dialplan did not load" | `sudo docker exec asterisk asterisk -rx "dialplan show codguard-dev"` |

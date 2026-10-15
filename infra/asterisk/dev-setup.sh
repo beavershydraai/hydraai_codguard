@@ -10,6 +10,8 @@
 #   300  plays the audio file
 #   301  plays the audio file, waits for one key, reads the key back
 # Asterisk can also call a softphone:  asterisk -rx "channel originate PJSIP/6001 extension 301@codguard-dev"
+# It also turns on ARI on 127.0.0.1:8088 for the call controller and writes the controller's
+# settings to /etc/codguard/controller.env (docs/call-controller.md).
 #
 # Options (environment):
 #   EXTENSIONS="6001 6002"   accounts to create (default 6001)
@@ -162,8 +164,40 @@ for f in "$PJSIP_FILE:pjsip.conf" "$DIALPLAN_FILE:extensions.conf"; do
   inside sh -c "grep -qx '#include $file' '$CONF/$main' || printf '\n#include %s\n' '$file' >> '$CONF/$main'"
 done
 
+# ARI for the call controller (docs/call-controller.md): HTTP on 127.0.0.1 only, one user.
+# Asterisk's own http.conf and ari.conf are replaced; the originals are kept once as *.orig.
+ARI_USER=codguard
+ari_password() {
+  inside sh -c "cat '$CONF/ari.conf' 2>/dev/null" |
+    awk -v s="[$ARI_USER]" '$0 == s {f = 1; next} /^\[/ {f = 0} f && /^password=/ {sub(/^password=/, ""); print; exit}' || true
+}
+ARI_PASSWORD=$(ari_password)
+[[ -n "$ARI_PASSWORD" ]] || ARI_PASSWORD=$(head -c 24 /dev/urandom | base64 | tr -d '/+=' | head -c 24)
+for f in http.conf ari.conf; do
+  inside sh -c "[ -f '$CONF/$f.orig' ] || cp '$CONF/$f' '$CONF/$f.orig' 2>/dev/null || true"
+done
+inside sh -c "cat > '$CONF/http.conf'" <<EOF
+; Written by infra/asterisk/dev-setup.sh: ARI for the call controller, local only.
+[general]
+enabled=yes
+bindaddr=127.0.0.1
+bindport=8088
+EOF
+inside sh -c "cat > '$CONF/ari.conf'" <<EOF
+; Written by infra/asterisk/dev-setup.sh. The password is also in /etc/codguard/controller.env.
+[general]
+enabled=yes
+
+[$ARI_USER]
+type=user
+read_only=no
+password=$ARI_PASSWORD
+EOF
+
 ast "pjsip reload" >/dev/null
 ast "dialplan reload" >/dev/null
+ast "module reload http" >/dev/null
+ast "module reload res_ari.so" >/dev/null
 # A reload can take several seconds when the sample configs are large.
 retry() { for _ in $(seq 1 20); do "$@" && return 0; sleep 1; done; return 1; }
 transport_up() { ast "pjsip show transports" | grep -q "$TRANSPORT"; }
@@ -171,6 +205,23 @@ dialplan_up() { ast "dialplan show 301@$CONTEXT" | grep -q Read; }
 retry transport_up ||
   die "transport $TRANSPORT did not start: is $BIND_IP:$SIP_PORT free? Check: asterisk -rx 'pjsip show transports'"
 retry dialplan_up || die "dialplan $CONTEXT did not load. Check: asterisk -rx 'dialplan show $CONTEXT'"
+ari_up() { ast "ari show users" | grep -qw "$ARI_USER" && ast "http show status" | grep -q "127.0.0.1:8088"; }
+retry ari_up || die "ARI did not start. Check: asterisk -rx 'http show status'; asterisk -rx 'module show like res_ari'"
+
+# Settings for the call controller and app.telephony.dial (docker run --env-file).
+mkdir -p /etc/codguard
+(
+  umask 077
+  cat > /etc/codguard/controller.env <<EOF
+ARI_URL=http://127.0.0.1:8088
+ARI_USER=$ARI_USER
+ARI_PASSWORD=$ARI_PASSWORD
+CONTROLLER_ID=codguard-asterisk
+GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-ai-codguard}
+GEMINI_LIVE_LOCATION=${GEMINI_LIVE_LOCATION:-us-central1}
+GEMINI_LIVE_MODEL=${GEMINI_LIVE_MODEL:-gemini-3.8-live}
+EOF
+)
 
 echo
 echo "Ready. Softphone settings (Zoiper: account type SIP, transport UDP, STUN off, codec u-law, DTMF RFC-2833):"
@@ -183,3 +234,6 @@ prefix=""
 [[ ${#RUN[@]} -gt 0 ]] && prefix="docker exec $C "
 echo "Have Asterisk call the softphone: sudo ${prefix}asterisk -rx \"channel originate PJSIP/$first extension 301@$CONTEXT\""
 echo "Registered? sudo ${prefix}asterisk -rx \"pjsip show contacts\""
+echo "ARI is on 127.0.0.1:8088; the controller's settings are in /etc/codguard/controller.env."
+echo "Gemini call to $first: sudo docker run --rm --network host --env-file /etc/codguard/controller.env \\"
+echo "  asia-southeast1-docker.pkg.dev/ai-codguard/codguard/backend:main python -m app.telephony.dial $first"
