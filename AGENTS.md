@@ -126,6 +126,7 @@ These rules come from the README and the epics. Code and tests must enforce them
 - One risk model per country, never trained on another country's orders. A branch uses its country's model; a second branch in a country is one more line in the config.
 - Amounts are integers in the currency's minor unit (VND has none; SGD and PHP are in cents). Field names keep the `_vnd` suffix for compatibility. Costs, local time and phone format come from the order's country.
 - Tier cut-offs are the same in every country.
+- The shop's profile (`GET/PATCH /shop`, Firestore `shops/{shop_id}`, onboarding E7.1) holds its name and, per country, its costs and contact hours. It starts with the country defaults of `branches.yaml` and stores only what the owner changed. Decisions and calls use the shop's values for the order's country: the expected loss is recomputed with the shop's cost of a failed delivery, and the AI call introduces itself with the shop's name. Training and the backtest keep the country defaults.
 
 ### Decisions
 
@@ -155,7 +156,7 @@ These rules come from the README and the epics. Code and tests must enforce them
 |---|---|
 | AI calls per phone number, across all shops | At most 1 per 24 hours |
 | Orders to the same phone batched into one contact | Within 15 minutes |
-| Contact hours | 08:00–21:00, Vietnam time (`Asia/Ho_Chi_Minh`) |
+| Contact hours | 08:00–21:00, local time of the order's country; the shop may narrow it per country (`PATCH /shop`) |
 | Call attempts per order | 2, at least 30 minutes apart (a shop may lower or slow its automatic calls) |
 | After *"I didn't order this"* | Block the phone for 30 days, all shops |
 | After a confirmed order | Trust the phone for 7 days, same shop |

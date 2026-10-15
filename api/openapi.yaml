@@ -95,7 +95,9 @@ paths:
     get:
       tags:
       - shop
-      summary: Current user's shop and settings
+      summary: Current user's shop and its settings per country
+      description: The shop exists from its first sign-in, with the defaults of each country where it
+        has branches, so it works before the owner changes anything (onboarding, E7.1).
       operationId: get_shop
       responses:
         '200':
@@ -121,7 +123,8 @@ paths:
     patch:
       tags:
       - shop
-      summary: Update shop name or settings (owner only)
+      summary: Update the shop name or its settings per country (owner only)
+      description: Costs and contact hours apply to decisions and calls made after the change.
       operationId: update_shop
       requestBody:
         content:
@@ -2882,11 +2885,115 @@ components:
           type: string
           pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]$
           title: End
+          description: Exclusive.
           default: '21:00'
       additionalProperties: false
       type: object
       title: ContactHours
-      description: Window when the buyer may be contacted, Vietnam time (Asia/Ho_Chi_Minh).
+      description: |-
+        Window when the buyer may be contacted, in the local time of the order's country. A shop
+        can narrow the default 08:00-21:00 but not widen it (contact protection).
+    CountrySettings:
+      properties:
+        failed_delivery_cost_vnd:
+          type: integer
+          minimum: 0.0
+          title: Failed Delivery Cost Vnd
+          description: 'Cost of one failed delivery: two-way shipping plus handling.'
+          default: 60000
+        ai_call_cost_vnd:
+          type: integer
+          minimum: 0.0
+          title: Ai Call Cost Vnd
+          description: Cost of one AI call.
+          default: 1500
+        confirmation_link_cost_vnd:
+          type: integer
+          minimum: 0.0
+          title: Confirmation Link Cost Vnd
+          description: Cost of sending one link.
+          default: 300
+        deposit_request_cost_vnd:
+          type: integer
+          minimum: 0.0
+          title: Deposit Request Cost Vnd
+          description: Estimated cost of asking for a deposit (lost conversions).
+          default: 5000
+        contact_hours:
+          $ref: '#/components/schemas/ContactHours'
+        country:
+          type: string
+          enum:
+          - VN
+          - SG
+          - PH
+          title: Country
+        currency:
+          type: string
+          enum:
+          - VND
+          - SGD
+          - PHP
+          title: Currency
+      additionalProperties: false
+      type: object
+      required:
+      - country
+      - currency
+      title: CountrySettings
+      description: |-
+        The shop's settings in one country where it has branches: costs in that country's
+        currency, contact hours in its local time.
+    CountrySettingsUpdate:
+      properties:
+        failed_delivery_cost_vnd:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+            description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+              SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
+          - type: 'null'
+          title: Failed Delivery Cost Vnd
+        ai_call_cost_vnd:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+            description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+              SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
+          - type: 'null'
+          title: Ai Call Cost Vnd
+        confirmation_link_cost_vnd:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+            description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+              SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
+          - type: 'null'
+          title: Confirmation Link Cost Vnd
+        deposit_request_cost_vnd:
+          anyOf:
+          - type: integer
+            minimum: 0.0
+            description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+              SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
+          - type: 'null'
+          title: Deposit Request Cost Vnd
+        contact_hours:
+          anyOf:
+          - $ref: '#/components/schemas/ContactHours'
+          - type: 'null'
+        country:
+          type: string
+          enum:
+          - VN
+          - SG
+          - PH
+          title: Country
+      additionalProperties: false
+      type: object
+      required:
+      - country
+      title: CountrySettingsUpdate
     DashboardSummary:
       properties:
         period_from:
@@ -4326,13 +4433,17 @@ components:
           minItems: 4
           title: Tiers
         automation:
-          $ref: '#/components/schemas/CallAutomation'
+          anyOf:
+          - $ref: '#/components/schemas/CallAutomation'
+          - type: 'null'
       additionalProperties: false
       type: object
       required:
       - tiers
       title: PolicyUpdate
-      description: Owner only. Must list all four tiers; `automation` left out means the defaults.
+      description: |-
+        Owner only. Must list all four tiers; `automation` left out keeps the call automation in
+        force.
       examples:
       - automation:
           call_window:
@@ -4596,8 +4707,12 @@ components:
           type: string
           format: date-time
           title: Created At
-        settings:
-          $ref: '#/components/schemas/ShopSettings'
+        countries:
+          items:
+            $ref: '#/components/schemas/CountrySettings'
+          type: array
+          title: Countries
+          description: One entry per country where the shop has branches (config/branches.yaml).
         intake_api_key_last4:
           anyOf:
           - type: string
@@ -4610,94 +4725,32 @@ components:
       - id
       - name
       - created_at
-      - settings
+      - countries
       title: Shop
       examples:
-      - created_at: '2026-10-09T09:00:00+07:00'
-        id: shp_01
-        intake_api_key_last4: a1b2
-        name: Sample Fashion Shop
-        settings:
-          ai_call_cost_vnd: 1500
+      - countries:
+        - ai_call_cost_vnd: 1500
           confirmation_link_cost_vnd: 300
           contact_hours:
             end: '21:00'
             start: 08:00
+          country: VN
+          currency: VND
           deposit_request_cost_vnd: 5000
           failed_delivery_cost_vnd: 60000
-    ShopSettings:
-      properties:
-        failed_delivery_cost_vnd:
-          type: integer
-          minimum: 0.0
-          title: Failed Delivery Cost Vnd
-          description: 'Cost of one failed delivery: two-way shipping plus handling.'
-          default: 60000
-        ai_call_cost_vnd:
-          type: integer
-          minimum: 0.0
-          title: Ai Call Cost Vnd
-          description: Cost of one AI call.
-          default: 1500
-        confirmation_link_cost_vnd:
-          type: integer
-          minimum: 0.0
-          title: Confirmation Link Cost Vnd
-          description: Cost of sending one link.
-          default: 300
-        deposit_request_cost_vnd:
-          type: integer
-          minimum: 0.0
-          title: Deposit Request Cost Vnd
-          description: Estimated cost of asking for a deposit (lost conversions).
-          default: 5000
-        contact_hours:
-          $ref: '#/components/schemas/ContactHours'
-      additionalProperties: false
-      type: object
-      title: ShopSettings
-      description: Costs used for expected-loss decisions, and contact rules the shop can tune.
-    ShopSettingsUpdate:
-      properties:
-        failed_delivery_cost_vnd:
-          anyOf:
-          - type: integer
-            minimum: 0.0
-            description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
-              SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
-          - type: 'null'
-          title: Failed Delivery Cost Vnd
-        ai_call_cost_vnd:
-          anyOf:
-          - type: integer
-            minimum: 0.0
-            description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
-              SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
-          - type: 'null'
-          title: Ai Call Cost Vnd
-        confirmation_link_cost_vnd:
-          anyOf:
-          - type: integer
-            minimum: 0.0
-            description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
-              SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
-          - type: 'null'
-          title: Confirmation Link Cost Vnd
-        deposit_request_cost_vnd:
-          anyOf:
-          - type: integer
-            minimum: 0.0
-            description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
-              SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
-          - type: 'null'
-          title: Deposit Request Cost Vnd
-        contact_hours:
-          anyOf:
-          - $ref: '#/components/schemas/ContactHours'
-          - type: 'null'
-      additionalProperties: false
-      type: object
-      title: ShopSettingsUpdate
+        - ai_call_cost_vnd: 30
+          confirmation_link_cost_vnd: 2
+          contact_hours:
+            end: '20:00'
+            start: 09:00
+          country: SG
+          currency: SGD
+          deposit_request_cost_vnd: 200
+          failed_delivery_cost_vnd: 1200
+        created_at: '2026-10-09T09:00:00+07:00'
+        id: shp_01
+        intake_api_key_last4: a1b2
+        name: Sample Fashion Shop
     ShopUpdate:
       properties:
         name:
@@ -4707,16 +4760,20 @@ components:
             minLength: 1
           - type: 'null'
           title: Name
-        settings:
+        countries:
           anyOf:
-          - $ref: '#/components/schemas/ShopSettingsUpdate'
+          - items:
+              $ref: '#/components/schemas/CountrySettingsUpdate'
+            type: array
           - type: 'null'
+          title: Countries
       additionalProperties: false
       type: object
       title: ShopUpdate
-      description: Owner only. Fields left out are unchanged.
+      description: Owner only. Fields left out are unchanged, and so are countries left out.
       examples:
-      - settings:
+      - countries:
+        - country: VN
           failed_delivery_cost_vnd: 65000
     Signal:
       properties:

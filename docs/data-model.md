@@ -19,6 +19,7 @@
 |---|---|---|
 | Firestore, collection `orders` | Every order: what came in, its status, its latest score and its delivery result | The backend on every request; the training job |
 | Firestore, collection `calls` | Every AI call: its job, progress, result and transcript | The backend (`app/calls/`) |
+| Firestore, `shops/{shop_id}` | The shop's name, and per country the costs and contact hours its owner changed | The backend on every decision and call (`app/data/shops.py`) |
 | Firestore, `shops/{shop_id}/policy_versions/{version}` | Every version of a shop's tier policy and call automation | The backend on every decision (`app/data/policies.py`) |
 | Cloud Storage, `snapshots/v{n}/orders.parquet` | A frozen copy of the labelled orders used for one training run | Training, backtest (E9) |
 | Cloud Storage, `models/v{n}/`, `models/latest` | Model file, metrics, feature list | The backend at startup |
@@ -107,6 +108,18 @@ One document per AI call attempt, written by `app/calls/` (docs/call-controller.
 | `expired` | bool | The backend failed the call itself (`controller_error`) because the controller stopped reporting; a late result still replaces it |
 
 - Contact rules query `phone_hash == h` (a single-field index, no composite index needed) and filter by time in Python.
+
+## Firestore: `shops/{shop_id}`
+
+The shop's profile (onboarding, E7.1), created on its first read (`GET /shop`).
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | string | Shown in the app and said by the AI call. Default: the demo shop's name, otherwise the id |
+| `created_at` | timestamp | |
+| `countries` | map | `{VN: {...}, SG: {...}}`: only the fields the owner changed (`failed_delivery_cost_vnd`, `ai_call_cost_vnd`, `confirmation_link_cost_vnd`, `deposit_request_cost_vnd` in the country's minor unit, `contact_hours`). Everything else comes from `config/branches.yaml`, so a later change to a default still reaches the shop |
+
+- An order's `scoring.failed_delivery_cost_vnd` and `expected_loss_vnd` use the shop's cost when it set one.
 
 ## Firestore: `shops/{shop_id}/policy_versions/{version}`
 

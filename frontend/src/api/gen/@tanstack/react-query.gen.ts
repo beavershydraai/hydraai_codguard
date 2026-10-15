@@ -200,7 +200,9 @@ export const getMeOptions = (options?: Options<GetMeData>) =>
 export const getShopQueryKey = (options?: Options<GetShopData>) => createQueryKey('getShop', options)
 
 /**
- * Current user's shop and settings
+ * Current user's shop and its settings per country
+ *
+ * The shop exists from its first sign-in, with the defaults of each country where it has branches, so it works before the owner changes anything (onboarding, E7.1).
  */
 export const getShopOptions = (options?: Options<GetShopData>) =>
   queryOptions<GetShopResponse, GetShopError, GetShopResponse, ReturnType<typeof getShopQueryKey>>({
@@ -217,7 +219,9 @@ export const getShopOptions = (options?: Options<GetShopData>) =>
   })
 
 /**
- * Update shop name or settings (owner only)
+ * Update the shop name or its settings per country (owner only)
+ *
+ * Costs and contact hours apply to decisions and calls made after the change.
  */
 export const updateShopMutation = (
   options?: Partial<Options<UpdateShopData>>,

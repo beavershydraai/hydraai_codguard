@@ -144,7 +144,9 @@ export const getMe = <ThrowOnError extends boolean = false>(
   })
 
 /**
- * Current user's shop and settings
+ * Current user's shop and its settings per country
+ *
+ * The shop exists from its first sign-in, with the defaults of each country where it has branches, so it works before the owner changes anything (onboarding, E7.1).
  */
 export const getShop = <ThrowOnError extends boolean = false>(
   options?: Options<GetShopData, ThrowOnError>,
@@ -162,7 +164,9 @@ export const getShop = <ThrowOnError extends boolean = false>(
   })
 
 /**
- * Update shop name or settings (owner only)
+ * Update the shop name or its settings per country (owner only)
+ *
+ * Costs and contact hours apply to decisions and calls made after the change.
  */
 export const updateShop = <ThrowOnError extends boolean = false>(
   options: Options<UpdateShopData, ThrowOnError>,

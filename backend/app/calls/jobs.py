@@ -13,7 +13,7 @@ from datetime import datetime
 
 from app.calls import spoken
 from app.data import branches
-from app.demo.world import SHOP_ID, SHOP_NAME
+from app.data.shops import default_name
 from app.schemas.enums import CallAgent, CallLanguage, CallTargetKind
 from app.schemas.telephony import CallBuyer, CallItem, CallJob, CallOrder, CallTarget
 
@@ -43,14 +43,6 @@ def target_for(doc: dict) -> CallTarget:
     if not doc.get("buyer_phone_hash") or not str(doc.get("buyer_phone", "")).startswith("+"):
         raise NoTarget(doc["order_id"])
     return CallTarget(kind=CallTargetKind.PSTN, address=doc["buyer_phone"])
-
-
-def shop_name(shop_id: str) -> str:
-    """The name the call introduces itself with. Shops have no profile yet (E7), so the demo
-    shop uses the name the app shows and any other shop its id."""
-    if shop_id == SHOP_ID:
-        return SHOP_NAME
-    return shop_id.removeprefix("shop_").replace("_", " ").title() or "the shop"
 
 
 def order_ref(doc: dict) -> str:
@@ -92,9 +84,12 @@ def call_order(doc: dict, now: datetime, language: CallLanguage) -> CallOrder:
     )
 
 
-def build_job(doc: dict, call_id: str, attempt: int, now: datetime) -> CallJob:
-    """One call about one order. Batching several orders to the same phone into one call
-    (contact protection, E4.3) is not done yet."""
+def build_job(
+    doc: dict, call_id: str, attempt: int, now: datetime, shop_name: str | None = None
+) -> CallJob:
+    """One call about one order, introduced with the shop's name (its profile, E7.1). Batching
+    several orders to the same phone into one call (contact protection, E4.3) is not done
+    yet."""
     language = CallLanguage(os.environ.get("CALL_LANGUAGE", CallLanguage.VI.value))
     order = call_order(doc, now, language)
     return CallJob(
@@ -104,7 +99,7 @@ def build_job(doc: dict, call_id: str, attempt: int, now: datetime) -> CallJob:
         target=target_for(doc),
         agent=CallAgent(os.environ.get("CALL_AGENT", CallAgent.GEMINI_LIVE.value)),
         language=language,
-        shop_name=shop_name(doc["shop_id"]),
+        shop_name=shop_name or default_name(doc["shop_id"]),
         buyer=CallBuyer(full_name=doc["buyer_name"]),
         orders=[order],
         total_cod_amount_vnd=order.cod_amount_vnd,

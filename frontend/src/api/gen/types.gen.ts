@@ -868,7 +868,8 @@ export type ContactChannel = 'ai_call' | 'confirmation_link' | 'deposit_request'
 /**
  * ContactHours
  *
- * Window when the buyer may be contacted, Vietnam time (Asia/Ho_Chi_Minh).
+ * Window when the buyer may be contacted, in the local time of the order's country. A shop
+ * can narrow the default 08:00-21:00 but not widen it (contact protection).
  */
 export type ContactHours = {
   /**
@@ -877,8 +878,79 @@ export type ContactHours = {
   start?: string
   /**
    * End
+   *
+   * Exclusive.
    */
   end?: string
+}
+
+/**
+ * CountrySettings
+ *
+ * The shop's settings in one country where it has branches: costs in that country's
+ * currency, contact hours in its local time.
+ */
+export type CountrySettings = {
+  /**
+   * Failed Delivery Cost Vnd
+   *
+   * Cost of one failed delivery: two-way shipping plus handling.
+   */
+  failed_delivery_cost_vnd?: number
+  /**
+   * Ai Call Cost Vnd
+   *
+   * Cost of one AI call.
+   */
+  ai_call_cost_vnd?: number
+  /**
+   * Confirmation Link Cost Vnd
+   *
+   * Cost of sending one link.
+   */
+  confirmation_link_cost_vnd?: number
+  /**
+   * Deposit Request Cost Vnd
+   *
+   * Estimated cost of asking for a deposit (lost conversions).
+   */
+  deposit_request_cost_vnd?: number
+  contact_hours?: ContactHours
+  /**
+   * Country
+   */
+  country: 'VN' | 'SG' | 'PH'
+  /**
+   * Currency
+   */
+  currency: 'VND' | 'SGD' | 'PHP'
+}
+
+/**
+ * CountrySettingsUpdate
+ */
+export type CountrySettingsUpdate = {
+  /**
+   * Failed Delivery Cost Vnd
+   */
+  failed_delivery_cost_vnd?: number | null
+  /**
+   * Ai Call Cost Vnd
+   */
+  ai_call_cost_vnd?: number | null
+  /**
+   * Confirmation Link Cost Vnd
+   */
+  confirmation_link_cost_vnd?: number | null
+  /**
+   * Deposit Request Cost Vnd
+   */
+  deposit_request_cost_vnd?: number | null
+  contact_hours?: ContactHours | null
+  /**
+   * Country
+   */
+  country: 'VN' | 'SG' | 'PH'
 }
 
 /**
@@ -1804,14 +1876,15 @@ export type PolicyComparison = {
 /**
  * PolicyUpdate
  *
- * Owner only. Must list all four tiers; `automation` left out means the defaults.
+ * Owner only. Must list all four tiers; `automation` left out keeps the call automation in
+ * force.
  */
 export type PolicyUpdate = {
   /**
    * Tiers
    */
   tiers: [TierPolicy, TierPolicy, TierPolicy, TierPolicy]
-  automation?: CallAutomation
+  automation?: CallAutomation | null
 }
 
 /**
@@ -1973,7 +2046,12 @@ export type Shop = {
    * Created At
    */
   created_at: string
-  settings: ShopSettings
+  /**
+   * Countries
+   *
+   * One entry per country where the shop has branches (config/branches.yaml).
+   */
+  countries: Array<CountrySettings>
   /**
    * Intake Api Key Last4
    *
@@ -1983,72 +2061,19 @@ export type Shop = {
 }
 
 /**
- * ShopSettings
- *
- * Costs used for expected-loss decisions, and contact rules the shop can tune.
- */
-export type ShopSettings = {
-  /**
-   * Failed Delivery Cost Vnd
-   *
-   * Cost of one failed delivery: two-way shipping plus handling.
-   */
-  failed_delivery_cost_vnd?: number
-  /**
-   * Ai Call Cost Vnd
-   *
-   * Cost of one AI call.
-   */
-  ai_call_cost_vnd?: number
-  /**
-   * Confirmation Link Cost Vnd
-   *
-   * Cost of sending one link.
-   */
-  confirmation_link_cost_vnd?: number
-  /**
-   * Deposit Request Cost Vnd
-   *
-   * Estimated cost of asking for a deposit (lost conversions).
-   */
-  deposit_request_cost_vnd?: number
-  contact_hours?: ContactHours
-}
-
-/**
- * ShopSettingsUpdate
- */
-export type ShopSettingsUpdate = {
-  /**
-   * Failed Delivery Cost Vnd
-   */
-  failed_delivery_cost_vnd?: number | null
-  /**
-   * Ai Call Cost Vnd
-   */
-  ai_call_cost_vnd?: number | null
-  /**
-   * Confirmation Link Cost Vnd
-   */
-  confirmation_link_cost_vnd?: number | null
-  /**
-   * Deposit Request Cost Vnd
-   */
-  deposit_request_cost_vnd?: number | null
-  contact_hours?: ContactHours | null
-}
-
-/**
  * ShopUpdate
  *
- * Owner only. Fields left out are unchanged.
+ * Owner only. Fields left out are unchanged, and so are countries left out.
  */
 export type ShopUpdate = {
   /**
    * Name
    */
   name?: string | null
-  settings?: ShopSettingsUpdate | null
+  /**
+   * Countries
+   */
+  countries?: Array<CountrySettingsUpdate> | null
 }
 
 /**

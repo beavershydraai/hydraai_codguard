@@ -142,14 +142,20 @@ export class MockDb {
     this.shop = {
       ...this.shop,
       name: update.name ?? this.shop.name,
-      settings: {
-        ...this.shop.settings,
-        ...Object.fromEntries(
-          Object.entries(update.settings ?? {}).filter(([, value]) => value !== null && value !== undefined),
-        ),
-      },
+      countries: this.shop.countries.map((current) => {
+        const change = update.countries?.find((c) => c.country === current.country)
+        const fields = Object.entries(change ?? {}).filter(
+          ([, value]) => value !== null && value !== undefined,
+        )
+        return { ...current, ...Object.fromEntries(fields) }
+      }),
     }
     return this.shop
+  }
+
+  /** The mock's orders are Vietnamese: they use the shop's VN costs. */
+  get vnSettings() {
+    return this.shop.countries.find((c) => c.country === 'VN') ?? this.shop.countries[0]!
   }
 
   get policy(): Policy {
@@ -276,8 +282,8 @@ export class MockDb {
       tier,
       expected_loss_vnd: prepaidAll
         ? null
-        : Math.round(probability * this.shop.settings.failed_delivery_cost_vnd!),
-      failed_delivery_cost_vnd: this.shop.settings.failed_delivery_cost_vnd ?? FAILED_DELIVERY_COST,
+        : Math.round(probability * (this.vnSettings.failed_delivery_cost_vnd ?? FAILED_DELIVERY_COST)),
+      failed_delivery_cost_vnd: this.vnSettings.failed_delivery_cost_vnd ?? FAILED_DELIVERY_COST,
       hard_rules: prepaidAll ? ['prepaid_skip'] : invalidPhone ? ['invalid_phone'] : [],
       top_signals: previous?.top_signals ?? [],
       reasons: previous?.reasons ?? [],
@@ -712,7 +718,7 @@ export class MockDb {
         o.timeline?.some((e) => /^(Call outcome: Confirmed|Buyer chose: Confirm)\./.test(e.message_vi)),
     )
     const goodContacted = good.filter((o) => (o.contacts?.length ?? 0) > 0)
-    const cost = this.shop.settings.failed_delivery_cost_vnd ?? FAILED_DELIVERY_COST
+    const cost = this.vnSettings.failed_delivery_cost_vnd ?? FAILED_DELIVERY_COST
     return {
       period_from: from,
       period_to: to,
@@ -741,7 +747,7 @@ export class MockDb {
       dataset: 'Simulated data, 12,000 orders (synthetic, 90 days)',
       orders: 12_000,
       orders_per_day: 300,
-      failed_delivery_cost_vnd: this.shop.settings.failed_delivery_cost_vnd ?? FAILED_DELIVERY_COST,
+      failed_delivery_cost_vnd: this.vnSettings.failed_delivery_cost_vnd ?? FAILED_DELIVERY_COST,
       lift: [
         { policy: 'cod_guard', points: curve(0.45) },
         { policy: 'phone_history_only', points: curve(0.7) },

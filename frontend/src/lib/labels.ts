@@ -1,5 +1,6 @@
 import type {
   BuyerAction,
+  CallAutomationMode,
   CallOutcome,
   CallStatus,
   ContactBlockReason,
@@ -10,6 +11,7 @@ import type {
   RiskTier,
   SalesChannel,
   SignalGroup,
+  Weekday,
 } from '@/api/gen'
 
 // English UI labels for the enums in api/openapi.yaml.
@@ -90,6 +92,27 @@ export const BLOCK_REASON_LABELS: Record<ContactBlockReason, string> = {
   outside_call_window: 'Outside the hours set for automatic calls',
 }
 
+export const CALL_AUTOMATION_MODE_LABELS: Record<CallAutomationMode, string> = {
+  auto: 'Call automatically',
+  suggest: 'Suggest, I confirm each call',
+}
+
+export const WEEKDAY_LABELS: Record<Weekday, string> = {
+  mon: 'Mon',
+  tue: 'Tue',
+  wed: 'Wed',
+  thu: 'Thu',
+  fri: 'Fri',
+  sat: 'Sat',
+  sun: 'Sun',
+}
+
+export const COUNTRY_LABELS: Record<string, string> = {
+  VN: 'Vietnam',
+  SG: 'Singapore',
+  PH: 'Philippines',
+}
+
 export const HARD_RULE_LABELS: Record<HardRule, string> = {
   prepaid_skip: 'Fully prepaid',
   invalid_phone: 'Invalid phone number',
@@ -124,6 +147,12 @@ export const formatVnd = (amount: number) => vnd.format(amount)
 
 // Amounts are integers in the currency's minor unit: VND has none, SGD and PHP are in cents.
 const MINOR_UNIT: Record<string, number> = { VND: 1, SGD: 100, PHP: 100 }
+/** A typed amount ("12.50") in the currency's minor unit (1250 cents); 0 when not a number. */
+export const toMinor = (value: string, currency = 'VND') =>
+  Math.max(0, Math.round((Number(value.replace(/[^\d.]/g, '')) || 0) * (MINOR_UNIT[currency] ?? 1)))
+/** A stored amount as the owner types it: 1250 cents → "12.5". */
+export const fromMinor = (amount: number, currency = 'VND') => String(amount / (MINOR_UNIT[currency] ?? 1))
+export const CURRENCY_SYMBOLS: Record<string, string> = { VND: '₫', SGD: 'S$', PHP: '₱' }
 const money = new Map<string, Intl.NumberFormat>()
 /** An order amount in its own currency (VN, SG and PH branches). */
 export function formatMoney(amount: number, currency = 'VND'): string {

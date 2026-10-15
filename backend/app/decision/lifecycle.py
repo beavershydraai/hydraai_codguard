@@ -8,6 +8,7 @@ from app.api.errors import ApiError
 from app.data import branches
 from app.data.orders import delivery_fields
 from app.data.phone import phone_hash, to_e164
+from app.data.shops import Settings, settings_for
 from app.data.store import OrderStore, phone_key
 from app.decision import policy as decisions
 from app.risk import engine
@@ -26,7 +27,7 @@ from app.schemas.enums import (
 )
 from app.schemas.orders import OrderUpdate
 from app.schemas.scoring import Decision
-from app.schemas.shops import Policy, ShopSettings
+from app.schemas.shops import Policy
 
 STATUS_FOR_ACTION = {
     DecisionAction.SHIP_NOW: OrderStatus.CLEARED_TO_SHIP,
@@ -188,7 +189,7 @@ def _score(
     doc: dict,
     now: datetime,
     *,
-    settings: ShopSettings | None,
+    settings: Settings,
     policy: Policy | None,
 ) -> bool:
     history = (
@@ -206,7 +207,7 @@ def _apply_score(
     fields: dict,
     now: datetime,
     *,
-    settings: ShopSettings | None,
+    settings: Settings,
     policy: Policy | None,
 ) -> None:
     """Apply deterministic score fields and choose the final action under current guards."""
@@ -217,6 +218,12 @@ def _apply_score(
     staff_decision = doc.get("decision")
     doc.update(fields)
     doc["scoring"]["scored_at"] = now
+    raw = doc["scoring"]
+    shop = settings_for(doc, settings)
+    if raw.get("failed_delivery_cost_vnd") not in (None, shop.failed_delivery_cost_vnd):
+        # The shop's own cost of a failed delivery replaces the country default (E7.1).
+        raw["failed_delivery_cost_vnd"] = shop.failed_delivery_cost_vnd
+        raw["expected_loss_vnd"] = round(raw["probability"] * shop.failed_delivery_cost_vnd)
     _event(doc, "scored", now, "Order rescored." if previous else "Order scored.")
     if staff:
         _set_decision(doc, Decision.model_validate(staff_decision))
@@ -230,7 +237,7 @@ def _apply_score(
         RiskTier(fields["tier"] or RiskTier.LOW),
         raw["expected_loss_vnd"],
         now,
-        settings=settings or branches.country_of(doc).settings,
+        settings=settings_for(doc, settings),
         policy=policy,
         confirmed=bool(doc.get("confirmation")),
         action=action,
@@ -260,7 +267,7 @@ def commit_prepared_score(
     fields: dict,
     now: datetime,
     *,
-    settings: ShopSettings | None = None,
+    settings: Settings = None,
     policy: Policy | None = None,
 ) -> dict:
     """Validate the assessed snapshot, then save score and deterministic decision atomically."""
@@ -282,7 +289,7 @@ def score_order(
     doc: dict,
     now: datetime | None = None,
     *,
-    settings: ShopSettings | None = None,
+    settings: Settings = None,
     policy: Policy | None = None,
 ) -> dict:
     """Score the stored order, then atomically save its decision and lifecycle state."""
@@ -323,7 +330,7 @@ def _edit(
     update: OrderUpdate,
     now: datetime,
     *,
-    settings: ShopSettings | None,
+    settings: Settings,
     policy: Policy | None,
     actor="system",
 ) -> bool:
@@ -387,7 +394,7 @@ def edit_order(
     update: OrderUpdate,
     now: datetime,
     *,
-    settings: ShopSettings | None = None,
+    settings: Settings = None,
     policy: Policy | None = None,
     actor: str = "system",
 ) -> dict:
@@ -463,7 +470,7 @@ def accept_suggested_call(
     actor: str,
     now: datetime,
     *,
-    settings: ShopSettings | None = None,
+    settings: Settings = None,
     policy: Policy | None = None,
 ) -> dict:
     """The shop confirms the AI call the engine suggested (call automation): the order then
@@ -491,7 +498,7 @@ def accept_suggested_call(
                 policy_version=current.version,
                 expected_loss_vnd=previous.get("expected_loss_vnd"),
                 contact_cost_vnd=decisions.contact_cost(
-                    DecisionAction.AI_CALL, settings or branches.country_of(doc).settings
+                    DecisionAction.AI_CALL, settings_for(doc, settings)
                 ),
                 next_action=next_action,
                 next_action_at=now + timedelta(minutes=wait) if next_action else None,
@@ -554,7 +561,7 @@ def apply_buyer_response(
     new_address: Address | None,
     now: datetime,
     *,
-    settings: ShopSettings | None = None,
+    settings: Settings = None,
     policy: Policy | None = None,
 ) -> dict:
     """Apply a response after the confirmation-link owner has verified its token."""
@@ -607,7 +614,7 @@ def _no_response(
     now: datetime,
     *,
     call_attempts: int | None,
-    settings: ShopSettings | None,
+    settings: Settings,
     policy: Policy | None,
 ) -> None:
     previous = doc.get("decision")
@@ -625,7 +632,7 @@ def _no_response(
         now,
         unanswered=previous.action,
         call_attempts=call_attempts,
-        settings=settings or branches.country_of(doc).settings,
+        settings=settings_for(doc, settings),
         policy=policy,
         confirmed=bool(doc.get("confirmation")),
         action=previous.next_action,
@@ -643,7 +650,7 @@ def on_no_response(
     now: datetime,
     *,
     call_attempts: int | None = None,
-    settings: ShopSettings | None = None,
+    settings: Settings = None,
     policy: Policy | None = None,
 ) -> dict:
     """Timer hook; an early or obsolete timer leaves the order unchanged."""
@@ -663,7 +670,7 @@ def apply_call_outcome(
     *,
     update: OrderUpdate | None = None,
     call_attempts: int | None = None,
-    settings: ShopSettings | None = None,
+    settings: Settings = None,
     policy: Policy | None = None,
 ) -> dict:
     """Apply one validated call outcome; corrected fields must have been read back."""
@@ -703,7 +710,7 @@ def apply_call_outcome(
                     RiskTier(doc.get("tier") or RiskTier.LOW),
                     (doc.get("scoring") or {}).get("expected_loss_vnd", 0),
                     now,
-                    settings=settings or branches.country_of(doc).settings,
+                    settings=settings_for(doc, settings),
                     policy=policy,
                     action=DecisionAction.HOLD_FOR_REVIEW,
                 )
@@ -721,7 +728,7 @@ def hold_for_review(
     order_id: str,
     now: datetime,
     *,
-    settings: ShopSettings | None = None,
+    settings: Settings = None,
     policy: Policy | None = None,
     guard_decision: bool = False,
     expected_decision: dict | None = None,
@@ -740,7 +747,7 @@ def hold_for_review(
             RiskTier(doc.get("tier") or RiskTier.LOW),
             (doc.get("scoring") or {}).get("expected_loss_vnd") or 0,
             now,
-            settings=settings or branches.country_of(doc).settings,
+            settings=settings_for(doc, settings),
             policy=policy,
             action=DecisionAction.HOLD_FOR_REVIEW,
         )

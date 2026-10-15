@@ -15,6 +15,7 @@ Vnd = Annotated[
     ),
 ]
 Currency = Literal["VND", "SGD", "PHP"]
+Country = Literal["VN", "SG", "PH"]
 Phone = Annotated[
     str,
     Field(

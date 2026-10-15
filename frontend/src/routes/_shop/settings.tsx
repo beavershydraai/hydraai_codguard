@@ -11,7 +11,7 @@ import { type SettingsTab, ShopSettingsView } from '@/components/blocks/settings
 import { QueryError } from '@/components/query-error'
 import { Skeleton } from '@/components/ui/skeleton'
 
-const TABS: SettingsTab[] = ['shop', 'policy', 'history']
+const TABS: SettingsTab[] = ['shop', 'policy', 'automation', 'history']
 
 export const Route = createFileRoute('/_shop/settings')({
   staticData: { crumb: 'Settings' },
@@ -43,7 +43,7 @@ function SettingsPage() {
   return (
     <ShopSettingsView
       // Remount the forms when saved data changes, so they show what the server stored.
-      key={`${shop.data.name}-${policy.data.version}`}
+      key={`${shop.data.name}-${policy.data.version}-${JSON.stringify(shop.data.countries)}`}
       shop={shop.data}
       policy={policy.data}
       versions={versions.data}

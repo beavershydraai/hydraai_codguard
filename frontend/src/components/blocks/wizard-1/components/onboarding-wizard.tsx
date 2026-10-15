@@ -21,13 +21,14 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/c
 import { Input } from '@/components/ui/input'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group'
 import { Separator } from '@/components/ui/separator'
-import { DECISION_ACTION_LABELS, formatVnd } from '@/lib/labels'
+import { COUNTRY_LABELS, CURRENCY_SYMBOLS, DECISION_ACTION_LABELS, formatMoney, toMinor } from '@/lib/labels'
 
-import { failedDeliveryCost, initialOnboardingValues, money, type OnboardingValues } from './data'
+import { type CountryValues, hoursValid, initialOnboardingValues, type OnboardingValues } from './data'
 
 // Shop onboarding (E7.1) in the three-step grammar of ReUI wizard-1: horizontal stepper,
-// per-step validation, and a review step. Every value starts at a sensible default, so the
-// shop can finish without changing anything.
+// per-step validation, and a review step. Every value starts at the default of its country
+// (one set of costs and contact hours per country where the shop has branches), so the shop can
+// finish without changing anything.
 
 const STEPS = [
   { id: 'shop', step: 1, title: 'Shop' },
@@ -35,15 +36,18 @@ const STEPS = [
   { id: 'policy', step: 3, title: 'Policy & review' },
 ] as const
 
-type Errors = Partial<Record<keyof OnboardingValues, string>>
+/** Field errors by key: `name`, or `<country>.failed` / `<country>.hours`. */
+type Errors = Record<string, string | undefined>
 
 function stepErrors(step: number, v: OnboardingValues): Errors {
   const errors: Errors = {}
   if (step === 1 && v.name.trim().length < 2) errors.name = 'Enter the shop name (at least 2 characters).'
   if (step === 2) {
-    if (money(v.shipping) <= 0) errors.shipping = 'Enter the average shipping fee for one order.'
-    if (!(v.start >= '08:00' && v.end <= '21:00' && v.start < v.end))
-      errors.end = 'Contact hours must be within 08:00–21:00.'
+    for (const c of v.countries) {
+      if (toMinor(c.failed, c.currency) <= 0)
+        errors[`${c.country}.failed`] = 'Enter the cost of a failed delivery.'
+      if (!hoursValid(c)) errors[`${c.country}.hours`] = 'Contact hours must be within 08:00–21:00.'
+    }
   }
   return errors
 }
@@ -64,10 +68,19 @@ export function OnboardingWizard({
   const [values, setValues] = useState(() => initialOnboardingValues(shop))
   const [errors, setErrors] = useState<Errors>({})
 
-  const set = (key: keyof OnboardingValues) => (event: { target: { value: string } }) => {
-    setValues((v) => ({ ...v, [key]: event.target.value }))
-    setErrors((e) => ({ ...e, [key]: undefined }))
+  const setName = (event: { target: { value: string } }) => {
+    setValues((v) => ({ ...v, name: event.target.value }))
+    setErrors((e) => ({ ...e, name: undefined }))
   }
+  const setCountry =
+    (country: CountryValues['country'], key: keyof CountryValues, error: string) =>
+    (event: { target: { value: string } }) => {
+      setValues((v) => ({
+        ...v,
+        countries: v.countries.map((c) => (c.country === country ? { ...c, [key]: event.target.value } : c)),
+      }))
+      setErrors((e) => ({ ...e, [`${country}.${error}`]: undefined }))
+    }
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -133,7 +146,7 @@ export function OnboardingWizard({
                     <Input
                       id="onb-name"
                       value={values.name}
-                      onChange={set('name')}
+                      onChange={setName}
                       aria-invalid={!!errors.name}
                       autoFocus
                     />
@@ -151,57 +164,74 @@ export function OnboardingWizard({
               </StepperContent>
 
               <StepperContent value={2}>
-                <FieldGroup className="gap-4">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Field data-invalid={!!errors.shipping}>
-                      <FieldLabel htmlFor="onb-ship">Average one-way shipping fee</FieldLabel>
-                      <Money id="onb-ship" value={values.shipping} onChange={set('shipping')} />
-                      {errors.shipping && <FieldError>{errors.shipping}</FieldError>}
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="onb-handling">Return handling cost</FieldLabel>
-                      <Money id="onb-handling" value={values.handling} onChange={set('handling')} />
-                    </Field>
-                  </div>
-                  <p className="text-sm">
-                    One failed delivery costs about{' '}
-                    <span className="font-semibold tabular-nums">
-                      {formatVnd(failedDeliveryCost(values))}
-                    </span>{' '}
-                    <Badge variant="info-light" size="sm">
-                      estimated
-                    </Badge>
+                <FieldGroup className="gap-5">
+                  <p className="text-muted-foreground">
+                    One set per country where the shop has branches, in that country's currency and local
+                    time. Calls and links are used only when an order's expected loss is higher than their
+                    cost.
                   </p>
-                  <Field>
-                    <FieldLabel htmlFor="onb-call">Cost of one AI call</FieldLabel>
-                    <Money id="onb-call" value={values.callCost} onChange={set('callCost')} />
-                    <FieldDescription>
-                      Calls are placed only when an order's expected loss is higher than this cost.
-                    </FieldDescription>
-                  </Field>
-                  <Field data-invalid={!!errors.end}>
-                    <FieldLabel htmlFor="onb-start">Hours when buyers may be contacted</FieldLabel>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        id="onb-start"
-                        type="time"
-                        value={values.start}
-                        onChange={set('start')}
-                        min="08:00"
-                        max="21:00"
-                      />
-                      <span className="text-muted-foreground">–</span>
-                      <Input
-                        aria-label="Until"
-                        type="time"
-                        value={values.end}
-                        onChange={set('end')}
-                        min="08:00"
-                        max="21:00"
-                      />
-                    </div>
-                    {errors.end && <FieldError>{errors.end}</FieldError>}
-                  </Field>
+                  {values.countries.map((c) => {
+                    const id = `onb-${c.country}`
+                    return (
+                      <fieldset key={c.country} className="flex flex-col gap-3 rounded-lg border p-3">
+                        <legend className="px-1 text-sm font-medium">
+                          {COUNTRY_LABELS[c.country] ?? c.country}{' '}
+                          <Badge variant="outline" size="sm">
+                            {c.currency}
+                          </Badge>
+                        </legend>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <Field data-invalid={!!errors[`${c.country}.failed`]}>
+                            <FieldLabel htmlFor={`${id}-failed`}>Cost of one failed delivery</FieldLabel>
+                            <Money
+                              id={`${id}-failed`}
+                              currency={c.currency}
+                              value={c.failed}
+                              onChange={setCountry(c.country, 'failed', 'failed')}
+                            />
+                            <FieldDescription>Shipping both ways plus handling.</FieldDescription>
+                            {errors[`${c.country}.failed`] && (
+                              <FieldError>{errors[`${c.country}.failed`]}</FieldError>
+                            )}
+                          </Field>
+                          <Field>
+                            <FieldLabel htmlFor={`${id}-call`}>Cost of one AI call</FieldLabel>
+                            <Money
+                              id={`${id}-call`}
+                              currency={c.currency}
+                              value={c.callCost}
+                              onChange={setCountry(c.country, 'callCost', 'call')}
+                            />
+                          </Field>
+                        </div>
+                        <Field data-invalid={!!errors[`${c.country}.hours`]}>
+                          <FieldLabel htmlFor={`${id}-start`}>Hours when buyers may be contacted</FieldLabel>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id={`${id}-start`}
+                              type="time"
+                              value={c.start}
+                              onChange={setCountry(c.country, 'start', 'hours')}
+                              min="08:00"
+                              max="21:00"
+                            />
+                            <span className="text-muted-foreground">–</span>
+                            <Input
+                              aria-label={`Until, ${COUNTRY_LABELS[c.country] ?? c.country}`}
+                              type="time"
+                              value={c.end}
+                              onChange={setCountry(c.country, 'end', 'hours')}
+                              min="08:00"
+                              max="21:00"
+                            />
+                          </div>
+                          {errors[`${c.country}.hours`] && (
+                            <FieldError>{errors[`${c.country}.hours`]}</FieldError>
+                          )}
+                        </Field>
+                      </fieldset>
+                    )
+                  })}
                 </FieldGroup>
               </StepperContent>
 
@@ -229,26 +259,32 @@ export function OnboardingWizard({
                       </li>
                     ))}
                   </ul>
-                  <dl className="grid grid-cols-2 gap-3 rounded-lg bg-muted/60 p-3 text-xs">
-                    <div>
-                      <dt className="text-muted-foreground">Shop</dt>
-                      <dd className="font-medium">{values.name}</dd>
-                    </div>
-                    <div>
+                  <div className="flex flex-col gap-2 rounded-lg bg-muted/60 p-3 text-xs">
+                    <p>
+                      <span className="text-muted-foreground">Shop: </span>
+                      <span className="font-medium">{values.name}</span>
+                    </p>
+                    <dl className="grid grid-cols-[auto_1fr_1fr_auto] gap-x-3 gap-y-1">
+                      <dt className="text-muted-foreground">Country</dt>
                       <dt className="text-muted-foreground">Failed delivery</dt>
-                      <dd className="font-medium tabular-nums">{formatVnd(failedDeliveryCost(values))}</dd>
-                    </div>
-                    <div>
                       <dt className="text-muted-foreground">AI call</dt>
-                      <dd className="font-medium tabular-nums">{formatVnd(money(values.callCost))}</dd>
-                    </div>
-                    <div>
                       <dt className="text-muted-foreground">Contact hours</dt>
-                      <dd className="font-medium tabular-nums">
-                        {values.start}–{values.end}
-                      </dd>
-                    </div>
-                  </dl>
+                      {values.countries.map((c) => (
+                        <div key={c.country} className="contents">
+                          <dd className="font-medium">{c.country}</dd>
+                          <dd className="tabular-nums">
+                            {formatMoney(toMinor(c.failed, c.currency), c.currency)}
+                          </dd>
+                          <dd className="tabular-nums">
+                            {formatMoney(toMinor(c.callCost, c.currency), c.currency)}
+                          </dd>
+                          <dd className="tabular-nums">
+                            {c.start}–{c.end}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
                 </div>
               </StepperContent>
             </StepperPanel>
@@ -273,10 +309,12 @@ export function OnboardingWizard({
 
 function Money({
   id,
+  currency,
   value,
   onChange,
 }: {
   id: string
+  currency: string
   value: string
   onChange: (e: { target: { value: string } }) => void
 }) {
@@ -286,11 +324,11 @@ function Money({
         id={id}
         value={value}
         onChange={onChange}
-        inputMode="numeric"
+        inputMode={currency === 'VND' ? 'numeric' : 'decimal'}
         className="text-right tabular-nums"
       />
       <InputGroupAddon align="inline-end">
-        <InputGroupText>₫</InputGroupText>
+        <InputGroupText>{CURRENCY_SYMBOLS[currency] ?? currency}</InputGroupText>
       </InputGroupAddon>
     </InputGroup>
   )

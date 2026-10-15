@@ -27,13 +27,38 @@ import { CALL_OUTCOME_LABELS, DECISION_ACTION_LABELS, formatVnd, RISK_TIER_LABEL
 export const SHOP_ID = 'shop_demo'
 export const FAILED_DELIVERY_COST = 60_000
 
-export const DEFAULT_SETTINGS = {
-  failed_delivery_cost_vnd: FAILED_DELIVERY_COST,
-  ai_call_cost_vnd: 1_500,
-  confirmation_link_cost_vnd: 300,
-  deposit_request_cost_vnd: 5_000,
-  contact_hours: { start: '08:00', end: '21:00' },
-} satisfies Shop['settings']
+const HOURS = { start: '08:00', end: '21:00' }
+
+/** The shop's settings per country: the defaults of backend/config/branches.yaml. */
+export const DEFAULT_COUNTRIES = [
+  {
+    country: 'VN',
+    currency: 'VND',
+    failed_delivery_cost_vnd: FAILED_DELIVERY_COST,
+    ai_call_cost_vnd: 1_500,
+    confirmation_link_cost_vnd: 300,
+    deposit_request_cost_vnd: 5_000,
+    contact_hours: HOURS,
+  },
+  {
+    country: 'SG',
+    currency: 'SGD',
+    failed_delivery_cost_vnd: 1_200,
+    ai_call_cost_vnd: 30,
+    confirmation_link_cost_vnd: 2,
+    deposit_request_cost_vnd: 200,
+    contact_hours: HOURS,
+  },
+  {
+    country: 'PH',
+    currency: 'PHP',
+    failed_delivery_cost_vnd: 25_000,
+    ai_call_cost_vnd: 500,
+    confirmation_link_cost_vnd: 100,
+    deposit_request_cost_vnd: 5_000,
+    contact_hours: HOURS,
+  },
+] satisfies Shop['countries']
 
 export function defaultPolicy(effectiveFrom: string): Policy {
   return {
@@ -926,7 +951,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
       id: SHOP_ID,
       name: 'Sample Fashion Shop',
       created_at: policyStart,
-      settings: DEFAULT_SETTINGS,
+      countries: DEFAULT_COUNTRIES,
       intake_api_key_last4: 'demo',
     },
     policies: [defaultPolicy(policyStart)],

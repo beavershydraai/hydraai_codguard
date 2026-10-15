@@ -31,13 +31,14 @@ from google.genai import types
 from app.agents import assessment, contact, routes
 from app.agents.assessment import AssessmentResult
 from app.agents.log import DecisionLog, entry
+from app.data.shops import Settings
 from app.data.store import OrderStore
 from app.decision import lifecycle
 from app.schemas.common import Address
 from app.schemas.enums import BuyerAction, CallOutcome, DecisionAction
 from app.schemas.orders import OrderUpdate
 from app.schemas.scoring import Decision
-from app.schemas.shops import Policy, ShopSettings
+from app.schemas.shops import Policy
 
 if TYPE_CHECKING:
     from app.calls.service import CallService
@@ -63,7 +64,7 @@ class Pipeline:
 
     store: OrderStore
     log: DecisionLog
-    settings: ShopSettings | None = None
+    settings: Settings = None  # the shop's settings per country (app/data/shops.py)
     policy: Policy | None = None
     now: datetime | None = None
     calls: "CallService | None" = None  # places real AI calls (E5); None keeps them simulated
