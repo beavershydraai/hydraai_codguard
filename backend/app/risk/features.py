@@ -9,7 +9,8 @@ import math
 import re
 from datetime import timedelta
 
-from app.data.orders import VN_TIME, final_state
+from app.data import branches
+from app.data.orders import final_state
 
 M_SMOOTH = 5  # E2.3 rule 7
 CHANNELS = ["facebook", "zalo", "tiktok", "website", "instagram", "other"]
@@ -23,7 +24,7 @@ SIGNALS = {
     "n_lines": ("order_behavior", "Number of products in the order"),
     "total_qty": ("order_behavior", "Total quantity"),
     "discount_ratio": ("order_behavior", "Discount rate"),
-    "placed_hour_vn": ("order_behavior", "Hour the order was placed"),
+    "placed_hour_local": ("order_behavior", "Hour the order was placed (local time)"),
     "placed_dow": ("order_behavior", "Day of the week"),
     "is_night": ("order_behavior", "Placed at night"),
     "address_missing_house_number": ("address_quality", "Address missing a house number"),
@@ -61,7 +62,7 @@ def compute_features(order: dict, history: list[dict], at, enc: dict) -> dict:
     items = order["items"]
     subtotal = sum(i["quantity"] * i["unit_price_vnd"] for i in items)
     cod = cod_amount(order)
-    local = order["placed_at"].astimezone(VN_TIME)
+    local = order["placed_at"].astimezone(branches.country_of(order).tz)
     p0 = enc["p0"]
 
     prior = [h for h in history if h["placed_at"] < at and h["order_id"] != order["order_id"]]
@@ -82,7 +83,7 @@ def compute_features(order: dict, history: list[dict], at, enc: dict) -> dict:
         "n_lines": len(items),
         "total_qty": sum(i["quantity"] for i in items),
         "discount_ratio": order["discount_vnd"] / subtotal if subtotal else 0.0,
-        "placed_hour_vn": local.hour,
+        "placed_hour_local": local.hour,
         "placed_dow": local.weekday(),
         "is_night": int(local.hour >= 22 or local.hour < 6),
         # address quality

@@ -1087,8 +1087,25 @@ paths:
     get:
       tags:
       - dashboard
-      summary: 'Latest backtest: lift curves and policy comparison'
+      summary: 'Latest backtest of a country''s model: lift curves and policy comparison'
+      description: The backtest the training job stored with the country's model (app/risk/backtest.py).
       operationId: get_backtest
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: country
+        in: query
+        required: false
+        schema:
+          enum:
+          - VN
+          - SG
+          - PH
+          type: string
+          description: Country of the model (one per country).
+          default: VN
+          title: Country
+        description: Country of the model (one per country).
       responses:
         '200':
           description: Successful Response
@@ -1100,16 +1117,33 @@ paths:
           description: Missing or invalid credentials.
           content:
             application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetail'
               example:
                 type: about:blank
                 title: Unauthorized
                 status: 401
                 code: unauthorized
                 detail: Missing or expired access token.
-      security:
-      - bearerAuth: []
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: Resource not found.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Not found
+                status: 404
+                code: not_found
+                detail: Order ord_99 not found.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example: *id001
   /api/v1/intake/orders:
     post:
       tags:
@@ -1666,6 +1700,20 @@ components:
           type: string
           format: date-time
           title: Generated At
+        country:
+          type: string
+          title: Country
+          description: Country of the model (VN, SG, PH).
+          default: VN
+        currency:
+          type: string
+          enum:
+          - VND
+          - SGD
+          - PHP
+          title: Currency
+          description: Currency of every amount.
+          default: VND
         dataset:
           type: string
           title: Dataset
@@ -1682,7 +1730,8 @@ components:
           type: integer
           minimum: 0.0
           title: Failed Delivery Cost Vnd
-          description: Amount in VND (integer, no decimals).
+          description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+            SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
         lift:
           items:
             $ref: '#/components/schemas/LiftSeries'
@@ -1807,7 +1856,8 @@ components:
           type: integer
           minimum: 0.0
           title: Cod Amount Vnd
-          description: Amount in VND (integer, no decimals).
+          description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+            SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
         recipient_name_masked:
           type: string
           title: Recipient Name Masked
@@ -2169,7 +2219,8 @@ components:
           type: integer
           minimum: 0.0
           title: Total Cod Amount Vnd
-          description: Amount in VND (integer, no decimals).
+          description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+            SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
         total_cod_amount_spoken:
           type: string
           maxLength: 200
@@ -2287,7 +2338,8 @@ components:
           type: integer
           minimum: 0.0
           title: Deposit Paid Vnd
-          description: Amount in VND (integer, no decimals).
+          description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+            SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
           default: 0
         deposit_paid_spoken:
           type: string
@@ -2755,14 +2807,16 @@ components:
           anyOf:
           - type: integer
             minimum: 0.0
-            description: Amount in VND (integer, no decimals).
+            description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+              SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
           - type: 'null'
           title: Expected Loss Vnd
         contact_cost_vnd:
           anyOf:
           - type: integer
             minimum: 0.0
-            description: Amount in VND (integer, no decimals).
+            description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+              SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
           - type: 'null'
           title: Contact Cost Vnd
           description: Cost of the chosen contact action, if any.
@@ -3221,9 +3275,10 @@ components:
           title: Buyer Name
         buyer_phone:
           type: string
-          pattern: ^\+?[0-9]{9,15}$
+          pattern: ^\+?[0-9]{8,15}$
           title: Buyer Phone
-          description: Phone number. Input accepts 0xxxxxxxxx or +84xxxxxxxxx; output is E.164.
+          description: Phone number of the branch's country (VN, SG or PH). Input accepts the national
+            or the international form; output is E.164.
           examples:
           - '+84000000001'
         is_gift:
@@ -3240,8 +3295,9 @@ components:
         recipient_phone:
           anyOf:
           - type: string
-            pattern: ^\+?[0-9]{9,15}$
-            description: Phone number. Input accepts 0xxxxxxxxx or +84xxxxxxxxx; output is E.164.
+            pattern: ^\+?[0-9]{8,15}$
+            description: Phone number of the branch's country (VN, SG or PH). Input accepts the national
+              or the international form; output is E.164.
             examples:
             - '+84000000001'
           - type: 'null'
@@ -3260,13 +3316,15 @@ components:
           type: integer
           minimum: 0.0
           title: Shipping Fee Vnd
-          description: Amount in VND (integer, no decimals).
+          description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+            SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
           default: 0
         discount_vnd:
           type: integer
           minimum: 0.0
           title: Discount Vnd
-          description: Amount in VND (integer, no decimals).
+          description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+            SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
           default: 0
         prepaid_vnd:
           type: integer
@@ -3291,6 +3349,17 @@ components:
             maxLength: 500
           - type: 'null'
           title: Note
+        currency:
+          anyOf:
+          - type: string
+            enum:
+            - VND
+            - SGD
+            - PHP
+          - type: 'null'
+          title: Currency
+          description: Currency of every amount in the order. Defaults to the branch's currency (set by
+            the intake key); a different one is rejected.
       additionalProperties: false
       type: object
       required:
@@ -3334,6 +3403,27 @@ components:
           - type: string
           - type: 'null'
           title: External Id
+        branch_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Branch Id
+          description: Branch that took the order.
+        country:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Country
+          description: Country of the branch (VN, SG, PH).
+        currency:
+          type: string
+          enum:
+          - VND
+          - SGD
+          - PHP
+          title: Currency
+          description: Currency of every amount.
+          default: VND
         channel:
           $ref: '#/components/schemas/SalesChannel'
         buyer_name:
@@ -3341,9 +3431,10 @@ components:
           title: Buyer Name
         buyer_phone:
           type: string
-          pattern: ^\+?[0-9]{9,15}$
+          pattern: ^\+?[0-9]{8,15}$
           title: Buyer Phone
-          description: Phone number. Input accepts 0xxxxxxxxx or +84xxxxxxxxx; output is E.164.
+          description: Phone number of the branch's country (VN, SG or PH). Input accepts the national
+            or the international form; output is E.164.
           examples:
           - '+84000000001'
         is_gift:
@@ -3393,8 +3484,9 @@ components:
         recipient_phone:
           anyOf:
           - type: string
-            pattern: ^\+?[0-9]{9,15}$
-            description: Phone number. Input accepts 0xxxxxxxxx or +84xxxxxxxxx; output is E.164.
+            pattern: ^\+?[0-9]{8,15}$
+            description: Phone number of the branch's country (VN, SG or PH). Input accepts the national
+              or the international form; output is E.164.
             examples:
             - '+84000000001'
           - type: 'null'
@@ -3410,17 +3502,20 @@ components:
           type: integer
           minimum: 0.0
           title: Shipping Fee Vnd
-          description: Amount in VND (integer, no decimals).
+          description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+            SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
         discount_vnd:
           type: integer
           minimum: 0.0
           title: Discount Vnd
-          description: Amount in VND (integer, no decimals).
+          description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+            SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
         prepaid_vnd:
           type: integer
           minimum: 0.0
           title: Prepaid Vnd
-          description: Amount in VND (integer, no decimals).
+          description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+            SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
         note:
           anyOf:
           - type: string
@@ -3698,7 +3793,8 @@ components:
           type: integer
           minimum: 0.0
           title: Unit Price Vnd
-          description: Amount in VND (integer, no decimals).
+          description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+            SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
       additionalProperties: false
       type: object
       required:
@@ -3759,6 +3855,27 @@ components:
           - type: string
           - type: 'null'
           title: External Id
+        branch_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Branch Id
+          description: Branch that took the order.
+        country:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Country
+          description: Country of the branch (VN, SG, PH).
+        currency:
+          type: string
+          enum:
+          - VND
+          - SGD
+          - PHP
+          title: Currency
+          description: Currency of every amount.
+          default: VND
         channel:
           $ref: '#/components/schemas/SalesChannel'
         buyer_name:
@@ -3766,9 +3883,10 @@ components:
           title: Buyer Name
         buyer_phone:
           type: string
-          pattern: ^\+?[0-9]{9,15}$
+          pattern: ^\+?[0-9]{8,15}$
           title: Buyer Phone
-          description: Phone number. Input accepts 0xxxxxxxxx or +84xxxxxxxxx; output is E.164.
+          description: Phone number of the branch's country (VN, SG or PH). Input accepts the national
+            or the international form; output is E.164.
           examples:
           - '+84000000001'
         is_gift:
@@ -3852,8 +3970,9 @@ components:
         buyer_phone:
           anyOf:
           - type: string
-            pattern: ^\+?[0-9]{9,15}$
-            description: Phone number. Input accepts 0xxxxxxxxx or +84xxxxxxxxx; output is E.164.
+            pattern: ^\+?[0-9]{8,15}$
+            description: Phone number of the branch's country (VN, SG or PH). Input accepts the national
+              or the international form; output is E.164.
             examples:
             - '+84000000001'
           - type: 'null'
@@ -3881,7 +4000,8 @@ components:
           anyOf:
           - type: integer
             minimum: 0.0
-            description: Amount in VND (integer, no decimals).
+            description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+              SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
           - type: 'null'
           title: Prepaid Vnd
         note:
@@ -4149,7 +4269,8 @@ components:
           anyOf:
           - type: integer
             minimum: 0.0
-            description: Amount in VND (integer, no decimals).
+            description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+              SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
           - type: 'null'
           title: Expected Loss Vnd
           description: probability × failed_delivery_cost_vnd, in VND.
@@ -4323,28 +4444,32 @@ components:
           anyOf:
           - type: integer
             minimum: 0.0
-            description: Amount in VND (integer, no decimals).
+            description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+              SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
           - type: 'null'
           title: Failed Delivery Cost Vnd
         ai_call_cost_vnd:
           anyOf:
           - type: integer
             minimum: 0.0
-            description: Amount in VND (integer, no decimals).
+            description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+              SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
           - type: 'null'
           title: Ai Call Cost Vnd
         confirmation_link_cost_vnd:
           anyOf:
           - type: integer
             minimum: 0.0
-            description: Amount in VND (integer, no decimals).
+            description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+              SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
           - type: 'null'
           title: Confirmation Link Cost Vnd
         deposit_request_cost_vnd:
           anyOf:
           - type: integer
             minimum: 0.0
-            description: Amount in VND (integer, no decimals).
+            description: 'Amount in the order''s currency, as an integer in its minor unit: VND has none,
+              SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.'
           - type: 'null'
           title: Deposit Request Cost Vnd
         contact_hours:

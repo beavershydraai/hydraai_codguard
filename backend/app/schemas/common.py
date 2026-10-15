@@ -1,17 +1,26 @@
 """Shared types: money, phone, address, errors."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.enums import ContactBlockReason, ErrorCode
 
-Vnd = Annotated[int, Field(ge=0, description="Amount in VND (integer, no decimals).")]
+Vnd = Annotated[
+    int,
+    Field(
+        ge=0,
+        description="Amount in the order's currency, as an integer in its minor unit: VND has "
+        "none, SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.",
+    ),
+]
+Currency = Literal["VND", "SGD", "PHP"]
 Phone = Annotated[
     str,
     Field(
-        pattern=r"^\+?[0-9]{9,15}$",
-        description="Phone number. Input accepts 0xxxxxxxxx or +84xxxxxxxxx; output is E.164.",
+        pattern=r"^\+?[0-9]{8,15}$",
+        description="Phone number of the branch's country (VN, SG or PH). Input accepts the "
+        "national or the international form; output is E.164.",
         examples=["+84000000001"],
     ),
 ]

@@ -12,7 +12,7 @@ import {
 import { TierBadge } from '@/components/tier-badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { DECISION_ACTION_LABELS, formatRelative, formatVnd, SALES_CHANNEL_LABELS } from '@/lib/labels'
+import { DECISION_ACTION_LABELS, formatRelative, formatMoney, SALES_CHANNEL_LABELS } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 
 export type ReviewDecision = Extract<DecisionAction, 'ship_now' | 'require_deposit' | 'cancel'>
@@ -80,7 +80,9 @@ export function createReviewColumns({
       accessorKey: 'cod_amount_vnd',
       header: ({ column }) => <DataGridColumnHeader column={column} title="COD" />,
       cell: ({ row }) => (
-        <span className="font-medium tabular-nums">{formatVnd(row.original.cod_amount_vnd)}</span>
+        <span className="font-medium tabular-nums">
+          {formatMoney(row.original.cod_amount_vnd, row.original.currency)}
+        </span>
       ),
       size: 130,
     },

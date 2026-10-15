@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import type { ContactAttempt, OrderDetail } from '@/api/gen'
 import { Badge } from '@/components/reui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { formatDateTime, formatVnd } from '@/lib/labels'
+import { formatDateTime, formatMoney } from '@/lib/labels'
 
 /** Simulated Zalo ZNS / SMS the buyer received (E6.2). Always labelled "mock". */
 export function MessagePreviewDialog({
@@ -41,7 +41,7 @@ export function MessagePreviewDialog({
               <p>
                 Hello {order.buyer_name.split(' ').pop()}, {shopName} has received order{' '}
                 {order.external_id ?? order.id} ({order.items.map((i) => i.name).join(', ')}), COD{' '}
-                {formatVnd(order.cod_amount_vnd)}.
+                {formatMoney(order.cod_amount_vnd, order.currency)}.
               </p>
               <p className="mt-2">
                 {deposit

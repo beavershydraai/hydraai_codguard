@@ -11,9 +11,21 @@ from sklearn.isotonic import IsotonicRegression
 
 from app.risk.features import CHANNELS, SIGNALS
 
-FAIL_COST = 60_000  # ShopSettings.failed_delivery_cost_vnd default
-ACTION_COST = {"none": 0, "link": 300, "call": 1_500, "deposit": 0}  # ShopSettings; deposit unset
-ACTIONS = list(ACTION_COST)
+ACTIONS = ["none", "link", "call", "deposit"]
+
+
+def costs_of(country) -> dict:
+    """{'fail', and each action} in the country's currency (config/branches.yaml)."""
+    c = country.costs
+    return {
+        "fail": c["failed_delivery"],
+        "none": 0,
+        "link": c["confirmation_link"],
+        "call": c["ai_call"],
+        "deposit": c["deposit_request"],
+    }
+
+
 KEY_COLUMNS = [
     "order_id",
     "placed_at",
@@ -112,7 +124,7 @@ def fit_model2(df: pd.DataFrame, cols: list[str]) -> dict:
     return {"clf": clf, "cols": cols}
 
 
-def expected_cost(model2: dict, X: pd.DataFrame, action: str):
-    """P(fail | x, action) × failed-delivery cost + action cost, per row."""
+def expected_cost(model2: dict, X: pd.DataFrame, action: str, costs: dict):
+    """P(fail | x, action) × failed-delivery cost + action cost, per row (costs: costs_of)."""
     p = model2["clf"].predict_proba(with_action(X[model2["cols"]], [action] * len(X)))[:, 1]
-    return p * FAIL_COST + ACTION_COST[action]
+    return p * costs["fail"] + costs[action]

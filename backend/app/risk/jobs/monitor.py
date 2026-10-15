@@ -21,10 +21,12 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import average_precision_score
 
+from app.data import branches
 from app.data.orders import final_state
 from app.risk import artifacts
 from app.risk.engine import TIER_OPTIONS, TIER_RULE
-from app.risk.model import ACTION_COST, FAIL_COST, expected_cost, fit_model2
+from app.risk.jobs.train import country_docs
+from app.risk.model import ACTIONS, costs_of, expected_cost, fit_model2
 
 WINDOW = timedelta(days=30)
 ALPHA = 0.05
@@ -48,7 +50,7 @@ def betting_test(x: np.ndarray, bound: float, alpha: float = ALPHA) -> bool:
     return False
 
 
-def tier_savings(random_rows: pd.DataFrame, cols: list[str], tier: str):
+def tier_savings(random_rows: pd.DataFrame, cols: list[str], tier: str, costs: dict):
     """DR estimate per order of cost(tier rule) − cost(Model 2 picks), Model 2 trained on the
     older 60 % of the tier's random orders and judged on the newer 40 %."""
     rows = random_rows[random_rows["tier"] == tier].sort_values("final_at")
@@ -58,10 +60,10 @@ def tier_savings(random_rows: pd.DataFrame, cols: list[str], tier: str):
     cut = int(len(rows) * 0.6)
     old, new = rows.iloc[:cut], rows.iloc[cut:]
     model2 = fit_model2(old, cols)
-    q = pd.DataFrame({a: expected_cost(model2, new, a) for a in options}, index=new.index)
+    q = pd.DataFrame({a: expected_cost(model2, new, a, costs) for a in options}, index=new.index)
     picks = q.idxmin(axis=1)
     logged = new["contact_action"]
-    real = new["is_failed"] * FAIL_COST + logged.map(ACTION_COST)
+    real = new["is_failed"] * costs["fail"] + logged.map(costs)
     q_logged = np.array([q.at[i, a] for i, a in logged.items()])
     k = len(options)
 
@@ -70,14 +72,14 @@ def tier_savings(random_rows: pd.DataFrame, cols: list[str], tier: str):
         return q_policy + (logged == policy).to_numpy() * k * (real.to_numpy() - q_logged)
 
     rule = pd.Series(TIER_RULE[tier], index=new.index)
-    bound = (1 + 2 * k) * (FAIL_COST + max(ACTION_COST.values()))
+    bound = (1 + 2 * k) * (costs["fail"] + max(costs[a] for a in ACTIONS))
     return dr(rule) - dr(picks), bound, picks.value_counts().to_dict()
 
 
-def tier_check(random_rows: pd.DataFrame, cols: list[str], switched: set[str]):
+def tier_check(random_rows: pd.DataFrame, cols: list[str], switched: set[str], costs: dict):
     report = {}
     for tier in ("medium", "high", "very_high"):
-        result = tier_savings(random_rows, cols, tier)
+        result = tier_savings(random_rows, cols, tier, costs)
         if result is None:
             report[tier] = {"status": "waiting: an action lacks both outcomes"}
             continue
@@ -190,35 +192,42 @@ def run_training_job() -> None:
 def main() -> None:
     from app.data.store import get_store
 
-    raw = artifacts.read("latest/model1.pkl")
+    docs = get_store().all()
+    for code in branches.countries():
+        monitor_country(country_docs(docs, code), code)
+
+
+def monitor_country(docs: list[dict], code: str) -> None:
+    raw = artifacts.read("latest/model1.pkl", code)
     if raw is None:
-        print(json.dumps({"status": "no model yet: run codguard-train first"}))
+        print(json.dumps({"country": code, "status": "no model yet: run codguard-train first"}))
         return
     model1 = pickle.loads(raw)
-    metrics = json.loads(artifacts.read("latest/metrics.json"))
-    reference = pd.read_parquet(io.BytesIO(artifacts.read("latest/features.parquet")))
+    metrics = json.loads(artifacts.read("latest/metrics.json", code))
+    reference = pd.read_parquet(io.BytesIO(artifacts.read("latest/features.parquet", code)))
     cols = model1["cols"]
+    costs = costs_of(branches.country(code))
 
-    scored = scored_rows(get_store().all())
+    scored = scored_rows(docs)
     end = scored["placed_at"].max() if len(scored) else datetime.now(UTC)
     recent = scored[scored["placed_at"] >= end - WINDOW]
-    summary = {"model_version": model1["version"], "recent_orders": len(recent)}
+    summary = {"country": code, "model_version": model1["version"], "recent_orders": len(recent)}
     if len(recent):
         snapshot, summary["drift"] = drift_report(reference, recent, cols)
         day = datetime.now(UTC).strftime("%Y-%m-%d")
         artifacts.write(
-            f"monitoring/{day}/report.html", snapshot.get_html_str(as_iframe=False).encode()
+            f"monitoring/{day}/report.html", snapshot.get_html_str(as_iframe=False).encode(), code
         )
         labelled = recent.dropna(subset=["is_failed"])
         summary["performance"] = performance(labelled, metrics["validation_pr_auc"])
 
     random_rows = scored[scored["random_slice"] & scored["is_failed"].notna()]
-    raw_switched = artifacts.read("latest/switched.json")
+    raw_switched = artifacts.read("latest/switched.json", code)
     switched = set(json.loads(raw_switched)) if raw_switched else set()
-    switched, summary["tiers"] = tier_check(random_rows, cols, switched)
+    switched, summary["tiers"] = tier_check(random_rows, cols, switched, costs)
     if len(random_rows):
-        artifacts.write("latest/model2.pkl", pickle.dumps(fit_model2(random_rows, cols)))
-    artifacts.write("latest/switched.json", json.dumps(sorted(switched)).encode())
+        artifacts.write("latest/model2.pkl", pickle.dumps(fit_model2(random_rows, cols)), code)
+    artifacts.write("latest/switched.json", json.dumps(sorted(switched)).encode(), code)
 
     degraded = summary.get("performance", {}).get("degraded", False)
     summary["retrain"] = (
@@ -231,6 +240,7 @@ def main() -> None:
     artifacts.write(
         f"monitoring/{datetime.now(UTC):%Y-%m-%d}/summary.json",
         json.dumps(summary, indent=1, default=str).encode(),
+        code,
     )
     print(json.dumps(summary, default=str))
 

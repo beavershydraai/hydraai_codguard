@@ -1,3 +1,4 @@
+import dataclasses
 import json
 import pickle
 from datetime import timedelta
@@ -6,11 +7,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from app.data import branches
 from app.risk import artifacts, engine
 from app.risk.features import compute_features, has_house_number
 from app.risk.jobs import monitor
 from app.risk.jobs.train import train
-from app.risk.model import explain1, explainer1, top_signals
+from app.risk.model import costs_of, explain1, explainer1, top_signals
 from app.schemas.scoring import Signal
 from tests.risk_data import START, orders
 
@@ -85,8 +87,9 @@ def test_tier_rule_follows_the_policy_and_its_cost_gate(monkeypatch):
         engine.decide(BASE, p, True, MODELS, no_rng)["action"] for p in (0.01, 0.1, 0.3, 0.5)
     ]
     assert actions == ["none", "link", "call", "deposit"]
-    monkeypatch.setattr(engine, "FAIL_COST", 2_000)  # 0.1 × 2,000 = 200, less than a link (300)
-    d = engine.decide(BASE, 0.1, True, MODELS, no_rng)
+    vn = branches.country("VN")
+    cheap = dataclasses.replace(vn, costs=vn.costs | {"failed_delivery": 2_000})
+    d = engine.decide(BASE, 0.1, True, MODELS, no_rng, country=cheap)  # 0.1 × 2,000 < link (300)
     assert (d["action"], d["chosen_by"]) == ("none", "tier rule: expected loss ≤ contact cost")
 
 
@@ -122,12 +125,12 @@ def test_engine_scores_with_the_latest_model(trained, tmp_path, monkeypatch):
     docs, model, report, _ = trained
     monkeypatch.setenv("MODEL_DIR", str(tmp_path))
     artifacts.write("latest/model1.pkl", pickle.dumps(model))
-    engine._cache.update(at=0.0, models=None)
+    engine._cache.clear()
     doc = docs[0] | {"placed_at": NOW, "order_id": "new"}
     fields = engine.score(
         doc, [d for d in docs if d["buyer_phone_hash"] == doc["buyer_phone_hash"]]
     )
-    engine._cache.update(at=0.0, models=None)
+    engine._cache.clear()
     assert 0 <= fields["scoring"]["probability"] <= 1
     assert fields["scoring"]["model_version"] == report["version"]
     assert fields["contact_action"] in {"none", "link", "call", "deposit", "hold"}
@@ -168,14 +171,14 @@ def test_an_explanation_error_never_blocks_scoring(trained, tmp_path, monkeypatc
     docs, model, _, _ = trained
     monkeypatch.setenv("MODEL_DIR", str(tmp_path))
     artifacts.write("latest/model1.pkl", pickle.dumps(model))
-    engine._cache.update(at=0.0, models=None)
+    engine._cache.clear()
 
     def broken(*args):
         raise RuntimeError("explainer unavailable")
 
     monkeypatch.setattr(engine, "explain1", broken)
     fields = engine.score(docs[0] | {"placed_at": NOW, "order_id": "new"}, [])
-    engine._cache.update(at=0.0, models=None)
+    engine._cache.clear()
     assert 0 <= fields["scoring"]["probability"] <= 1
     assert fields["scoring"]["shap"]["available"] is False
     assert fields["scoring"]["top_signals"] == []
@@ -183,7 +186,7 @@ def test_an_explanation_error_never_blocks_scoring(trained, tmp_path, monkeypatc
 
 def test_engine_without_a_model_leaves_the_order_unscored(tmp_path, monkeypatch):
     monkeypatch.setenv("MODEL_DIR", str(tmp_path))
-    engine._cache.update(at=0.0, models=None)
+    engine._cache.clear()
     assert engine.score({}, []) is None
 
 
@@ -206,7 +209,8 @@ def test_performance_flags_a_confident_drop():
 def test_tier_check_and_drift_report_run_on_scored_orders(trained):
     _, model, _, table = trained
     cols = model["cols"]
-    _, report = monitor.tier_check(table[table["random_slice"]], cols, set())
+    costs = costs_of(branches.country("VN"))
+    _, report = monitor.tier_check(table[table["random_slice"]], cols, set(), costs)
     assert set(report) == {"medium", "high", "very_high"}
     assert report["very_high"]["status"].startswith("waiting")
     _, drift = monitor.drift_report(table, table.sample(frac=0.5, random_state=0), cols)
@@ -218,3 +222,16 @@ def test_scored_rows_reads_live_scoring():
     doc = orders(n_phones=1)[0] | {"scoring": {"probability": 0.2, "features": {"a": 1}}}
     rows = monitor.scored_rows([doc, orders(n_phones=1)[0]])
     assert len(rows) == 1 and rows.loc[0, "a"] == 1 and rows.loc[0, "probability"] == 0.2
+
+
+def test_each_country_is_scored_by_its_own_model(trained, tmp_path, monkeypatch):
+    docs, model, _, _ = trained
+    monkeypatch.setenv("MODEL_DIR", str(tmp_path))
+    artifacts.write("latest/model1.pkl", pickle.dumps(model), "VN")
+    engine._cache.clear()
+    vn = docs[0] | {"placed_at": NOW, "order_id": "vn", "country": "VN"}
+    sg = docs[0] | {"placed_at": NOW, "order_id": "sg", "country": "SG"}
+    fields = engine.score(vn, [])
+    assert fields["scoring"]["failed_delivery_cost_vnd"] == 60_000
+    assert engine.score(sg, []) is None  # no SG model yet: the order waits unscored
+    engine._cache.clear()

@@ -648,7 +648,9 @@ export const getBacktestQueryKey = (options?: Options<GetBacktestData>) =>
   createQueryKey('getBacktest', options)
 
 /**
- * Latest backtest: lift curves and policy comparison
+ * Latest backtest of a country's model: lift curves and policy comparison
+ *
+ * The backtest the training job stored with the country's model (app/risk/backtest.py).
  */
 export const getBacktestOptions = (options?: Options<GetBacktestData>) =>
   queryOptions<

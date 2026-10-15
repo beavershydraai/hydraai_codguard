@@ -97,14 +97,16 @@ def phone_key() -> bytes:
     return os.environ["PHONE_HASH_KEY"].encode()
 
 
-def _intake_keys() -> dict[str, tuple[str, bool]]:
-    """INTAKE_API_KEYS: `key:shop` entries, or `key:shop:noagents` for a test key whose orders
-    skip the Gemini agents (the order simulator's default)."""
+def _intake_keys() -> dict[str, tuple[str, str | None, bool]]:
+    """INTAKE_API_KEYS entries `key:shop[:branch][:noagents]`: the branch that sends with the key
+    (default: config/branches.yaml), and `noagents` for a test key whose orders skip the Gemini
+    agents (the order simulator's default)."""
     keys = {}
     for entry in os.environ.get("INTAKE_API_KEYS", "").split(","):
-        parts = entry.split(":")
-        if len(parts) >= 2:
-            keys[parts[0]] = (parts[1], parts[2:3] == ["noagents"])
+        key, *rest = entry.split(":")
+        if rest:
+            branch = next((t for t in rest[1:] if t != "noagents"), None)
+            keys[key] = (rest[0], branch, "noagents" in rest[1:])
     return keys
 
 
@@ -113,10 +115,16 @@ def shop_for_key(api_key: str | None) -> str | None:
     return entry[0] if entry else None
 
 
+def branch_for_key(api_key: str | None) -> str | None:
+    """The branch of the key; None means the default branch."""
+    entry = _intake_keys().get(api_key) if api_key else None
+    return entry[1] if entry else None
+
+
 def agents_for_key(api_key: str | None) -> bool:
     """False for a `noagents` test key: its orders are scored and decided without Gemini."""
     entry = _intake_keys().get(api_key) if api_key else None
-    return not (entry and entry[1])
+    return not (entry and entry[2])
 
 
 def order_id_for(shop_id: str, external_id: str | None) -> str:

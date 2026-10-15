@@ -15,6 +15,7 @@ from app.data.orders import order_document
 from app.data.store import (
     OrderStore,
     agents_for_key,
+    branch_for_key,
     get_store,
     order_id_for,
     phone_key,
@@ -50,10 +51,22 @@ def intake_order(
     shop_id = shop_for_key(api_key)
     if shop_id is None:
         raise ApiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized", "Missing or unknown X-Api-Key.")
-    order_id = order_id_for(shop_id, body.external_id)
     doc = order_document(
-        body, order_id=order_id, shop_id=shop_id, phone_key=phone_key(), now=datetime.now(UTC)
+        body,
+        order_id=order_id_for(shop_id, body.external_id),
+        shop_id=shop_id,
+        phone_key=phone_key(),
+        now=datetime.now(UTC),
+        branch_id=branch_for_key(api_key),
     )
+    order_id = doc["order_id"]
+    if body.currency and body.currency != doc["currency"]:
+        raise ApiError(
+            422,
+            ErrorCode.VALIDATION_ERROR,
+            "Validation error",
+            f"This branch takes orders in {doc['currency']}, not {body.currency}.",
+        )
     if not agents_for_key(api_key):  # a test key: the pipeline skips the Gemini assessment
         doc["skip_agents"] = True
     existing = store.create(doc)

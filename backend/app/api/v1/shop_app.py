@@ -11,6 +11,7 @@ from app.data.orders import to_utc
 from app.data.store import OrderStore, get_store
 from app.decision.inbox import InvalidCursor, order_page
 from app.decision.views import order_detail
+from app.risk import artifacts
 from app.schemas.calls import Call
 from app.schemas.dashboard import BacktestResult, DashboardSummary
 from app.schemas.delivery import DeliveryImportResult, DeliveryOutcomeBatch
@@ -307,8 +308,16 @@ async def get_dashboard_summary(
 @dashboard_router.get(
     "/backtest",
     response_model=BacktestResult,
-    responses=problem_responses(401),
-    summary="Latest backtest: lift curves and policy comparison",
+    responses=problem_responses(401, 404),
+    summary="Latest backtest of a country's model: lift curves and policy comparison",
 )
-async def get_backtest() -> BacktestResult:
-    raise NotImplementedYet("get_backtest")
+def get_backtest(
+    country: Annotated[
+        Literal["VN", "SG", "PH"], Query(description="Country of the model (one per country).")
+    ] = "VN",
+) -> BacktestResult:
+    """The backtest the training job stored with the country's model (app/risk/backtest.py)."""
+    raw = artifacts.read("latest/backtest.json", country)
+    if raw is None:  # the country's model has not been trained since the backtest was added
+        raise ApiError(404, ErrorCode.NOT_FOUND, "No backtest yet", "Run the codguard-train job.")
+    return BacktestResult.model_validate_json(raw)

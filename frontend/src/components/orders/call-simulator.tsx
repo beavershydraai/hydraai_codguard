@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { invalidate } from '@/lib/api'
-import { CALL_OUTCOME_LABELS, CALL_STATUS_LABELS, formatVnd } from '@/lib/labels'
+import { CALL_OUTCOME_LABELS, CALL_STATUS_LABELS, formatMoney } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 
 // Browser phone for the AI confirmation call (E5.2). Until the Gemini Live session (E5) is wired,
@@ -215,7 +215,7 @@ function ScriptedCall({ order, call, shopName }: { order: OrderDetail; call: Cal
                   { from: 'buyer', text: 'Yes, speaking.' },
                   {
                     from: 'ai',
-                    text: `Thank you. ${shopName} is calling to confirm order ${order.external_id ?? ''}: ${items}, delivered to ${order.address.raw}, with ${formatVnd(order.cod_amount_vnd)} to pay on delivery. Can you confirm you will accept it?`,
+                    text: `Thank you. ${shopName} is calling to confirm order ${order.external_id ?? ''}: ${items}, delivered to ${order.address.raw}, with ${formatMoney(order.cod_amount_vnd, order.currency)} to pay on delivery. Can you confirm you will accept it?`,
                   },
                 )
                 setStage('summary')

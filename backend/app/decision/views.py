@@ -1,6 +1,6 @@
 """Views of stored order documents for the shop API contract."""
 
-from app.risk.model import FAIL_COST
+from app.data import branches
 from app.schemas.enums import HardRule
 from app.schemas.orders import OrderDetail, OrderEvent, OrderSummary
 from app.schemas.scoring import RiskScore
@@ -12,7 +12,7 @@ _ENGINE_HARD_RULES = {
 }
 
 
-def _risk_score(order_id: str, raw: dict) -> RiskScore:
+def _risk_score(order_id: str, raw: dict, fail_cost: int) -> RiskScore:
     """Expose scoring inputs only through the API's signal and reason fields."""
     rule = _ENGINE_HARD_RULES.get(raw.get("chosen_by"))
     hard_rules = raw.get("hard_rules", [rule] if rule else [])
@@ -26,7 +26,7 @@ def _risk_score(order_id: str, raw: dict) -> RiskScore:
         risk_score=None if skipped else raw.get("risk_score"),
         tier=None if skipped else raw.get("tier"),
         expected_loss_vnd=None if skipped else raw.get("expected_loss_vnd"),
-        failed_delivery_cost_vnd=raw.get("failed_delivery_cost_vnd", FAIL_COST),
+        failed_delivery_cost_vnd=raw.get("failed_delivery_cost_vnd", fail_cost),
         hard_rules=hard_rules,
         top_signals=raw.get("top_signals", []),
         reasons=raw.get("reasons", []),
@@ -34,8 +34,14 @@ def _risk_score(order_id: str, raw: dict) -> RiskScore:
     )
 
 
+def _fail_cost(doc: dict) -> int:
+    return branches.country_of(doc).costs["failed_delivery"]
+
+
 def _current_score(doc: dict) -> RiskScore | None:
-    return _risk_score(doc["order_id"], doc["scoring"]) if doc.get("scoring") else None
+    if not doc.get("scoring"):
+        return None
+    return _risk_score(doc["order_id"], doc["scoring"], _fail_cost(doc))
 
 
 def _total_vnd(doc: dict) -> int:
@@ -64,6 +70,9 @@ def order_summary(doc: dict) -> OrderSummary:
 
 _SUMMARY_FIELDS = (
     "external_id",
+    "branch_id",
+    "country",
+    "currency",
     "channel",
     "buyer_name",
     "buyer_phone",
@@ -77,7 +86,9 @@ _SUMMARY_FIELDS = (
 def order_detail(doc: dict) -> OrderDetail:
     """Current score and every earlier run, without changing the stored document."""
     current = _current_score(doc)
-    runs = [_risk_score(doc["order_id"], run) for run in doc.get("score_history", [])]
+    runs = [
+        _risk_score(doc["order_id"], run, _fail_cost(doc)) for run in doc.get("score_history", [])
+    ]
     if current:
         runs.append(current)
     total = _total_vnd(doc)
@@ -86,6 +97,9 @@ def order_detail(doc: dict) -> OrderDetail:
         name: doc[name]
         for name in (
             "external_id",
+            "branch_id",
+            "country",
+            "currency",
             "channel",
             "buyer_name",
             "buyer_phone",

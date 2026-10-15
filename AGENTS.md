@@ -29,6 +29,7 @@ backend/        Python service on Cloud Run: API, decision engine, ADK agents
   app/          FastAPI app: routes (api/v1/) and request/response schemas (schemas/)
     decision/   order lifecycle, rescoring, confirmed-order guard (E4.1) and tier policy (E4.2)
     agents/     ADK workflows (E4.7), advisory assessment and the decision log
+    demo/       synthetic world of the demo shop's branches, history seed and live simulator
     telephony/  call controller: Pub/Sub consumer, ARI client, call agents (runs on the Asterisk VM)
   config/       rule set YAML; only `tier_policy` is read by the code so far
   scoring/      hard rules, expected loss, model calls
@@ -79,9 +80,10 @@ Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 | Inspect the ADK pipeline | `uv run adk web app` (the pipeline is listed as `agents`) |
 | Backend lint and format | `uv run ruff check . && uv run ruff format --check .` |
 | Export the API contract | `uv run python -m app.openapi_export` (writes `api/openapi.yaml`) |
-| Train the risk model | `uv run python -m app.risk.jobs.train` (env `FIRESTORE_DATABASE`, and `MODEL_BUCKET` or a local `MODEL_DIR`); in the cloud: `gcloud run jobs execute codguard-train`. Run it after every deploy that changes the feature set: scoring fails until a model with the new columns is promoted |
+| Train the risk model | `uv run python -m app.risk.jobs.train [--country VN]` (env `FIRESTORE_DATABASE`, and `MODEL_BUCKET` or a local `MODEL_DIR`); in the cloud: `gcloud run jobs execute codguard-train`. One model per country (`models/{db}/{country}/`), trained on the orders of that country's branches; without `--country` it trains every country. It also stores the country's backtest (`GET /dashboard/backtest?country=`). Run it after every deploy that changes the feature set: scoring fails until a model with the new columns is promoted |
 | Monitor the models | `uv run python -m app.risk.jobs.monitor` (same env); in the cloud: Cloud Run job `codguard-monitor`, run daily at 02:00 Vietnam time by the Cloud Scheduler job `codguard-monitor-daily`, which was created in GCP by hand, not by `ci.yml` |
-| Simulate orders (demo) | `uv run python -m app.demo.simulate --minutes 60 --orders-per-hour 30` (env `INTAKE_URL`, `INTAKE_API_KEYS`); in the cloud: `gcloud run jobs execute codguard-simulate --region asia-southeast1 --args=--minutes=60,--orders-per-hour=30`, stop early with `gcloud run jobs executions cancel <execution>`. Posts orders of the demo shop (`shop_demo`, "Sample Fashion Shop") from three branches, named in the order note, with the shop's `noagents` test key: they are scored and decided but skip the Gemini assessment. Add `--agents` (cloud: `--args=...,--agents`) to post with the normal key, so the agents run and use the daily quota. An `INTAKE_API_KEYS` entry `key:shop:noagents` is such a test key; its orders get `skip_agents: true` |
+| Seed the demo history | `uv run python -m app.demo.seed --days 90 [--apply]` (env `FIRESTORE_DATABASE`, `PHONE_HASH_KEY`): 90 days of finished orders for every branch, same seed every time; without `--apply` it only prints the counts. Then train |
+| Simulate orders (demo) | `uv run python -m app.demo.simulate --minutes 60 --orders-per-hour 30` (env `INTAKE_URL`, `INTAKE_API_KEYS`); in the cloud: `gcloud run jobs execute codguard-simulate --region asia-southeast1 --args=--minutes=60,--orders-per-hour=30`, stop early with `gcloud run jobs executions cancel <execution>`. Posts live orders of the demo shop's branches (VN, SG, PH) from the same buyers as the history, each with its branch's `noagents` test key: they are scored and decided but skip the Gemini assessment. Add `--agents` to post with the normal keys, so the agents run and use the daily quota |
 | Build and run the backend image | `docker build -t codguard-backend backend` then `docker run -p 8080:8080 codguard-backend` (from the repo root) |
 | Mock API for the frontend | Built in: `src/mocks/` answers 501 endpoints (`VITE_API_MOCK=fallback`, default) or everything (`all`). Prism with the contract's fixed examples: `pnpm mock` from `frontend/` |
 | Install frontend dependencies | `pnpm install` (from `frontend/`, as are the frontend commands below) |
@@ -116,6 +118,13 @@ These rules come from the README and the epics. Code and tests must enforce them
   - phone with a ≥75% return rate over at least 3 past orders → Very High.
 - Location may contribute to a score but is never the only reason for High or Very High.
 - The training label "failed" counts buyer-caused failures only (refused, unreachable), never carrier or shop errors.
+
+### Branches and countries
+
+- The demo shop has branches in Vietnam, Singapore and the Philippines (`backend/config/branches.yaml`). Each intake key belongs to a branch (`key:shop:branch[:noagents]`); intake stores `branch_id`, `country` and `currency` on the order.
+- One risk model per country, never trained on another country's orders. A branch uses its country's model; a second branch in a country is one more line in the config.
+- Amounts are integers in the currency's minor unit (VND has none; SGD and PHP are in cents). Field names keep the `_vnd` suffix for compatibility. Costs, local time and phone format come from the order's country.
+- Tier cut-offs are the same in every country.
 
 ### Decisions
 
@@ -160,7 +169,7 @@ These rules come from the README and the epics. Code and tests must enforce them
 
 ## Privacy and secrets
 
-- No real phone numbers, names or addresses anywhere in the repo: seed data, fixtures, tests, screenshots and logs included. Use the synthetic data generator.
+- No real phone numbers, names or addresses anywhere in the repo: seed data, fixtures, tests, screenshots and logs included. Use the synthetic data generator, whose numbers have `000` after the calling code (`+84000…`, `+65000…`, `+63000…`).
 - Hash phone numbers wherever they are shared across shops.
 - Secrets live in Secret Manager. Never commit `.env`, keys or tokens; keep `.env.example` up to date instead.
 - Cap Gemini calls on public demo paths so judges cannot exhaust the quota (E1.4).

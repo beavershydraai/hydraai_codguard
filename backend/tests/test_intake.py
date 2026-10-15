@@ -85,10 +85,13 @@ class FakeDecisionLog:
 @pytest.fixture
 def api(monkeypatch, tmp_path):
     monkeypatch.delenv("GEMINI_MODEL", raising=False)
-    monkeypatch.setenv("INTAKE_API_KEYS", "key-a:shop_a,key-b:shop_b,key-t:shop_a:noagents")
+    monkeypatch.setenv(
+        "INTAKE_API_KEYS",
+        "key-a:shop_a,key-b:shop_b,key-t:shop_a:noagents,key-sg:shop_a:branch_SG:noagents",
+    )
     monkeypatch.setenv("PHONE_HASH_KEY", "test-key")
     monkeypatch.setenv("MODEL_DIR", str(tmp_path))  # no model yet
-    engine._cache.update(at=0.0, models=None)
+    engine._cache.clear()
     store, decisions = FakeStore(), FakeDecisionLog()
     app = create_app()
     app.dependency_overrides[get_store] = lambda: store
@@ -130,6 +133,30 @@ def test_a_noagents_test_key_marks_the_order_to_skip_the_agents(api):
     assert "skip_agents" not in store.docs[normal["order_id"]]
 
 
+def test_the_key_sets_the_branch_country_and_currency(api):
+    client, store = api
+    default = post(client, "key-a", ORDER | {"external_id": "B-1"}).json()
+    assert {
+        k: store.docs[default["order_id"]][k] for k in ("branch_id", "country", "currency")
+    } == {
+        "branch_id": "branch_VN_HCM",
+        "country": "VN",
+        "currency": "VND",
+    }
+    sg = ORDER | {"external_id": "B-2", "buyer_phone": "+6500000042", "currency": "SGD"}
+    doc = store.docs[post(client, "key-sg", sg).json()["order_id"]]
+    assert (doc["branch_id"], doc["country"], doc["currency"]) == ("branch_SG", "SG", "SGD")
+    assert doc["buyer_phone"] == "+6500000042" and doc["buyer_phone_hash"]
+    assert doc["skip_agents"] is True
+
+
+def test_an_order_in_another_currency_than_its_branch_is_rejected(api):
+    client, store = api
+    response = post(client, "key-sg", ORDER | {"external_id": "B-3", "currency": "VND"})
+    assert response.status_code == 422
+    assert "SGD" in response.json()["detail"]
+
+
 def test_intake_is_idempotent_on_external_id_per_shop(api):
     client, store = api
     first = post(client, "key-a").json()
@@ -150,9 +177,9 @@ def test_intake_scores_the_order_when_a_model_exists(api):
     client, store = api
     model, _, _ = train(orders(), START + timedelta(days=200), None)
     artifacts.write("latest/model1.pkl", pickle.dumps(model))
-    engine._cache.update(at=0.0, models=None)
+    engine._cache.clear()
     doc = store.docs[post(client, "key-a").json()["order_id"]]
-    engine._cache.update(at=0.0, models=None)
+    engine._cache.clear()
     assert 0 <= doc["scoring"]["probability"] <= 1
     assert doc["scoring"]["chosen_by"] and doc["contact_action"]
     assert doc["scoring"]["features"]["address_missing_house_number"] == 0

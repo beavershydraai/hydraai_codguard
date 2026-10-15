@@ -31,7 +31,7 @@ FEATURES = frozenset(
         "n_lines",
         "total_qty",
         "discount_ratio",
-        "placed_hour_vn",
+        "placed_hour_local",
         "placed_dow",
         "is_night",
         "address_missing_house_number",

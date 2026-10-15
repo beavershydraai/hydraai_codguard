@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import ConfigDict, Field
 
 from app.schemas.calls import Call, ContactAttempt
-from app.schemas.common import Address, ApiModel, Phone, Vnd
+from app.schemas.common import Address, ApiModel, Currency, Phone, Vnd
 from app.schemas.enums import DecisionAction, OrderStatus, RiskTier, SalesChannel
 from app.schemas.scoring import Decision, RiskScore
 
@@ -78,6 +78,11 @@ class OrderCreate(ApiModel):
         default=None, max_length=5000, description="Sales chat that closed the order, if any."
     )
     note: str | None = Field(default=None, max_length=500)
+    currency: Currency | None = Field(
+        default=None,
+        description="Currency of every amount in the order. Defaults to the branch's currency "
+        "(set by the intake key); a different one is rejected.",
+    )
 
 
 class OrderUpdate(ApiModel):
@@ -136,6 +141,9 @@ class OrderSummary(ApiModel):
 
     id: str
     external_id: str | None = None
+    branch_id: str | None = Field(default=None, description="Branch that took the order.")
+    country: str | None = Field(default=None, description="Country of the branch (VN, SG, PH).")
+    currency: Currency = Field(default="VND", description="Currency of every amount.")
     channel: SalesChannel
     buyer_name: str
     buyer_phone: Phone

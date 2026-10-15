@@ -51,6 +51,18 @@ export type BacktestResult = {
    */
   generated_at: string
   /**
+   * Country
+   *
+   * Country of the model (VN, SG, PH).
+   */
+  country?: string
+  /**
+   * Currency
+   *
+   * Currency of every amount.
+   */
+  currency?: 'VND' | 'SGD' | 'PHP'
+  /**
    * Dataset
    */
   dataset: string
@@ -67,7 +79,7 @@ export type BacktestResult = {
   /**
    * Failed Delivery Cost Vnd
    *
-   * Amount in VND (integer, no decimals).
+   * Amount in the order's currency, as an integer in its minor unit: VND has none, SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.
    */
   failed_delivery_cost_vnd: number
   /**
@@ -153,7 +165,7 @@ export type BuyerOrderView = {
   /**
    * Cod Amount Vnd
    *
-   * Amount in VND (integer, no decimals).
+   * Amount in the order's currency, as an integer in its minor unit: VND has none, SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.
    */
   cod_amount_vnd: number
   /**
@@ -425,7 +437,7 @@ export type CallJob = {
   /**
    * Total Cod Amount Vnd
    *
-   * Amount in VND (integer, no decimals).
+   * Amount in the order's currency, as an integer in its minor unit: VND has none, SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.
    */
   total_cod_amount_vnd: number
   /**
@@ -493,7 +505,7 @@ export type CallOrder = {
   /**
    * Deposit Paid Vnd
    *
-   * Amount in VND (integer, no decimals).
+   * Amount in the order's currency, as an integer in its minor unit: VND has none, SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.
    */
   deposit_paid_vnd?: number
   /**
@@ -1173,7 +1185,7 @@ export type OrderCreate = {
   /**
    * Buyer Phone
    *
-   * Phone number. Input accepts 0xxxxxxxxx or +84xxxxxxxxx; output is E.164.
+   * Phone number of the branch's country (VN, SG or PH). Input accepts the national or the international form; output is E.164.
    */
   buyer_phone: string
   /**
@@ -1200,13 +1212,13 @@ export type OrderCreate = {
   /**
    * Shipping Fee Vnd
    *
-   * Amount in VND (integer, no decimals).
+   * Amount in the order's currency, as an integer in its minor unit: VND has none, SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.
    */
   shipping_fee_vnd?: number
   /**
    * Discount Vnd
    *
-   * Amount in VND (integer, no decimals).
+   * Amount in the order's currency, as an integer in its minor unit: VND has none, SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.
    */
   discount_vnd?: number
   /**
@@ -1229,6 +1241,12 @@ export type OrderCreate = {
    * Note
    */
   note?: string | null
+  /**
+   * Currency
+   *
+   * Currency of every amount in the order. Defaults to the branch's currency (set by the intake key); a different one is rejected.
+   */
+  currency?: 'VND' | 'SGD' | 'PHP' | null
 }
 
 /**
@@ -1245,6 +1263,24 @@ export type OrderDetail = {
    * External Id
    */
   external_id?: string | null
+  /**
+   * Branch Id
+   *
+   * Branch that took the order.
+   */
+  branch_id?: string | null
+  /**
+   * Country
+   *
+   * Country of the branch (VN, SG, PH).
+   */
+  country?: string | null
+  /**
+   * Currency
+   *
+   * Currency of every amount.
+   */
+  currency?: 'VND' | 'SGD' | 'PHP'
   channel: SalesChannel
   /**
    * Buyer Name
@@ -1253,7 +1289,7 @@ export type OrderDetail = {
   /**
    * Buyer Phone
    *
-   * Phone number. Input accepts 0xxxxxxxxx or +84xxxxxxxxx; output is E.164.
+   * Phone number of the branch's country (VN, SG or PH). Input accepts the national or the international form; output is E.164.
    */
   buyer_phone: string
   /**
@@ -1306,19 +1342,19 @@ export type OrderDetail = {
   /**
    * Shipping Fee Vnd
    *
-   * Amount in VND (integer, no decimals).
+   * Amount in the order's currency, as an integer in its minor unit: VND has none, SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.
    */
   shipping_fee_vnd: number
   /**
    * Discount Vnd
    *
-   * Amount in VND (integer, no decimals).
+   * Amount in the order's currency, as an integer in its minor unit: VND has none, SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.
    */
   discount_vnd: number
   /**
    * Prepaid Vnd
    *
-   * Amount in VND (integer, no decimals).
+   * Amount in the order's currency, as an integer in its minor unit: VND has none, SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.
    */
   prepaid_vnd: number
   /**
@@ -1421,7 +1457,7 @@ export type OrderItem = {
   /**
    * Unit Price Vnd
    *
-   * Amount in VND (integer, no decimals).
+   * Amount in the order's currency, as an integer in its minor unit: VND has none, SGD and PHP are in cents. Field names keep the `_vnd` suffix for compatibility.
    */
   unit_price_vnd: number
 }
@@ -1482,6 +1518,24 @@ export type OrderSummary = {
    * External Id
    */
   external_id?: string | null
+  /**
+   * Branch Id
+   *
+   * Branch that took the order.
+   */
+  branch_id?: string | null
+  /**
+   * Country
+   *
+   * Country of the branch (VN, SG, PH).
+   */
+  country?: string | null
+  /**
+   * Currency
+   *
+   * Currency of every amount.
+   */
+  currency?: 'VND' | 'SGD' | 'PHP'
   channel: SalesChannel
   /**
    * Buyer Name
@@ -1490,7 +1544,7 @@ export type OrderSummary = {
   /**
    * Buyer Phone
    *
-   * Phone number. Input accepts 0xxxxxxxxx or +84xxxxxxxxx; output is E.164.
+   * Phone number of the branch's country (VN, SG or PH). Input accepts the national or the international form; output is E.164.
    */
   buyer_phone: string
   /**
@@ -2620,7 +2674,14 @@ export type GetDashboardSummaryResponse = GetDashboardSummaryResponses[keyof Get
 export type GetBacktestData = {
   body?: never
   path?: never
-  query?: never
+  query?: {
+    /**
+     * Country
+     *
+     * Country of the model (one per country).
+     */
+    country?: 'VN' | 'SG' | 'PH'
+  }
   url: '/api/v1/dashboard/backtest'
 }
 
@@ -2629,6 +2690,14 @@ export type GetBacktestErrors = {
    * Missing or invalid credentials.
    */
   401: ProblemDetail
+  /**
+   * Resource not found.
+   */
+  404: ProblemDetail
+  /**
+   * Request body or parameters failed validation. See `errors`.
+   */
+  422: ProblemDetail
 }
 
 export type GetBacktestError = GetBacktestErrors[keyof GetBacktestErrors]

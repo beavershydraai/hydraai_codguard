@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import ConfigDict, Field
 
-from app.schemas.common import ApiModel, Vnd
+from app.schemas.common import ApiModel, Currency, Vnd
 from app.schemas.enums import DecisionAction
 
 
@@ -132,6 +132,8 @@ class BacktestResult(ApiModel):
     )
 
     generated_at: datetime
+    country: str = Field(default="VN", description="Country of the model (VN, SG, PH).")
+    currency: Currency = Field(default="VND", description="Currency of every amount.")
     dataset: str
     orders: int = Field(ge=0)
     orders_per_day: int = Field(ge=1, description="Shop size used for the savings estimate.")

@@ -32,11 +32,14 @@ One document per order. It is a top-level collection with a `shop_id` field rath
 |---|---|---|---|
 | `order_id` | string | system | Same as the document ID |
 | `shop_id` | string | system | |
+| `branch_id` | string | intake key | Branch that took the order (`config/branches.yaml`); orders stored before branches have none and are left out of training |
+| `country` | `VN` \| `SG` \| `PH` | branch | Picks the risk model (one per country), the costs, the local time and the phone format |
+| `currency` | `VND` \| `SGD` \| `PHP` | branch | Every amount of the order is an integer in this currency's minor unit (SGD, PHP: cents) |
 | `external_id` | string \| null | `OrderCreate.external_id` | Unique per shop; a repeat is ignored |
 | `channel` | string | `OrderCreate.channel` | One of `SalesChannel` |
 | `placed_at` | timestamp | `OrderCreate.placed_at` | Stored in UTC. A time without a zone is Vietnam time (UTC+7) |
 | `buyer_name` | string | `OrderCreate.buyer_name` | Shown in the app; never copied into snapshots |
-| `buyer_phone` | string | `OrderCreate.buyer_phone` | E.164 (`+84…`). Kept as received if it cannot be normalised |
+| `buyer_phone` | string | `OrderCreate.buyer_phone` | E.164 for the branch's country (`+84…`, `+65…`, `+63…`). Kept as received if it cannot be normalised |
 | `buyer_phone_hash` | string \| null | derived | HMAC-SHA256 of the E.164 number with a secret key. Null means the phone is invalid |
 | `is_gift` | bool | `OrderCreate.is_gift` | |
 | `recipient_name` | string \| null | `OrderCreate.recipient_name` | |

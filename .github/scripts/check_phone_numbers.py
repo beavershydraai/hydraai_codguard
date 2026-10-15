@@ -1,15 +1,21 @@
-"""Fail if a tracked file contains what looks like a real Vietnamese phone number.
+"""Fail if a tracked file contains what looks like a real Vietnamese, Singapore or Philippine
+phone number.
 
-AGENTS.md forbids real phone numbers anywhere in the repo. Use the invalid prefix +84000...
-for examples. If a match is a false positive, add `pii-allow` on the same line.
+AGENTS.md forbids real phone numbers anywhere in the repo. Use the invalid prefixes +84000...,
++65000... or +63000... for examples. If a match is a false positive, add `pii-allow` on the line.
 """
 
 import re
 import subprocess
 import sys
 
-# Vietnamese mobile and landline numbers: 0 / 84 / +84, then a digit 2-9, then 8 digits.
-PHONE = re.compile(r"(?<![\w+])(?:\+84|84|0)[235789]\d{8}(?!\w)")
+PHONE = re.compile(
+    r"(?<![\w+])(?:"
+    r"(?:\+84|84|0)[235789]\d{8}"  # Vietnam: 0 / 84 / +84, a digit 2-9, 8 digits
+    r"|\+65 ?[3689]\d{3} ?\d{4}"  # Singapore: +65, then 3, 6, 8 or 9 and 7 digits
+    r"|(?:\+63|0)9\d{2} ?\d{3} ?\d{4}"  # Philippines mobile: +63 / 0, then 9 and 9 digits
+    r")(?!\w)"
+)
 SKIP_SUFFIXES = (".lock", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".pdf", ".woff", ".woff2")
 SKIP_NAMES = {"package-lock.json", "pnpm-lock.yaml", "uv.lock"}
 
@@ -36,7 +42,8 @@ def main() -> int:
         masked = value[:4] + "*" * (len(value) - 7) + value[-3:]
         print(f"::error file={path},line={number}::Possible real phone number {masked}")
     if hits:
-        print(f"{len(hits)} possible real phone number(s). Use +84000... in examples, "
+        print(f"{len(hits)} possible real phone number(s). Use +84000..., +65000... or "
+              "+63000... in examples, "
               "or add `pii-allow` on the line if it is not a phone number.")
         return 1
     print(f"Checked {len(files)} files: no real phone numbers.")

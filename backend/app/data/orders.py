@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime, timedelta, timezone
 
+from app.data import branches
 from app.data.phone import phone_hash, to_e164
 from app.schemas.delivery import DeliveryOutcome
 from app.schemas.enums import DeliveryResult, OrderStatus
@@ -26,30 +27,41 @@ NOT_IN_SNAPSHOT = {
 }
 
 
-def to_utc(at: datetime) -> datetime:
-    """A time without a zone is Vietnam time."""
-    return (at if at.tzinfo else at.replace(tzinfo=VN_TIME)).astimezone(UTC)
+def to_utc(at: datetime, tz: timezone = VN_TIME) -> datetime:
+    """A time without a zone is in `tz`, the branch's local time (default Vietnam)."""
+    return (at if at.tzinfo else at.replace(tzinfo=tz)).astimezone(UTC)
 
 
-def _phone(raw: str | None, key: bytes) -> tuple[str | None, str | None]:
+def _phone(raw: str | None, key: bytes, calling_code: str) -> tuple[str | None, str | None]:
     """(phone to store, its hash). An invalid phone is kept as received, with no hash."""
     if raw is None:
         return None, None
-    e164 = to_e164(raw)
+    e164 = to_e164(raw, calling_code)
     return (e164, phone_hash(e164, key)) if e164 else (raw, None)
 
 
 def order_document(
-    order: OrderCreate, *, order_id: str, shop_id: str, phone_key: bytes, now: datetime
+    order: OrderCreate,
+    *,
+    order_id: str,
+    shop_id: str,
+    phone_key: bytes,
+    now: datetime,
+    branch_id: str | None = None,
 ) -> dict:
-    """Firestore `orders/{order_id}` for a new order."""
-    buyer, buyer_hash = _phone(order.buyer_phone, phone_key)
-    recipient, recipient_hash = _phone(order.recipient_phone, phone_key)
+    """Firestore `orders/{order_id}` for a new order of `branch_id` (default: config default)."""
+    branch_id = branch_id or branches.default_branch()
+    country = branches.country(branches.branches()[branch_id])
+    buyer, buyer_hash = _phone(order.buyer_phone, phone_key, country.calling_code)
+    recipient, recipient_hash = _phone(order.recipient_phone, phone_key, country.calling_code)
     return {
         **order.model_dump(mode="json"),
+        "currency": country.currency,
         "order_id": order_id,
         "shop_id": shop_id,
-        "placed_at": to_utc(order.placed_at),
+        "branch_id": branch_id,
+        "country": country.code,
+        "placed_at": to_utc(order.placed_at, country.tz),
         "buyer_phone": buyer,
         "buyer_phone_hash": buyer_hash,
         "recipient_phone": recipient,
