@@ -260,7 +260,7 @@ async def test_missing_model_configuration_explicitly_disables_assessment():
         ({"confirmation": {"at": NOW, "via": "link"}}, "skipped"),
         ({"scoring": DOC["scoring"] | {"chosen_by": "hard rule: fully prepaid"}}, "skipped"),
         ({"scoring": DOC["scoring"] | {"chosen_by": "hard rule: invalid phone"}}, "skipped"),
-        ({"external_id": "SIM-shop_la_vang-0a1b2c3d4e5f"}, "skipped"),
+        ({"external_id": "SIM-branch_1-0a1b2c3d4e5f"}, "skipped"),
     ],
 )
 async def test_unscored_hard_rule_and_confirmed_orders_use_no_model_requests(change, status):
