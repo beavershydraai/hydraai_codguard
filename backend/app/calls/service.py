@@ -3,7 +3,8 @@
 
 - CALL_JOBS_TOPIC: `projects/<project>/topics/call-jobs`. Unset: calls are not configured, the
   shop app's call endpoints answer 501 and the pipeline keeps its simulated ("mock") call.
-- CALL_TARGET_OVERRIDE, CALL_ENV, CALL_AGENT, CALL_LANGUAGE: see app/calls/jobs.py.
+- CALL_TARGET_OVERRIDE, CALL_DIAL_BUYERS, CALL_ENV, CALL_AGENT, CALL_LANGUAGE: see
+  app/calls/jobs.py.
 - CONTACT_HOURS: `08:00-21:00` by default, Vietnam time.
 
 Contact protection (AGENTS.md) checked here: a confirmed order and an order whose two attempts
@@ -175,21 +176,29 @@ class CallService:
         lifecycle.accept_suggested_call(
             self.orders, order_id, actor, now, policy=self.policy(shop_id)
         )
-        return self._place(doc, attempt, now, actor)
+        try:
+            return self._place(doc, attempt, now, actor)
+        except jobs.NoTarget as reason:
+            raise ApiError(
+                409,
+                ErrorCode.CONTACT_BLOCKED,
+                "Contact blocked",
+                f"The call was not placed: {reason}.",
+                block_reasons=[],
+            ) from None
 
     def start_for_pipeline(self, order_id: str, attempt: int, now: datetime) -> dict:
         """The pipeline's `call_buyer` node claimed attempt `attempt`; place it for real. A phone
         rule that blocks the call is noted on the order, which then waits for its timer."""
         doc = self.orders.get(order_id)
         blocks = self.phone_blocks(doc, now)
+        reasons = ", ".join(blocks)
         if not blocks:
             try:
                 call = self._place(doc, attempt, now, "system")
                 return {"mock": False, "call_id": call.id, "call_status": call.status.value}
-            except ApiError as error:  # no phone the call can dial
-                if error.problem.code != ErrorCode.CONTACT_BLOCKED:
-                    raise
-        reasons = ", ".join(blocks) or "no valid phone number"
+            except jobs.NoTarget as reason:
+                reasons = str(reason)
         lifecycle.record_note(self.orders, order_id, now, f"AI call not placed: {reasons}.")
         return {"mock": False, "call_id": None, "blocked": [b.value for b in blocks]}
 
@@ -239,16 +248,7 @@ class CallService:
 
     def _place(self, doc: dict, attempt: int, now: datetime, actor: str) -> Call:
         call_id = call_id_for(doc["order_id"], attempt)
-        try:
-            job = jobs.build_job(doc, call_id, attempt, now)
-        except jobs.NoTarget:
-            raise ApiError(
-                409,
-                ErrorCode.CONTACT_BLOCKED,
-                "Contact blocked",
-                "The order has no valid phone number.",
-                block_reasons=[],
-            ) from None
+        job = jobs.build_job(doc, call_id, attempt, now)  # NoTarget: the caller says why
         stored = {
             "call_id": call_id,
             "shop_id": doc["shop_id"],
