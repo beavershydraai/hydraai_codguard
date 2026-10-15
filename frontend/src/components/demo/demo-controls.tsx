@@ -12,7 +12,7 @@ import {
 } from '@/api/gen/@tanstack/react-query.gen'
 import { SettingField } from '@/components/blocks/settings-3/components/setting-field'
 import { Badge } from '@/components/reui/badge'
-import { Frame, FrameDescription, FrameHeader, FramePanel, FrameTitle } from '@/components/reui/frame'
+import { Frame, FrameDescription, FrameHeader, FramePanel, FrameTitle } from '@/components/ui/frame'
 import { Button } from '@/components/ui/button'
 import { FieldGroup } from '@/components/ui/field'
 import {

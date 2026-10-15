@@ -1,6 +1,6 @@
 import { type ReactNode, useId } from 'react'
 
-import { Frame, FramePanel } from '@/components/reui/frame'
+import { Frame, FramePanel } from '@/components/ui/frame'
 import { IconTile } from '@/components/reui/icon-tile'
 
 // Review queue summary tiles, adapted from ReUI card-2 (icon-tile cards with a faded dot pattern,

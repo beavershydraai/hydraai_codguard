@@ -23,7 +23,8 @@
     {
       "files": ["src/routes/**", "src/components/ui/**"],
       "rules": {
-        "react/only-export-components": "off"
+        "react/only-export-components": "off",
+        "react/set-state-in-effect": "off"
       }
     }
   ]

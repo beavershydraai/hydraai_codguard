@@ -2,7 +2,7 @@ import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
 
 import type { BacktestResult } from '@/api/gen'
 import { Badge } from '@/components/reui/badge'
-import { Frame, FramePanel } from '@/components/reui/frame'
+import { Frame, FramePanel } from '@/components/ui/frame'
 import {
   type ChartConfig,
   ChartContainer,

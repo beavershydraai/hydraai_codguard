@@ -21,7 +21,7 @@ import {
   FrameHeader,
   FramePanel,
   FrameTitle,
-} from '@/components/reui/frame'
+} from '@/components/ui/frame'
 import { OrderStatusBadge } from '@/components/order-status-badge'
 import { TierBadge } from '@/components/tier-badge'
 import { Button } from '@/components/ui/button'

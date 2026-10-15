@@ -30,7 +30,7 @@ import {
   FrameHeader,
   FramePanel,
   FrameTitle,
-} from '@/components/reui/frame'
+} from '@/components/ui/frame'
 import {
   Timeline,
   TimelineContent,

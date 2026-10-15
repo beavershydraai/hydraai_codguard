@@ -1,7 +1,7 @@
 import { AlertCircleIcon, EyeIcon, EyeOffIcon } from 'lucide-react'
 import * as React from 'react'
 
-import { Frame, FrameDescription, FramePanel, FrameTitle } from '@/components/reui/frame'
+import { Frame, FrameDescription, FramePanel, FrameTitle } from '@/components/ui/frame'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
