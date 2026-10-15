@@ -70,11 +70,10 @@ def test_suggest_mode_leaves_every_call_to_the_shop():
 @pytest.mark.parametrize(
     ("rules", "reason"),
     [
-        ({"min_risk_score": 70}, B.BELOW_CALL_THRESHOLD),
+        ({"min_tier": "very_high"}, B.BELOW_AUTO_CALL_TIER),
         ({"cod_ranges": [{"currency": "VND", "max_cod": 300_000}]}, B.COD_OUT_OF_RANGE),
         ({"cod_ranges": [{"currency": "VND", "min_cod": 500_000}]}, B.COD_OUT_OF_RANGE),
         ({"channels": ["tiktok", "website"]}, B.CHANNEL_NOT_AUTOMATED),
-        ({"branches": ["branch_SG"]}, B.BRANCH_NOT_AUTOMATED),
         ({"call_window": {"start": "11:00", "end": "20:00"}}, B.OUTSIDE_CALL_WINDOW),
         ({"call_window": {"days": ["sat", "sun"]}}, B.OUTSIDE_CALL_WINDOW),
     ],
@@ -87,10 +86,9 @@ def test_a_call_outside_the_rules_is_only_suggested(rules, reason):
 
 def test_a_call_inside_every_rule_is_placed():
     rules = automated(
-        min_risk_score=60,
+        min_tier="high",
         cod_ranges=[{"currency": "VND", "min_cod": 330_000, "max_cod": 330_000}],
         channels=["facebook"],
-        branches=["branch_VN_HCM"],
         call_window={"start": "10:00", "end": "10:01", "days": ["wed"]},
     )
     assert decide(rules, scored()).action == A.AI_CALL
@@ -114,29 +112,33 @@ def test_without_the_order_nothing_blocks():
     assert d.action == A.AI_CALL
 
 
-# --- the threshold also chooses calls --------------------------------------------------------
+# --- the lowest tier the agent calls by itself --------------------------------------------
 
 
-def test_a_score_at_the_threshold_turns_a_link_into_a_call():
-    d = decide(automated(min_risk_score=50), scored(), tier=RiskTier.MEDIUM)
-    assert d.action == A.AI_CALL and d.contact_cost_vnd == 1500
+def test_auto_calls_start_at_the_shops_tier():
+    rules = automated(min_tier="high")
+    assert decide(rules, scored()).action == A.AI_CALL
+    model_call = policy.decide(
+        RiskTier.VERY_HIGH, 36_000, NOW, policy=rules, order=scored(), action=A.AI_CALL
+    )
+    assert model_call.action == A.AI_CALL  # a call the model picked for Very High
+    escalated = policy.escalate(
+        RiskTier.MEDIUM,
+        36_000,
+        at(120),
+        unanswered=A.SEND_CONFIRMATION_LINK,
+        policy=rules,
+        order=scored(),
+    )
+    assert escalated.action == A.HOLD_FOR_REVIEW and escalated.suggested_action == A.AI_CALL
+    assert escalated.block_reasons == [B.BELOW_AUTO_CALL_TIER]
 
 
-def test_the_threshold_never_buys_a_call_that_does_not_pay_for_itself():
-    d = decide(automated(min_risk_score=50), scored(), tier=RiskTier.MEDIUM, loss=1_000)
-    assert d.action == A.SEND_CONFIRMATION_LINK  # 1,000 > link 300, but not > call 1,500
-
-
-def test_below_the_threshold_a_link_stays_a_link():
-    d = decide(automated(min_risk_score=70), scored(), tier=RiskTier.MEDIUM)
-    assert d.action == A.SEND_CONFIRMATION_LINK and d.block_reasons == []
-
-
-def test_the_threshold_leaves_deposits_and_confirmed_buyers_alone():
-    rules = automated(min_risk_score=10)
+def test_the_tier_rule_still_picks_the_action():
+    """Automation only holds calls back: it never turns a link or a deposit into a call."""
+    rules = automated(min_tier="medium")
+    assert decide(rules, scored(), tier=RiskTier.MEDIUM).action == A.SEND_CONFIRMATION_LINK
     assert decide(rules, scored(), tier=RiskTier.VERY_HIGH).action == A.REQUIRE_DEPOSIT
-    d = policy.decide(RiskTier.MEDIUM, 36_000, NOW, policy=rules, order=scored(), confirmed=True)
-    assert d.action == A.SHIP_NOW and d.block_reasons == [B.ALREADY_CONFIRMED]
 
 
 # --- follow-ups --------------------------------------------------------------------------
@@ -182,7 +184,7 @@ def test_the_shop_sets_the_attempts_and_the_gap_between_calls():
         lambda: CallAutomation(cod_ranges=[{"currency": "VND"}, {"currency": "VND"}]),
         lambda: CallAutomation(max_attempts=3),  # contact protection: 2 calls per order
         lambda: CallAutomation(retry_after_minutes=10),  # at least 30 minutes apart
-        lambda: CallAutomation(min_risk_score=101),
+        lambda: CallAutomation(min_tier="extreme"),
     ],
 )
 def test_rules_that_break_contact_protection_are_rejected(build):
@@ -220,7 +222,7 @@ def test_a_shop_starts_with_the_default_policy(owner):
 
 
 def test_the_owner_saves_a_new_version(owner, policy_versions):
-    rules = {"mode": "suggest", "min_risk_score": 55, "channels": ["facebook"]}
+    rules = {"mode": "suggest", "min_tier": "high", "channels": ["facebook"]}
     saved = owner.put("/api/v1/shop/policy", json=body(**rules))
     assert saved.status_code == 200, saved.text
     assert saved.json()["version"] == 2 and saved.json()["updated_by"] == "admin@gmail.com"
@@ -233,7 +235,7 @@ def test_the_owner_saves_a_new_version(owner, policy_versions):
 @pytest.mark.parametrize(
     "bad",
     [
-        body(branches=["branch_XX"]),
+        body(min_tier="extreme"),
         body(call_window={"start": "06:00", "end": "22:00"}),
         {"tiers": [t | {"action": "cancel"} for t in body()["tiers"]]},
     ],

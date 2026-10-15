@@ -2088,16 +2088,12 @@ components:
         mode:
           $ref: '#/components/schemas/CallAutomationMode'
           default: auto
-        min_risk_score:
+        min_tier:
           anyOf:
-          - type: integer
-            maximum: 100.0
-            minimum: 0.0
+          - $ref: '#/components/schemas/RiskTier'
           - type: 'null'
-          title: Min Risk Score
-          description: 'Auto-call orders scoring at least this (0-100): a ship-now or link decision becomes
-            an AI call when the call pays for itself, and an AI call below it is only suggested. Null
-            keeps the tier policy.'
+          description: 'Auto-call from this risk tier up; an AI call for a lower tier is only suggested.
+            Which tiers get a call at all is the tier policy''s choice. Null: every tier.'
         cod_ranges:
           items:
             $ref: '#/components/schemas/CodRange'
@@ -2112,14 +2108,6 @@ components:
           - type: 'null'
           title: Channels
           description: 'Sales channels to auto-call. Null: all.'
-        branches:
-          anyOf:
-          - items:
-              type: string
-            type: array
-          - type: 'null'
-          title: Branches
-          description: 'Branch IDs to auto-call (config/branches.yaml). Null: all.'
         call_window:
           anyOf:
           - $ref: '#/components/schemas/CallWindow'
@@ -2169,7 +2157,7 @@ components:
           max_cod: 5000000
           min_cod: 200000
         max_attempts: 2
-        min_risk_score: 60
+        min_tier: high
         mode: auto
         retry_after_minutes: 45
     CallAutomationMode:
@@ -2852,10 +2840,9 @@ components:
       - batched
       - attempts_exhausted
       - manual_approval
-      - below_call_threshold
+      - below_auto_call_tier
       - cod_out_of_range
       - channel_not_automated
-      - branch_not_automated
       - outside_call_window
       title: ContactBlockReason
       description: |-
@@ -2870,10 +2857,9 @@ components:
         batched: batched into another order's contact within 15 minutes ·
         attempts_exhausted: both call attempts used ·
         manual_approval: the shop approves every AI call (call automation mode "suggest") ·
-        below_call_threshold: risk score below the shop's auto-call threshold ·
+        below_auto_call_tier: risk tier below the one the shop auto-calls from ·
         cod_out_of_range: amount to collect outside the shop's auto-call range ·
         channel_not_automated: the shop does not auto-call orders from this sales channel ·
-        branch_not_automated: the shop does not auto-call orders of this branch ·
         outside_call_window: outside the hours or days the shop allows automatic calls
     ContactChannel:
       type: string
@@ -4368,7 +4354,7 @@ components:
             max_cod: 5000000
             min_cod: 200000
           max_attempts: 2
-          min_risk_score: 60
+          min_tier: high
           mode: auto
           retry_after_minutes: 45
         tiers:

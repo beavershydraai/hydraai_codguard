@@ -12,7 +12,7 @@ from app.agents.log import DecisionLog, entry, get_decision_log
 from app.api.errors import ApiError, NotImplementedYet, problem_example, problem_responses
 from app.api.security import CurrentUser, bearer_auth
 from app.calls.service import CallService, get_call_service
-from app.data import branches, order_csv
+from app.data import order_csv
 from app.data.orders import to_utc
 from app.data.policies import PolicyStore, VersionTaken, get_policy_store
 from app.data.store import OrderStore, get_store
@@ -102,14 +102,6 @@ def get_policy(user: CurrentUser, policies: Policies) -> Policy:
 def update_policy(body: PolicyUpdate, user: CurrentUser, policies: Policies) -> Policy:
     if user.role != Role.OWNER:
         raise ApiError(403, ErrorCode.FORBIDDEN, "Forbidden", "Only the owner changes the policy.")
-    unknown = set(body.automation.branches or []) - set(branches.branches())
-    if unknown:
-        raise ApiError(
-            422,
-            ErrorCode.VALIDATION_ERROR,
-            "Validation error",
-            f"Unknown branch: {', '.join(sorted(unknown))}.",
-        )
     try:
         return policies.save(user.shop_id, body, user.email, datetime.now(UTC))
     except ValueError as error:

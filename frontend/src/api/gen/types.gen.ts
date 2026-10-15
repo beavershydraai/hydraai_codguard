@@ -314,11 +314,9 @@ export type CallAgent = 'script' | 'gemini_live'
 export type CallAutomation = {
   mode?: CallAutomationMode
   /**
-   * Min Risk Score
-   *
-   * Auto-call orders scoring at least this (0-100): a ship-now or link decision becomes an AI call when the call pays for itself, and an AI call below it is only suggested. Null keeps the tier policy.
+   * Auto-call from this risk tier up; an AI call for a lower tier is only suggested. Which tiers get a call at all is the tier policy's choice. Null: every tier.
    */
-  min_risk_score?: number | null
+  min_tier?: RiskTier | null
   /**
    * Cod Ranges
    *
@@ -331,12 +329,6 @@ export type CallAutomation = {
    * Sales channels to auto-call. Null: all.
    */
   channels?: Array<SalesChannel> | null
-  /**
-   * Branches
-   *
-   * Branch IDs to auto-call (config/branches.yaml). Null: all.
-   */
-  branches?: Array<string> | null
   /**
    * Null: whenever contact hours allow.
    */
@@ -845,10 +837,9 @@ export type ContactAttempt = {
  * batched: batched into another order's contact within 15 minutes ·
  * attempts_exhausted: both call attempts used ·
  * manual_approval: the shop approves every AI call (call automation mode "suggest") ·
- * below_call_threshold: risk score below the shop's auto-call threshold ·
+ * below_auto_call_tier: risk tier below the one the shop auto-calls from ·
  * cod_out_of_range: amount to collect outside the shop's auto-call range ·
  * channel_not_automated: the shop does not auto-call orders from this sales channel ·
- * branch_not_automated: the shop does not auto-call orders of this branch ·
  * outside_call_window: outside the hours or days the shop allows automatic calls
  */
 export type ContactBlockReason =
@@ -861,10 +852,9 @@ export type ContactBlockReason =
   | 'batched'
   | 'attempts_exhausted'
   | 'manual_approval'
-  | 'below_call_threshold'
+  | 'below_auto_call_tier'
   | 'cod_out_of_range'
   | 'channel_not_automated'
-  | 'branch_not_automated'
   | 'outside_call_window'
 
 /**

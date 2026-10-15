@@ -29,7 +29,6 @@ from app.schemas.shops import CallAutomation, Policy, ShopSettings, TierPolicy
 RULES_FILE = Path(__file__).resolve().parents[2] / "config" / "cod_guard_rules_apac.yaml"
 MAX_CALL_ATTEMPTS = 2  # contact protection: no order is called more often, whoever asks
 CALL_RETRY_GAP_MINUTES = 30
-UPGRADABLE = (DecisionAction.SHIP_NOW, DecisionAction.SEND_CONFIRMATION_LINK)
 CONTACT_COST_FIELD = {  # the ShopSettings field that prices each way of contacting the buyer
     DecisionAction.SEND_CONFIRMATION_LINK: "confirmation_link_cost_vnd",
     DecisionAction.AI_CALL: "ai_call_cost_vnd",
@@ -95,18 +94,18 @@ def follow_up(
 
 
 def automation_blocks(
-    automation: CallAutomation, order: dict | None, now: datetime
+    automation: CallAutomation, order: dict | None, now: datetime, tier: RiskTier
 ) -> list[ContactBlockReason]:
-    """Why the agent may not place an AI call for `order` by itself now; empty when it may.
-    Without an order (a bare policy check) nothing blocks."""
+    """Why the agent may not place an AI call for `order` (risk `tier`) by itself now; empty
+    when it may. Without an order (a bare policy check) nothing blocks."""
     if order is None:
         return []
     auto, reason, blocks = automation, ContactBlockReason, []
     if auto.mode == CallAutomationMode.SUGGEST:
         blocks.append(reason.MANUAL_APPROVAL)
-    score = (order.get("scoring") or {}).get("risk_score")
-    if auto.min_risk_score is not None and (score is None or score < auto.min_risk_score):
-        blocks.append(reason.BELOW_CALL_THRESHOLD)
+    tiers = list(RiskTier)
+    if auto.min_tier is not None and tiers.index(tier) < tiers.index(auto.min_tier):
+        blocks.append(reason.BELOW_AUTO_CALL_TIER)
     currency = order.get("currency") or branches.country_of(order).currency
     cod = cod_amount(order)
     for r in auto.cod_ranges:
@@ -116,9 +115,6 @@ def automation_blocks(
             blocks.append(reason.COD_OUT_OF_RANGE)
     if auto.channels is not None and order.get("channel") not in auto.channels:
         blocks.append(reason.CHANNEL_NOT_AUTOMATED)
-    branch = order.get("branch_id") or branches.default_branch()
-    if auto.branches is not None and branch not in auto.branches:
-        blocks.append(reason.BRANCH_NOT_AUTOMATED)
     window = auto.call_window
     if window:
         local = now.astimezone(branches.country_of(order).tz)
@@ -142,33 +138,20 @@ def decide(
     """The decision for a scored order, preserving an action selected by a scoring hard rule.
 
     A confirmed buyer is never contacted again, even after the order is rescored. With the
-    `order`, the shop's call automation applies: a score at or above its threshold turns a
-    ship-now or link decision into an AI call when the call pays for itself, and an AI call
-    outside its rules becomes a suggestion for the shop.
+    `order`, the shop's call automation applies: an AI call outside its rules becomes a
+    suggestion for the shop.
     """
     if action == DecisionAction.CANCEL:
         raise ValueError("only the buyer or the shop cancels an order")
     policy = policy or default_policy()
-    settings = settings or ShopSettings()
     action = action or tier_rule(policy, tier).action
-    threshold = policy.automation.min_risk_score
-    score = ((order or {}).get("scoring") or {}).get("risk_score")
-    if (
-        threshold is not None
-        and score is not None
-        and score >= threshold
-        and action in UPGRADABLE
-        and not confirmed
-        and expected_loss_vnd > contact_cost(DecisionAction.AI_CALL, settings)
-    ):
-        action = DecisionAction.AI_CALL
     return _decision(
         action,
         tier,
         expected_loss_vnd,
         now,
         0,
-        settings,
+        settings or ShopSettings(),
         policy,
         confirmed=confirmed,
         order=order,
@@ -238,7 +221,7 @@ def _decision(
     elif cost is not None and expected_loss_vnd <= cost:  # contact only when it pays for itself
         action, cost = DecisionAction.SHIP_NOW, None
         blocks = [ContactBlockReason.EXPECTED_LOSS_BELOW_COST]
-    elif action == DecisionAction.AI_CALL and (blocks := automation_blocks(auto, order, now)):
+    elif action == DecisionAction.AI_CALL and (blocks := automation_blocks(auto, order, now, tier)):
         # Outside the shop's call automation: suggest the call, a person starts it.
         action, cost, suggested = DecisionAction.HOLD_FOR_REVIEW, None, DecisionAction.AI_CALL
     calls_made = call_attempts + (action == DecisionAction.AI_CALL)
