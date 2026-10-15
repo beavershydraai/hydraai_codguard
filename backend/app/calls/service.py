@@ -3,15 +3,16 @@
 
 - CALL_JOBS_TOPIC: `projects/<project>/topics/call-jobs`. Unset: calls are not configured, the
   shop app's call endpoints answer 501 and the pipeline keeps its simulated ("mock") call.
-- CALL_TARGET_OVERRIDE, CALL_DIAL_BUYERS, CALL_ENV, CALL_AGENT, CALL_LANGUAGE: see
-  app/calls/jobs.py.
+- CALL_ALLOWED_PHONES, CALL_TARGET_OVERRIDE, CALL_DIAL_BUYERS, CALL_ENV, CALL_AGENT,
+  CALL_LANGUAGE: see app/calls/jobs.py.
 - CONTACT_HOURS: `08:00-21:00` by default, Vietnam time.
 
 Contact protection (AGENTS.md) checked here: a confirmed order and an order whose two attempts
 are used are never called; a phone gets at most one AI call per 24 hours (retries for the same
 order excepted), none for 30 days after "I didn't order this", and only within contact hours.
-The phone rules protect a real buyer, so they are skipped while CALL_TARGET_OVERRIDE sends every
-call to a test softphone. Batching orders to the same phone into one call is not done yet.
+The phone rules protect a real buyer, so they are skipped for a test target: the team's phones on
+CALL_ALLOWED_PHONES, and CALL_TARGET_OVERRIDE, which takes every other call. Batching orders
+to the same phone into one call is not done yet.
 """
 
 import asyncio
@@ -210,7 +211,7 @@ class CallService:
         return []
 
     def phone_blocks(self, doc: dict, now: datetime) -> list[ContactBlockReason]:
-        if jobs.target_override():
+        if jobs.skips_phone_rules(doc):
             return []
         blocks = []
         start, end = _contact_hours()

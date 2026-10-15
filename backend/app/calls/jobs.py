@@ -1,13 +1,17 @@
 """Build the CallJob for an order (docs/call-controller.md). Settings from the environment:
 
 - CALL_ENV: `env` of published jobs, `demo` (the VM) or `dev-<name>` (default `demo`)
+- CALL_ALLOWED_PHONES: comma-separated phone numbers (the team's) that are really dialled when an
+  order carries one, in any common form (`+84 9x xxx xxxx`, `09x...`). Demo and testing only.
 - CALL_TARGET_OVERRIDE: `<kind>:<address>`, e.g. `sip:6001` or `pstn:<team phone, E.164>`. Demo
-  and testing only: every call rings this target instead of the buyer's phone. Deployed from
-  Secret Manager (`call-target-override`), so a real number never lands in the repo.
+  and testing only: every other call rings this target instead of the buyer's phone.
 - CALL_DIAL_BUYERS: `on` lets a call without the override dial the buyer's phone. Off by default:
   with the Twilio trunk up, a missing override must not ring the made-up buyers of demo data.
 - CALL_AGENT: `gemini_live` (default) or `script`
 - CALL_LANGUAGE: `vi` (default) or `en`
+
+CALL_ALLOWED_PHONES and CALL_TARGET_OVERRIDE are deployed from Secret Manager
+(`call-allowed-phones`, `call-target-override`), so a real number never lands in the repo.
 """
 
 import os
@@ -15,7 +19,7 @@ import re
 from datetime import datetime
 
 from app.calls import spoken
-from app.data import branches
+from app.data import branches, phone
 from app.demo.world import SHOP_ID, SHOP_NAME
 from app.schemas.enums import CallAgent, CallLanguage, CallTargetKind
 from app.schemas.telephony import CallBuyer, CallItem, CallJob, CallOrder, CallTarget
@@ -41,17 +45,52 @@ def dial_buyers() -> bool:
     return os.environ.get("CALL_DIAL_BUYERS", "").strip().lower() == "on"
 
 
+def _e164(entry: str) -> str | None:
+    entry = entry.strip()
+    for code in phone.NATIONAL:
+        if entry.startswith(f"+{code}"):
+            return phone.to_e164(entry, code)
+    return phone.to_e164(entry) if entry else None  # Vietnamese national form, 0xx...
+
+
+def allowed_phones() -> set[str]:
+    """CALL_ALLOWED_PHONES as E.164, in the form intake stores the buyer's phone."""
+    entries = os.environ.get("CALL_ALLOWED_PHONES", "").split(",")
+    return {e164 for e164 in map(_e164, entries) if e164}
+
+
+def buyer_phone(doc: dict) -> str | None:
+    """The buyer's phone as intake stored it, if valid. A phone that failed validation at intake
+    has no hash and is never dialled."""
+    number = str(doc.get("buyer_phone") or "")
+    return number if doc.get("buyer_phone_hash") and number.startswith("+") else None
+
+
+def allowed(doc: dict) -> bool:
+    number = buyer_phone(doc)
+    return number is not None and number in allowed_phones()
+
+
+def skips_phone_rules(doc: dict) -> bool:
+    """A call to a test target, the override or an allowed (team) phone, skips the per-phone
+    contact rules, which protect real buyers."""
+    return allowed(doc) or target_override() is not None
+
+
 def target_for(doc: dict) -> CallTarget:
-    """The override when set, otherwise the buyer's phone if CALL_DIAL_BUYERS is on. A phone that
-    failed validation at intake has no hash and is never dialled."""
+    """The buyer's phone when it is on CALL_ALLOWED_PHONES; otherwise the override when set;
+    otherwise the buyer's phone if CALL_DIAL_BUYERS is on."""
+    number = buyer_phone(doc)
+    if number and allowed(doc):
+        return CallTarget(kind=CallTargetKind.PSTN, address=number)
     override = target_override()
     if override:
         return override
     if not dial_buyers():
         raise NoTarget("calls to buyers' phones are turned off on this server")
-    if not doc.get("buyer_phone_hash") or not str(doc.get("buyer_phone", "")).startswith("+"):
+    if not number:
         raise NoTarget("the order has no valid phone number")
-    return CallTarget(kind=CallTargetKind.PSTN, address=doc["buyer_phone"])
+    return CallTarget(kind=CallTargetKind.PSTN, address=number)
 
 
 def shop_name(shop_id: str) -> str:

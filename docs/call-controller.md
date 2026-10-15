@@ -96,7 +96,7 @@ The backend marks a call `failed` (`controller_error`) when it stays `dialing` o
 - Two ways to start a call, sharing the same two attempts per order (claims `order_id:ai_call:1` and `:2` in `pipeline_claims`):
   - the pipeline: when the engine decides `ai_call`, the `call_buyer` node claims the attempt and places it. Orders from the simulator (`SIM-`, `SIMAI-`) keep a simulated call, so the demo traffic never rings a phone;
   - the shop: `POST /orders/{id}/calls` from the order page. A second click while a call runs returns that call.
-- Contact rules checked before a call: a confirmed order and an order whose two attempts are used are never called (409 `contact_blocked`). For the buyer's phone: contact hours (`CONTACT_HOURS`, 08:00–21:00 Vietnam time), at most one AI call per phone per 24 hours across shops (retries of the same order excepted), none for 30 days after `not_ordered`. These phone rules are skipped while `CALL_TARGET_OVERRIDE` sends every call to a test target. Without the override, the buyer's phone is dialled only with `CALL_DIAL_BUYERS=on`; otherwise the call is not placed (409 `contact_blocked` for the shop). A call the pipeline wanted but a rule stopped is noted on the order, which then waits for its no-response timer.
+- Contact rules checked before a call: a confirmed order and an order whose two attempts are used are never called (409 `contact_blocked`). For the buyer's phone: contact hours (`CONTACT_HOURS`, 08:00–21:00 Vietnam time), at most one AI call per phone per 24 hours across shops (retries of the same order excepted), none for 30 days after `not_ordered`. These phone rules are skipped for a test target: a team phone on `CALL_ALLOWED_PHONES`, or `CALL_TARGET_OVERRIDE`, which takes every other call. Without the override, the buyer's phone is dialled only with `CALL_DIAL_BUYERS=on`; otherwise the call is not placed (409 `contact_blocked` for the shop). A call the pipeline wanted but a rule stopped is noted on the order, which then waits for its no-response timer.
 - The `CallJob` reads amounts and the order time in words (`app/calls/spoken.py`): `450000` → "bốn trăm năm mươi nghìn đồng", "chiều nay", "tối ngày 7 tháng 10". The shop name comes from the simulator's demo shops until shops have profiles (E7).
 - The call is stored in `calls/{call_id}` (docs/data-model.md), with a copy of the public `Call` on each order. The transcript stays in the call document.
 - A failed publish fails the call (`controller_error`) at once. A call the controller never claims within 10 minutes, or that stays `dialing` or `in_progress` past `ring_timeout_seconds` + `max_duration_seconds` + 2 minutes, fails with `controller_error` when it is next read; a late result from the controller still replaces it.
@@ -195,7 +195,8 @@ Backend:
 |---|---|---|
 | `CALL_JOBS_TOPIC` | `projects/ai-codguard/topics/call-jobs` | Where jobs go. Unset: calls are not configured, the call endpoints answer 501 (the frontend's mock simulates the call) and the pipeline keeps simulated calls |
 | `CALL_ENV` | `demo` | `env` attribute on published jobs; `dev-<name>` on a developer's machine |
-| `CALL_TARGET_OVERRIDE` | `sip:6001`, `pstn:+84XXXXXXXXX` | Demo only: send every call to this target instead of the buyer's phone. Deployed from Secret Manager (`call-target-override`), so a team phone number never lands in the repo. The per-phone contact rules are skipped while it is set |
+| `CALL_ALLOWED_PHONES` | `+84XXXXXXXXX,09XXXXXXXX` | Demo only: the team's phones. An order whose buyer phone is one of them rings it for real (Twilio), without the per-phone contact rules. Deployed from Secret Manager (`call-allowed-phones`) |
+| `CALL_TARGET_OVERRIDE` | `sip:6001`, `pstn:+84XXXXXXXXX` | Demo only: send every other call to this target instead of the buyer's phone. Deployed from Secret Manager (`call-target-override`), so a team phone number never lands in the repo. The per-phone contact rules are skipped while it is set |
 | `CALL_DIAL_BUYERS` | unset | `on` lets a call without the override dial the buyer's phone. Not set in the demo: its buyers are made up, and their numbers may belong to someone |
 | `CALL_AGENT`, `CALL_LANGUAGE` | `gemini_live`, `vi` | Agent and language of new calls (the defaults) |
 | `CONTACT_HOURS` | `08:00-21:00` | When a real buyer may be called, Vietnam time |
@@ -250,15 +251,15 @@ sudo docker run --rm --network host --env-file /etc/codguard/controller.env \
   python -m app.telephony.dial +84XXXXXXXXX
 ```
 
-To have the deployed backend ring a team phone instead of the softphone, change the secret and roll a new revision (a secret in a variable is read when an instance starts):
+The deployed backend rings a team phone for real when an order's buyer phone is on `CALL_ALLOWED_PHONES`; any other order rings the softphone (`CALL_TARGET_OVERRIDE`). To change the list, add a secret version and roll a new revision (a secret in a variable is read when an instance starts):
 
 ```bash
-printf 'pstn:+84XXXXXXXXX' | gcloud secrets versions add call-target-override --project ai-codguard --data-file=-
+printf '+84XXXXXXXXX,+84YYYYYYYYY' | gcloud secrets versions add call-allowed-phones --project ai-codguard --data-file=-
 gcloud run services update codguard-api --project ai-codguard --region asia-southeast1 \
-  --update-secrets CALL_TARGET_OVERRIDE=call-target-override:latest
+  --update-secrets CALL_ALLOWED_PHONES=call-allowed-phones:latest
 ```
 
-Back to the softphone: the same with `sip:6001`. Deploys from `main` keep the latest version.
+Deploys from `main` keep the latest versions.
 
 ### The controller service
 
@@ -299,7 +300,7 @@ All in project `ai-codguard`. The repo owner keeps the script for it outside the
 - Pub/Sub topics and subscriptions as in the table above. The Pub/Sub service agent needs publisher on `call-jobs-dead` and subscriber on `call-jobs-vm` for dead-lettering.
 - `codguard-runtime`: publisher on `call-jobs` (backend), subscriber on `call-jobs-vm` (controller), object user on the recordings bucket, reader on Artifact Registry (to pull the image on the VM). It already has the Speech-to-Text client role.
 - Bucket `ai-codguard-call-recordings` in `us-central1` (Cloud Storage's free tier is in US regions), uniform access, public access prevented, delete after 30 days.
-- Secret `call-target-override` (first version `sip:6001`); `codguard-runtime` needs secret accessor on it.
+- Secrets `call-target-override` (`sip:6001`) and `call-allowed-phones` (the team's phones, comma-separated); `codguard-runtime` needs secret accessor on both.
 - Firewall: `codguard-sip-from-twilio` (UDP and TCP 5060, TCP 5061 from Twilio's signalling addresses) and `codguard-rtp-from-twilio` (UDP 10000–10100 from `168.86.128.0/18`), both to the VM.
 - Twilio, on an upgraded account: an Elastic SIP Trunk whose Termination SIP URI has an IP Access Control List with `34.60.118.169/32`, a Twilio number for the caller ID, and Voice geo permissions for Vietnam.
 
