@@ -199,6 +199,7 @@ jobs:
       DEMO_ADMIN_PASSWORD: admin1234
       SOURCE_IMAGE: ghcr.io/${{ github.repository }}/backend
     steps:
+      - uses: actions/checkout@v7
       - name: Image names
         run: |
           echo "TAG=sha-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
@@ -219,6 +220,13 @@ jobs:
           docker pull "$SOURCE_IMAGE:$TAG"
           docker tag "$SOURCE_IMAGE:$TAG" "$TARGET_IMAGE"
           docker push "$TARGET_IMAGE"
+      - name: Firestore indexes
+        run: |
+          # Creates the composite indexes in infra/firestore.indexes.json that the database lacks.
+          # A query that needs a missing index fails, and the API answers 500.
+          database=$(tr ',' '\n' <<<"$DATA_ENV" | sed -n 's/^FIRESTORE_DATABASE=//p')
+          python3 .github/scripts/sync_firestore_indexes.py infra/firestore.indexes.json \
+            "$GCP_PROJECT_ID" "$database"
       - name: Deploy
         run: |
           # A new token signing key on every deploy: never in the repo, and every instance of one

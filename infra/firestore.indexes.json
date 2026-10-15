@@ -15,6 +15,14 @@
         { "fieldPath": "buyer_phone_hash", "order": "ASCENDING" },
         { "fieldPath": "placed_at", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "decision_log",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "order_id", "order": "ASCENDING" },
+        { "fieldPath": "decided_at", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
