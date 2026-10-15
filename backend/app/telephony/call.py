@@ -7,7 +7,7 @@ routes them there (see `CallRunner.wants`).
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
 from typing import Any
@@ -51,6 +51,7 @@ class CallRunner:
         connect: SessionFactory = live.connect,
         timing: Timing | None = None,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
+        on_answer: Callable[[datetime], Awaitable[None]] | None = None,
     ) -> None:
         if job.agent != CallAgent.GEMINI_LIVE:
             raise NotImplementedError("only the gemini_live agent exists so far")
@@ -64,6 +65,7 @@ class CallRunner:
         self._connect = connect
         self._timing = timing
         self._now = now
+        self._on_answer = on_answer  # the controller reports in_progress here
         self._agent: LiveAgent | None = None
 
     def wants(self, event: dict) -> bool:
@@ -98,6 +100,8 @@ class CallRunner:
 
         answered_at = self._now()
         log.info("answered")
+        if self._on_answer:
+            await self._safe(self._on_answer(answered_at))
         report: AgentReport | None = None
         try:
             report = await self._converse()
