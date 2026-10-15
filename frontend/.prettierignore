@@ -1,0 +1,7 @@
+dist
+pnpm-lock.yaml
+src/routeTree.gen.ts
+src/components/ui
+src/components/reui
+src/hooks/use-mobile.ts
+src/hooks/use-file-upload.ts

@@ -13,12 +13,12 @@ def test_health() -> None:
 
 
 def test_contract_stub_returns_501_problem() -> None:
-    response = client.get("/api/v1/orders")
+    response = client.get("/api/v1/shop")
     assert response.status_code == 501
     assert response.headers["content-type"] == PROBLEM
     body = response.json()
     assert body["code"] == "not_implemented"
-    assert "list_orders" in body["detail"]
+    assert "get_shop" in body["detail"]
 
 
 def test_validation_error_is_problem_json() -> None:

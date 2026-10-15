@@ -4,9 +4,12 @@ ponytail: sklearn HistGradientBoosting instead of LightGBM; same family (histogr
 boosting), no extra native dependency. Swap if validation shows a gap.
 """
 
+import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.isotonic import IsotonicRegression
+
+from app.risk.features import CHANNELS, SIGNALS
 
 FAIL_COST = 60_000  # ShopSettings.failed_delivery_cost_vnd default
 ACTION_COST = {"none": 0, "link": 300, "call": 1_500, "deposit": 0}  # ShopSettings; deposit unset
@@ -43,6 +46,57 @@ def fit_model1(df: pd.DataFrame, cols: list[str]) -> dict:
 
 def predict1(model: dict, X: pd.DataFrame):
     return model["iso"].predict(model["clf"].predict_proba(X[model["cols"]])[:, 1])
+
+
+def explainer1(model: dict):
+    """SHAP TreeExplainer for model 1 (exact for HistGradientBoosting, log-odds scale)."""
+    import shap  # imported here: slow to load and only the scoring path needs it
+
+    return shap.TreeExplainer(model["clf"])
+
+
+def explain1(model: dict, explainer, features: dict) -> dict:
+    """Exact TreeSHAP contributions of every feature to this order's risk (E2.4).
+
+    SHAP values are in log-odds. They are rescaled so they add up to the change in the model's
+    probability from the average order (`base_value`) to this one (`prediction`): positive raises
+    risk. This is the boosted model's probability before calibration; calibration is monotone,
+    so it keeps their order and sign.
+    """
+    x = pd.DataFrame([features])[model["cols"]]
+    phi = explainer.shap_values(x)[0]
+    base, logit = float(np.ravel(explainer.expected_value)[0]), float(phi.sum())
+    before, after = 1 / (1 + np.exp(-base)), 1 / (1 + np.exp(-(base + logit)))
+    scale = (after - before) / logit if abs(logit) > 1e-9 else 0.0
+    return {
+        "available": True,
+        "method": "tree_shap",
+        "approximate": False,
+        "output": "model_failure_probability",
+        "base_value": round(float(before), 4),
+        "prediction": round(float(after), 4),
+        "contributions": {
+            c: round(float(v * scale), 4) for c, v in zip(model["cols"], phi, strict=True)
+        },
+    }
+
+
+def top_signals(features: dict, contributions: dict, top: int = 5) -> list[dict]:
+    """The `top` largest contributions as API Signal dicts (key, group, label_vi, value)."""
+    signals = []
+    for key in sorted(contributions, key=lambda k: -abs(contributions[k]))[:top]:
+        group, label = SIGNALS[key]
+        value, contribution = features[key], contributions[key]
+        signals.append(
+            {
+                "key": key,
+                "group": group,
+                "label_vi": label,
+                "value": CHANNELS[int(value)] if key == "channel" else round(value, 4),
+                "contribution": contribution,
+            }
+        )
+    return signals
 
 
 def with_action(X: pd.DataFrame, actions) -> pd.DataFrame:

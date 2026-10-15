@@ -1,0 +1,43 @@
+# nginx config for the frontend image. At start the image replaces ${PORT} and ${API_ORIGIN} with
+# environment variables; nginx's own $variables are left alone.
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen ${PORT};
+    server_name _;
+    root /usr/share/nginx/html;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # The app calls /api/... on its own origin; forward it to the backend, so the backend needs no CORS.
+    location /api/ {
+        proxy_pass ${API_ORIGIN};
+        # Cloud Run routes by host name: send the backend's own host, over TLS with SNI.
+        proxy_set_header Host $proxy_host;
+        proxy_ssl_server_name on;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # WebSocket upgrades and long calls (assessments, voice) pass through.
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 300s;
+    }
+
+    # Hashed build files never change.
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    # Client-side routes (/orders/123, /login, ...) all load index.html; always revalidate it.
+    location / {
+        add_header Cache-Control "no-cache";
+        try_files $uri /index.html;
+    }
+}

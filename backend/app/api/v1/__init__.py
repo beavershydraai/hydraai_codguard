@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.v1.auth import auth_router
 from app.api.v1.external import demo_router, intake_router, public_router
 from app.api.v1.internal import call_job_webhooks, internal_router
 from app.api.v1.shop_app import (
@@ -13,6 +14,7 @@ from app.api.v1.shop_app import (
 
 router = APIRouter(prefix="/api/v1")
 for r in (
+    auth_router,
     me_router,
     shop_router,
     orders_router,

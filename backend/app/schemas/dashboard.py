@@ -1,4 +1,4 @@
-"""ROI dashboard and backtest results. Predicted figures are estimates (UI label: "ước tính")."""
+"""ROI dashboard and backtest results. Predicted figures are estimates (UI label: "estimated")."""
 
 from datetime import date, datetime
 from typing import Literal
@@ -46,7 +46,9 @@ class DashboardSummary(ApiModel):
     cancelled_before_ship: int = Field(ge=0)
     delivered: int = Field(ge=0)
     delivery_failed: int = Field(ge=0, description="Buyer-caused failures only.")
-    estimated_savings_vnd: int = Field(description="Estimate (ước tính). May be negative.")
+    estimated_savings_vnd: int = Field(
+        description="Estimate (UI label 'estimated'). May be negative."
+    )
     good_orders_contacted_rate: float = Field(
         ge=0, le=1, description="Share of orders that were delivered fine but still contacted."
     )
@@ -73,7 +75,9 @@ class PolicyComparison(ApiModel):
     policy: PolicyName
     contact_rate: float = Field(ge=0, le=1)
     failures_caught_rate: float = Field(ge=0, le=1)
-    monthly_savings_vnd: int = Field(description="Estimate (ước tính) for orders_per_day.")
+    monthly_savings_vnd: int = Field(
+        description="Estimate (UI label 'estimated') for orders_per_day."
+    )
 
 
 class BacktestResult(ApiModel):

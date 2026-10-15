@@ -49,6 +49,8 @@ def train(docs: list[dict], now: datetime, current: dict | None):
         "failure_rate": round(float(table["is_failed"].mean()), 4),
         "candidate": _metrics(candidate, hold),
     }
+    if current and not set(current["cols"]) <= set(hold.columns):
+        current = None  # the features changed (e.g. a renamed column): nothing to compare against
     if current:
         report["current"] = {"version": current["version"]} | _metrics(current, hold)
     better = not current or report["candidate"]["pr_auc"] > report["current"]["pr_auc"]

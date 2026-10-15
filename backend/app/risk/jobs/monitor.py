@@ -156,7 +156,9 @@ def scored_rows(docs: list[dict]) -> pd.DataFrame:
     rows = []
     for d in docs:
         scoring = d.get("scoring") or {}
-        if not scoring.get("features"):
+        assignment = d.get("intervention") or d
+        features = assignment.get("features") or scoring.get("features")
+        if not features:
             continue
         label, at = final_state(d)
         rows.append(
@@ -164,11 +166,11 @@ def scored_rows(docs: list[dict]) -> pd.DataFrame:
                 "placed_at": d["placed_at"],
                 "final_at": at,
                 "is_failed": label,
-                "tier": d.get("tier"),
-                "contact_action": d.get("contact_action"),
-                "random_slice": bool(d.get("random_slice")),
-                "probability": scoring.get("probability"),
-                **scoring["features"],
+                "tier": assignment.get("tier"),
+                "contact_action": assignment.get("contact_action"),
+                "random_slice": bool(assignment.get("random_slice")),
+                "probability": assignment.get("probability", scoring.get("probability")),
+                **features,
             }
         )
     return pd.DataFrame(rows)

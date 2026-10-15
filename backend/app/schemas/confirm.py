@@ -21,11 +21,9 @@ class BuyerOrderView(ApiModel):
         json_schema_extra={
             "examples": [
                 {
-                    "shop_name": "Shop Thời Trang Mẫu",
+                    "shop_name": "Sample Fashion Shop",
                     "order_ref": "A7K2",
-                    "items": [
-                        {"name": "Áo thun basic", "variant": "Size M, màu đen", "quantity": 2}
-                    ],
+                    "items": [{"name": "Basic T-shirt", "variant": "Size M, black", "quantity": 2}],
                     "cod_amount_vnd": 330000,
                     "recipient_name_masked": "Nguyễn V** A",
                     "phone_masked": "+84******001",
@@ -73,9 +71,7 @@ class BuyerResponse(ApiModel):
 class BuyerResponseResult(ApiModel):
     model_config = ConfigDict(
         json_schema_extra={
-            "examples": [
-                {"action": "confirm", "message_vi": "Cảm ơn bạn. Đơn hàng đã được xác nhận."}
-            ]
+            "examples": [{"action": "confirm", "message_vi": "Thank you. Your order is confirmed."}]
         }
     )
 

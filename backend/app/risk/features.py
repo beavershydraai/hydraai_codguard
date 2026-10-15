@@ -15,6 +15,35 @@ M_SMOOTH = 5  # E2.3 rule 7
 CHANNELS = ["facebook", "zalo", "tiktok", "website", "instagram", "other"]
 _DIGIT = re.compile(r"\d")
 
+# key -> (SignalGroup, label shown to the shop), for the top signals of each order (E2.4)
+SIGNALS = {
+    "cod_amount_vnd": ("payment", "COD amount"),
+    "log_cod_amount": ("payment", "COD amount"),
+    "cod_vs_phone_avg_ratio": ("payment", "COD amount compared with the phone's past orders"),
+    "n_lines": ("order_behavior", "Number of products in the order"),
+    "total_qty": ("order_behavior", "Total quantity"),
+    "discount_ratio": ("order_behavior", "Discount rate"),
+    "placed_hour_vn": ("order_behavior", "Hour the order was placed"),
+    "placed_dow": ("order_behavior", "Day of the week"),
+    "is_night": ("order_behavior", "Placed at night"),
+    "address_missing_house_number": ("address_quality", "Address missing a house number"),
+    "address_parts_filled": ("address_quality", "Address completeness"),
+    "province_fail_rate_te": ("address_quality", "Failed delivery rate of the province"),
+    "is_gift": ("context", "Gift order"),
+    "channel": ("context", "Sales channel"),
+    "phone_outcomes_all": ("phone_history", "Past orders with a delivery result"),
+    "phone_failed_all": ("phone_history", "Past orders the buyer refused"),
+    "phone_fail_rate_smoothed_all": ("phone_history", "Failed delivery rate of the phone"),
+    "phone_days_since_last_failure": ("phone_history", "Days since the last failed delivery"),
+    "phone_is_new": ("phone_history", "First order from this phone"),
+    "phone_orders_1h": ("velocity", "Orders from the phone in 1 hour"),
+    "phone_orders_24h": ("velocity", "Orders from the phone in 24 hours"),
+    "phone_orders_30d": ("velocity", "Orders from the phone in 30 days"),
+    "phone_orders_all": ("velocity", "Past orders from the phone"),
+    "phone_minutes_since_prev_order": ("velocity", "Minutes since the previous order"),
+    "phone_distinct_shops_all": ("velocity", "Shops the phone has bought from"),
+}
+
 
 def has_house_number(address: dict) -> int:
     """A number before the ward ('Số 12 ...', '12/3 ...'). Digits in 'Phường 5' do not count."""
@@ -57,7 +86,7 @@ def compute_features(order: dict, history: list[dict], at, enc: dict) -> dict:
         "placed_dow": local.weekday(),
         "is_night": int(local.hour >= 22 or local.hour < 6),
         # address quality
-        "address_has_house_number": has_house_number(order["address"]),
+        "address_missing_house_number": 1 - has_house_number(order["address"]),
         "address_parts_filled": sum(
             order["address"].get(k) is not None for k in ("street", "ward", "province")
         ),

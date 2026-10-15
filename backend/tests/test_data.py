@@ -11,7 +11,7 @@ from app.data.orders import (
 )
 from app.data.phone import phone_hash, to_e164
 from app.schemas.delivery import DeliveryOutcome
-from app.schemas.orders import OrderCreate
+from app.schemas.orders import OrderCreate, OrderEvent
 
 KEY = b"test-key"
 NOW = datetime(2026, 10, 12, 1, 0, tzinfo=UTC)
@@ -67,6 +67,17 @@ def test_order_document_keeps_an_invalid_phone_without_hash():
     assert doc["buyer_phone_hash"] is None
 
 
+def test_order_document_initialises_lifecycle_state():
+    doc = _doc()
+    assert doc["decision"] is None
+    assert doc["score_history"] == []
+    assert doc["confirmation"] is None
+    assert doc["cancel"] is None
+    assert len(doc["timeline"]) == 1
+    event = OrderEvent.model_validate(doc["timeline"][0])
+    assert (event.type, event.at, event.actor) == ("created", NOW, "system")
+
+
 @pytest.mark.parametrize(
     ("result", "label"),
     [
@@ -102,3 +113,34 @@ def test_snapshot_row_is_flat_labelled_and_has_no_personal_data():
 def test_snapshot_row_drops_orders_without_a_buyer_label():
     assert snapshot_row(_doc()) is None
     assert snapshot_row(_delivered("carrier_issue")) is None
+
+
+def test_snapshot_row_excludes_lifecycle_outcomes_but_keeps_the_label():
+    doc = {
+        **_delivered("delivered"),
+        "status": "delivered",
+        "decision": {"action": "ship_now"},
+        "score_history": [{"probability": 0.9}],
+        "confirmation": {"at": NOW, "via": "link"},
+        "cancel": None,
+        "attempts": {"ai_call": 2},
+    }
+    row = snapshot_row(doc)
+    assert row["is_failed"] == 0
+    for field in (
+        "status",
+        "decision",
+        "score_history",
+        "timeline",
+        "confirmation",
+        "cancel",
+        "attempts",
+    ):
+        assert field not in row
+
+
+def test_snapshot_row_labels_a_buyer_cancellation_without_exposing_it():
+    doc = {**_doc(), "cancel": {"reason": "not_ordered", "at": NOW, "by": "buyer"}}
+    row = snapshot_row(doc)
+    assert row["is_failed"] == 1
+    assert "cancel" not in row

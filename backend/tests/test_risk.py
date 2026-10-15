@@ -10,6 +10,8 @@ from app.risk import artifacts, engine
 from app.risk.features import compute_features, has_house_number
 from app.risk.jobs import monitor
 from app.risk.jobs.train import train
+from app.risk.model import explain1, explainer1, top_signals
+from app.schemas.scoring import Signal
 from tests.risk_data import START, orders
 
 NOW = START + timedelta(days=200)
@@ -109,6 +111,13 @@ def test_candidate_must_beat_the_current_model(trained):
     assert report["promoted"] is False  # same data, same score: not better
 
 
+def test_a_model_with_other_columns_is_replaced_not_compared(trained):
+    docs, model, _, _ = trained
+    old = model | {"cols": [*model["cols"][:-1], "address_has_house_number"]}
+    _, report, _ = train(docs, NOW, old)
+    assert report["promoted"] is True and "current" not in report
+
+
 def test_engine_scores_with_the_latest_model(trained, tmp_path, monkeypatch):
     docs, model, report, _ = trained
     monkeypatch.setenv("MODEL_DIR", str(tmp_path))
@@ -124,6 +133,52 @@ def test_engine_scores_with_the_latest_model(trained, tmp_path, monkeypatch):
     assert fields["contact_action"] in {"none", "link", "call", "deposit", "hold"}
     scoring = fields["scoring"]
     assert scoring["expected_loss_vnd"] == pytest.approx(scoring["probability"] * 60_000, abs=4)
+    signals = [Signal.model_validate(s) for s in scoring["top_signals"]]
+    assert len(signals) == 5
+    sizes = [abs(s.contribution) for s in signals]
+    assert sizes == sorted(sizes, reverse=True) and sizes[0] > 0
+    assert all(
+        s.value == pytest.approx(scoring["features"][s.key], abs=1e-4)
+        for s in signals
+        if s.key in scoring["features"] and s.key != "channel"
+    )
+
+
+def test_the_house_number_signal_uses_the_api_key(trained):
+    _, model, _, table = trained
+    features = table[model["cols"]].iloc[0].to_dict() | {"address_missing_house_number": 1}
+    shap = explain1(model, explainer1(model), features)
+    signals = top_signals(features, shap["contributions"], top=len(model["cols"]))
+    (house,) = [s for s in signals if "house_number" in s["key"]]
+    assert (house["key"], house["value"]) == ("address_missing_house_number", 1)
+    assert house["contribution"] == shap["contributions"]["address_missing_house_number"]
+
+
+def test_shap_adds_up_to_the_change_from_the_average_order(trained):
+    _, model, _, table = trained
+    features = table[model["cols"]].iloc[0].to_dict()
+    shap = explain1(model, explainer1(model), features)
+    raw = model["clf"].predict_proba(table[model["cols"]].iloc[[0]])[0, 1]
+    assert shap["prediction"] == pytest.approx(raw, abs=1e-4)
+    assert shap["base_value"] + sum(shap["contributions"].values()) == pytest.approx(raw, abs=1e-3)
+    assert set(shap["contributions"]) == set(model["cols"])
+
+
+def test_an_explanation_error_never_blocks_scoring(trained, tmp_path, monkeypatch):
+    docs, model, _, _ = trained
+    monkeypatch.setenv("MODEL_DIR", str(tmp_path))
+    artifacts.write("latest/model1.pkl", pickle.dumps(model))
+    engine._cache.update(at=0.0, models=None)
+
+    def broken(*args):
+        raise RuntimeError("explainer unavailable")
+
+    monkeypatch.setattr(engine, "explain1", broken)
+    fields = engine.score(docs[0] | {"placed_at": NOW, "order_id": "new"}, [])
+    engine._cache.update(at=0.0, models=None)
+    assert 0 <= fields["scoring"]["probability"] <= 1
+    assert fields["scoring"]["shap"]["available"] is False
+    assert fields["scoring"]["top_signals"] == []
 
 
 def test_engine_without_a_model_leaves_the_order_unscored(tmp_path, monkeypatch):

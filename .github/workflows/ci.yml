@@ -16,6 +16,13 @@ concurrency:
 permissions:
   contents: read
 
+# Shared by the deploy jobs (main only).
+env:
+  GCP_PROJECT_ID: ai-codguard
+  GCP_REGION: asia-southeast1
+  GCP_WIF_PROVIDER: projects/186430269525/locations/global/workloadIdentityPools/github/providers/github-oidc
+  GCP_DEPLOYER_SA: codguard-deployer@ai-codguard.iam.gserviceaccount.com
+
 jobs:
   backend:
     name: Backend (lint, tests, API contract)
@@ -38,6 +45,44 @@ jobs:
         run: uv run ruff format --check .
       - name: Tests (includes API contract checks)
         run: uv run pytest -q
+
+  frontend:
+    name: Frontend (lint, types, tests, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6  # reads the version from packageManager in package.json
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: API client matches api/openapi.yaml
+        run: |
+          pnpm generate:api
+          if [ -n "$(git status --porcelain src/api/gen)" ]; then
+            git status --short src/api/gen
+            echo "::error::src/api/gen is out of date. Run 'pnpm generate:api' in frontend/ and commit the result."
+            exit 1
+          fi
+      - name: Lint
+        run: pnpm lint
+      - name: Format
+        run: pnpm format:check
+      - name: Type check
+        run: pnpm typecheck
+      - name: Tests
+        run: pnpm test
+      - name: Build
+        run: pnpm build
 
   image:
     name: Backend image (build, smoke test, publish on main)
@@ -85,6 +130,52 @@ jobs:
           docker push --all-tags "$IMAGE"
           echo "Published $IMAGE:sha-${GITHUB_SHA::7} and $IMAGE:main" >> "$GITHUB_STEP_SUMMARY"
 
+  web-image:
+    name: Frontend image (build, smoke test, publish on main)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}/frontend
+      PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha,format=short
+            type=raw,value=main,enable=${{ env.PUBLISH }}
+      - name: Build
+        uses: docker/build-push-action@v7
+        with:
+          context: frontend
+          load: true
+          push: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=frontend-image
+          cache-to: type=gha,scope=frontend-image,mode=max
+      - name: Smoke test
+        run: bash .github/scripts/smoke_test_web.sh "${{ env.IMAGE }}:sha-${GITHUB_SHA::7}"
+      - name: Log in to GHCR
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish
+        if: env.PUBLISH == 'true'
+        run: |
+          docker push --all-tags "$IMAGE"
+          echo "Published $IMAGE:sha-${GITHUB_SHA::7} and $IMAGE:main" >> "$GITHUB_STEP_SUMMARY"
+
   deploy:
     name: Deploy backend to Cloud Run (main only)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -96,14 +187,13 @@ jobs:
       packages: read
       id-token: write # Workload Identity Federation: no GCP key is stored in GitHub
     env:
-      GCP_PROJECT_ID: ai-codguard
-      GCP_REGION: asia-southeast1
-      GCP_WIF_PROVIDER: projects/186430269525/locations/global/workloadIdentityPools/github/providers/github-oidc
-      GCP_DEPLOYER_SA: codguard-deployer@ai-codguard.iam.gserviceaccount.com
       GCP_RUNTIME_SA: codguard-runtime@ai-codguard.iam.gserviceaccount.com
       GCP_TRAINER_SA: codguard-trainer@ai-codguard.iam.gserviceaccount.com
       SERVICE: codguard-api
       DATA_ENV: FIRESTORE_DATABASE=vn-synthetic,MODEL_BUCKET=ai-codguard-ml
+      # Gemini through Vertex AI as the runtime service account (no API key). This model is served
+      # only from the global location, not asia-southeast1.
+      GEMINI_ENV: GEMINI_MODEL=gemini-3.1-flash-lite,GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=ai-codguard,GOOGLE_CLOUD_LOCATION=global
       SOURCE_IMAGE: ghcr.io/${{ github.repository }}/backend
     steps:
       - name: Image names
@@ -132,7 +222,7 @@ jobs:
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --service-account "$GCP_RUNTIME_SA" --allow-unauthenticated \
             --port 8080 --cpu 1 --memory 512Mi --min-instances 0 --max-instances 2 \
-            --update-env-vars "$DATA_ENV" --remove-env-vars MODEL_URI \
+            --update-env-vars "$DATA_ENV,$GEMINI_ENV" --remove-env-vars MODEL_URI \
             --update-secrets "PHONE_HASH_KEY=phone-hash-key-synthetic:latest,INTAKE_API_KEYS=intake-api-keys:latest" --quiet
           URL=$(gcloud run services describe "$SERVICE" --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" --format 'value(status.url)')
@@ -157,6 +247,71 @@ jobs:
           echo "::error::$URL/health did not return ok"
           curl -sS -i "$URL/health" | head -20
           exit 1
+
+  deploy-web:
+    name: Deploy frontend to Cloud Run (main only)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # After the backend deploy, so the app never runs ahead of the API it calls.
+    needs: [frontend, web-image, deploy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+      id-token: write # Workload Identity Federation: no GCP key is stored in GitHub
+    env:
+      # nginx needs no Google API access: its service account has no roles.
+      GCP_WEB_SA: codguard-web@ai-codguard.iam.gserviceaccount.com
+      SERVICE: codguard-web
+      API_SERVICE: codguard-api
+      SOURCE_IMAGE: ghcr.io/${{ github.repository }}/frontend
+    steps:
+      - name: Image names
+        run: |
+          echo "TAG=sha-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          echo "TARGET_IMAGE=$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/codguard/frontend:sha-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: ${{ env.GCP_DEPLOYER_SA }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Copy the tested image to Artifact Registry
+        run: |
+          gcloud auth configure-docker "$GCP_REGION-docker.pkg.dev" --quiet
+          docker pull "$SOURCE_IMAGE:$TAG"
+          docker tag "$SOURCE_IMAGE:$TAG" "$TARGET_IMAGE"
+          docker push "$TARGET_IMAGE"
+      - name: Deploy
+        run: |
+          API_URL=$(gcloud run services describe "$API_SERVICE" --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" --format 'value(status.url)')
+          gcloud run deploy "$SERVICE" --image "$TARGET_IMAGE" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --service-account "$GCP_WEB_SA" --allow-unauthenticated \
+            --port 8080 --cpu 1 --memory 512Mi --min-instances 0 --max-instances 2 \
+            --set-env-vars "API_ORIGIN=$API_URL" --quiet
+          URL=$(gcloud run services describe "$SERVICE" --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" --format 'value(status.url)')
+          echo "URL=$URL" >> "$GITHUB_ENV"
+      - name: Check the deployed app
+        run: |
+          echo "Deployed \`$TAG\` to $URL" >> "$GITHUB_STEP_SUMMARY"
+          for _ in $(seq 1 10); do
+            curl -fsS "$URL/" | grep -q 'id="root"' && break
+            sleep 3
+          done
+          curl -fsS "$URL/" | grep -q 'id="root"' || { echo "::error::$URL/ did not return the app"; exit 1; }
+          # A request the backend answers itself: 401 problem+json, not an nginx error page.
+          result=$(curl -sS -o /dev/null -w '%{http_code} %{content_type}' "$URL/api/v1/me")
+          case "$result" in
+            "401 application/problem+json"*) ;;
+            *) echo "::error::$URL/api/v1/me returned '$result'; /api is not reaching $API_SERVICE"; exit 1 ;;
+          esac
 
   secrets:
     name: Secret scan (gitleaks)
@@ -192,7 +347,7 @@ jobs:
   ci-result:
     name: CI result
     if: always()
-    needs: [backend, image, deploy, secrets, privacy]
+    needs: [backend, frontend, image, web-image, deploy, deploy-web, secrets, privacy]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

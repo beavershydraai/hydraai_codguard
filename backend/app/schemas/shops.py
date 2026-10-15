@@ -17,7 +17,7 @@ class Me(ApiModel):
                 {
                     "user_id": "usr_01",
                     "email": "owner@example.com",
-                    "display_name": "Chủ shop",
+                    "display_name": "Shop owner",
                     "role": "owner",
                     "shop_id": "shp_01",
                 }
@@ -59,7 +59,7 @@ class Shop(ApiModel):
             "examples": [
                 {
                     "id": "shp_01",
-                    "name": "Shop Thời Trang Mẫu",
+                    "name": "Sample Fashion Shop",
                     "created_at": "2026-10-09T09:00:00+07:00",
                     "settings": {
                         "failed_delivery_cost_vnd": 60000,

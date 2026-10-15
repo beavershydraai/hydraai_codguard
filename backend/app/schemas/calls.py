@@ -45,7 +45,7 @@ class Call(ApiModel):
                     "cancel_reason": None,
                     "human_callback_requested": False,
                     "buyer_requests": None,
-                    "summary_vi": "Người mua nghe máy, xác nhận đơn và sửa số nhà từ 12 thành 15.",
+                    "summary_vi": "Buyer confirmed and changed the house number to 15.",
                 }
             ]
         }
