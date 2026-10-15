@@ -1,12 +1,13 @@
 """Endpoints used by the shop web app (bearer token from /auth/login)."""
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Path, Query, Security, UploadFile, status
 
 from app.api.errors import ApiError, NotImplementedYet, problem_example, problem_responses
 from app.api.security import CurrentUser, bearer_auth
+from app.calls.service import CallService, get_call_service
 from app.data.orders import to_utc
 from app.data.store import OrderStore, get_store
 from app.decision.inbox import InvalidCursor, order_page
@@ -240,8 +241,14 @@ async def override_order(order_id: OrderId, body: OverrideRequest) -> OrderDetai
     description="Contact protection still applies: 409 `contact_blocked` with "
     "`block_reasons` when the call is not allowed.",
 )
-async def start_call(order_id: OrderId) -> Call:
-    raise NotImplementedYet("start_call")
+def start_call(
+    order_id: OrderId,
+    user: CurrentUser,
+    calls: Annotated[CallService | None, Depends(get_call_service)],
+) -> Call:
+    if calls is None:  # CALL_JOBS_TOPIC unset: the frontend's mock simulates the call
+        raise NotImplementedYet("start_call")
+    return calls.start_for_shop(order_id, user.shop_id, user.email, datetime.now(UTC))
 
 
 # ---------------------------------------------------------------- calls
@@ -255,8 +262,14 @@ calls_router = APIRouter(prefix="/calls", tags=["calls"], dependencies=auth)
     responses=problem_responses(401, 404),
     summary="Call status and result (poll during a live call)",
 )
-async def get_call(call_id: Annotated[str, Path(examples=["call_01"])]) -> Call:
-    raise NotImplementedYet("get_call")
+def get_call(
+    call_id: Annotated[str, Path(examples=["call_01"])],
+    user: CurrentUser,
+    calls: Annotated[CallService | None, Depends(get_call_service)],
+) -> Call:
+    if calls is None:
+        raise NotImplementedYet("get_call")
+    return calls.get_for_shop(call_id, user.shop_id, datetime.now(UTC))
 
 
 # ---------------------------------------------------------------- delivery outcomes

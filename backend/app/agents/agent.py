@@ -16,10 +16,12 @@ overriding `_run_async_impl`) is silently ignored by this version.
 """
 
 import json
+import logging
 from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from google.adk import Event, Workflow
 from google.adk.workflow import DEFAULT_ROUTE, RetryConfig, node
@@ -37,6 +39,10 @@ from app.schemas.orders import OrderUpdate
 from app.schemas.scoring import Decision
 from app.schemas.shops import Policy, ShopSettings
 
+if TYPE_CHECKING:
+    from app.calls.service import CallService
+
+log = logging.getLogger(__name__)
 ON_NEW_ORDER = "cod_guard_on_new_order"
 ON_CONTACT_EVENT = "cod_guard_on_contact_event"
 # Branches that are not a Baseline A action. Everything else reaches DEFAULT_ROUTE, which
@@ -60,6 +66,7 @@ class Pipeline:
     settings: ShopSettings | None = None
     policy: Policy | None = None
     now: datetime | None = None
+    calls: "CallService | None" = None  # places real AI calls (E5); None keeps them simulated
 
 
 @dataclass
@@ -275,7 +282,22 @@ def call_buyer(node_input: dict) -> dict:
         lifecycle.record_call_attempt(
             pipe.store, node_input["order_id"], result["attempt"], result["sent_at"]
         )
+        result |= _place_call(pipe, node_input, result["attempt"], result["sent_at"])
     return result
+
+
+def _place_call(pipe: Pipeline, doc: dict, attempt: int, now: datetime) -> dict:
+    """Hand the claimed attempt to the call controller. Simulated orders (`SIM-`/`SIMAI-`, the
+    demo simulator) and an instance without calls configured keep the call simulated. A failure
+    to place the call is logged and leaves the order waiting for its no-response timer: nothing
+    reaches the buyer on an error."""
+    if pipe.calls is None or str(doc.get("external_id") or "").startswith("SIM"):
+        return {}
+    try:
+        return pipe.calls.start_for_pipeline(doc["order_id"], attempt, now)
+    except Exception:
+        log.exception("Could not place AI call %s for %s", attempt, doc["order_id"])
+        return {}
 
 
 def request_deposit(node_input: dict) -> dict:

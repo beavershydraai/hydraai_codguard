@@ -6,7 +6,8 @@ What exists so far:
 
 - The contract: `api/openapi.yaml`, tag `internal`, and the `call-job` webhook.
 - One call with the `gemini_live` agent, in `backend/app/telephony/`: ARI client (`ari.py`), RTP for External Media (`rtp.py`, `audio.py`), the Live agent (`live.py`), the outcome checks (`outcome.py`) and the call runner (`call.py`). The dev tool `app.telephony.dial` drives them; see "Try a Gemini call from a softphone".
-- Not yet: the controller service (Pub/Sub, internal API, outbox), the `script` agent, recording, language switching.
+- The backend side, in `backend/app/calls/`: `POST /orders/{id}/calls` and the pipeline's `call_buyer` node create the call and publish its `CallJob`; `GET /calls/{id}` and the order page show its progress; the internal endpoints take the controller's status and result, and the result runs the rule set's L4 table on the order (see "Backend").
+- Not yet: the controller service on the VM (Pub/Sub consumer, outbox), the `script` agent, recording, language switching, batching several orders into one call.
 
 ## Why a controller
 
@@ -85,6 +86,19 @@ How a call ends decides the result. The controller sets `no_answer` and the `unc
 | Script or Live session broke | `failed` | `agent_error` |
 
 The backend marks a call `failed` (`controller_error`) when it stays `dialing` or `in_progress` for more than `max_duration_seconds` + 2 minutes, so a crashed controller never leaves a call open.
+
+## Backend
+
+`backend/app/calls/` creates calls and applies their results.
+
+- Two ways to start a call, sharing the same two attempts per order (claims `order_id:ai_call:1` and `:2` in `pipeline_claims`):
+  - the pipeline: when the engine decides `ai_call`, the `call_buyer` node claims the attempt and places it. Orders from the simulator (`SIM-`, `SIMAI-`) keep a simulated call, so the demo traffic never rings a phone;
+  - the shop: `POST /orders/{id}/calls` from the order page. A second click while a call runs returns that call.
+- Contact rules checked before a call: a confirmed order and an order whose two attempts are used are never called (409 `contact_blocked`). For the buyer's phone: contact hours (`CONTACT_HOURS`, 08:00–21:00 Vietnam time), at most one AI call per phone per 24 hours across shops (retries of the same order excepted), none for 30 days after `not_ordered`. These phone rules are skipped while `CALL_TARGET_OVERRIDE` sends every call to a test softphone. A call the pipeline wanted but a phone rule stopped is noted on the order, which then waits for its no-response timer.
+- The `CallJob` reads amounts and the order time in words (`app/calls/spoken.py`): `450000` → "bốn trăm năm mươi nghìn đồng", "chiều nay", "tối ngày 7 tháng 10". The shop name comes from the simulator's demo shops until shops have profiles (E7).
+- The call is stored in `calls/{call_id}` (docs/data-model.md), with a copy of the public `Call` on each order. The transcript stays in the call document.
+- A failed publish fails the call (`controller_error`) at once. A call the controller never claims within 10 minutes, or that stays `dialing` or `in_progress` past `ring_timeout_seconds` + `max_duration_seconds` + 2 minutes, fails with `controller_error` when it is next read; a late result from the controller still replaces it.
+- A `completed` result runs the pipeline's `on_contact_event` with a `call_outcome` event for each order: `confirmed` clears the order, `edited` applies the read-back changes (address, recipient, item variant or quantity, delivery note) and rescores, `cancelled` and `not_ordered` cancel it, `wrong_person` and `unclear` send it to review, `no_answer` leaves it for the no-response timer. A `failed` result only adds a timeline entry: nobody was reached.
 
 ## ARI
 
@@ -177,9 +191,11 @@ Backend:
 
 | Variable | Example | Meaning |
 |---|---|---|
-| `CALL_JOBS_TOPIC` | `projects/ai-codguard/topics/call-jobs` | Where jobs go |
+| `CALL_JOBS_TOPIC` | `projects/ai-codguard/topics/call-jobs` | Where jobs go. Unset: calls are not configured, the call endpoints answer 501 (the frontend's mock simulates the call) and the pipeline keeps simulated calls |
 | `CALL_ENV` | `demo` | `env` attribute on published jobs; `dev-<name>` on a developer's machine |
-| `CALL_TARGET_OVERRIDE` | `sip:6001` | Demo only: send every call to this target instead of the buyer's phone |
+| `CALL_TARGET_OVERRIDE` | `sip:6001` | Demo only: send every call to this target instead of the buyer's phone. The per-phone contact rules are skipped while it is set |
+| `CALL_AGENT`, `CALL_LANGUAGE` | `gemini_live`, `vi` | Agent and language of new calls (the defaults) |
+| `CONTACT_HOURS` | `08:00-21:00` | When a real buyer may be called, Vietnam time |
 | `INTERNAL_AUDIENCE` | the backend URL | Expected audience of controller tokens |
 | `CONTROLLER_SERVICE_ACCOUNTS` | `codguard-runtime@ai-codguard.iam.gserviceaccount.com` | Who may call the internal API |
 

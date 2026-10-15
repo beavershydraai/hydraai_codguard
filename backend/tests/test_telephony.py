@@ -25,10 +25,43 @@ JOB = CallJob.model_config["json_schema_extra"]["examples"][0]
         ("/api/v1/internal/calls/call_01/result", COMPLETED, "record_call_result"),
     ],
 )
-def test_internal_stubs_return_501(path: str, body: dict, operation: str) -> None:
+def test_internal_endpoints_need_a_controller_token(
+    path: str, body: dict, operation: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("INTERNAL_AUTH", raising=False)
+    monkeypatch.setenv("INTERNAL_AUDIENCE", "https://backend.example")
     response = client.post(path, json=body, headers={"Authorization": "Bearer test"})
+    assert response.status_code == 401
+    assert client.post(path, json=body).status_code == 401
+
+
+@pytest.mark.parametrize(
+    ("path", "body", "operation"),
+    [
+        (
+            "/api/v1/internal/calls/call_01/status",
+            {"status": "dialing", "at": "2026-10-13T10:15:08+07:00", "controller_id": "vm"},
+            "report_call_status",
+        ),
+        ("/api/v1/internal/calls/call_01/result", COMPLETED, "record_call_result"),
+    ],
+)
+def test_internal_endpoints_answer_501_until_calls_are_configured(
+    path: str, body: dict, operation: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("INTERNAL_AUTH", "off")
+    monkeypatch.delenv("K_SERVICE", raising=False)
+    monkeypatch.delenv("CALL_JOBS_TOPIC", raising=False)
+    response = client.post(path, json=body)
     assert response.status_code == 501
     assert operation in response.json()["detail"]
+
+
+def test_internal_auth_off_is_ignored_on_cloud_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("INTERNAL_AUTH", "off")
+    monkeypatch.setenv("K_SERVICE", "codguard-api")
+    path = "/api/v1/internal/calls/call_01/result"
+    assert client.post(path, json=COMPLETED).status_code == 401
 
 
 def _result(**changes: object) -> dict:

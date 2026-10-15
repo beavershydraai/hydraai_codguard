@@ -678,3 +678,56 @@ def apply_delivery(
         return doc
 
     return _transact(store, order_id, apply)
+
+
+def record_call(
+    store: OrderStore,
+    order_id: str,
+    call: dict,
+    now: datetime,
+    *,
+    event: tuple[str, str] | None = None,
+    actor: str = "system",
+) -> dict:
+    """Keep the order's copy of an AI call (E5) and its contact attempt, so the order page shows
+    the call's progress and result. `call` is the public `Call` as JSON. Recording the same call
+    again replaces the copy; the attempt counter only moves up."""
+
+    def apply(doc):
+        calls = [c for c in doc.get("calls", []) if c["id"] != call["id"]]
+        doc["calls"] = sorted([*calls, call], key=lambda c: (c["attempt"], c["queued_at"]))
+        contact = {
+            "id": f"ct_{call['id']}",
+            "channel": "ai_call",
+            "created_at": call["queued_at"],
+            "call_id": call["id"],
+            "link_expires_at": None,
+            "responded_at": call["ended_at"] if call.get("outcome") else None,
+            "result": call.get("outcome"),
+        }
+        contacts = doc.get("contacts", [])
+        index = next((i for i, c in enumerate(contacts) if c["id"] == contact["id"]), None)
+        if index is None:
+            contacts.append(contact)
+        else:
+            contacts[index] = contact
+        doc["contacts"] = contacts
+        attempts = doc.get("attempts") or {}
+        if call["attempt"] > attempts.get("ai_call", 0):
+            doc["attempts"] = attempts | {"ai_call": call["attempt"]}
+        if event:
+            _event(doc, event[0], now, event[1], actor)
+        doc["updated_at"] = now
+        return doc
+
+    return _transact(store, order_id, apply)
+
+
+def record_note(store: OrderStore, order_id: str, now: datetime, message: str) -> dict:
+    """A contact the engine chose but contact protection stopped, on the order's timeline."""
+
+    def apply(doc):
+        _event(doc, "contact_started", now, message)
+        return doc
+
+    return _transact(store, order_id, apply)
