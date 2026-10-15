@@ -309,7 +309,7 @@ export class MockDb {
     // A confirmed order is never contacted again.
     const chosen: DecisionAction = confirmed && policyAction !== 'hold_for_review' ? 'ship_now' : policyAction
     // Call automation "suggest": the engine's AI call waits in review until the shop confirms it.
-    // The mock leaves out the other automation rules (threshold, amounts, channels, hours).
+    // The mock leaves out the other automation rules (tier, amounts, channels, hours).
     const suggested = chosen === 'ai_call' && this.policy.automation?.mode === 'suggest'
     const action: DecisionAction = suggested ? 'hold_for_review' : chosen
     order.decision = {

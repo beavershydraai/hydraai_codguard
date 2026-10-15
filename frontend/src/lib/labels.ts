@@ -84,10 +84,9 @@ export const BLOCK_REASON_LABELS: Record<ContactBlockReason, string> = {
   batched: 'Batched with another order to the same phone within 15 minutes',
   attempts_exhausted: 'Both call attempts used',
   manual_approval: 'The shop confirms every AI call',
-  below_call_threshold: 'Risk score below the auto-call threshold',
+  below_auto_call_tier: 'Risk tier below the one the shop auto-calls from',
   cod_out_of_range: 'Amount outside the auto-call range',
   channel_not_automated: 'No automatic calls for this sales channel',
-  branch_not_automated: 'No automatic calls for this branch',
   outside_call_window: 'Outside the hours set for automatic calls',
 }
 

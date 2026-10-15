@@ -97,10 +97,9 @@ class ContactBlockReason(StrEnum):
     batched: batched into another order's contact within 15 minutes ·
     attempts_exhausted: both call attempts used ·
     manual_approval: the shop approves every AI call (call automation mode "suggest") ·
-    below_call_threshold: risk score below the shop's auto-call threshold ·
+    below_auto_call_tier: risk tier below the one the shop auto-calls from ·
     cod_out_of_range: amount to collect outside the shop's auto-call range ·
     channel_not_automated: the shop does not auto-call orders from this sales channel ·
-    branch_not_automated: the shop does not auto-call orders of this branch ·
     outside_call_window: outside the hours or days the shop allows automatic calls
     """
 
@@ -113,10 +112,9 @@ class ContactBlockReason(StrEnum):
     BATCHED = "batched"
     ATTEMPTS_EXHAUSTED = "attempts_exhausted"
     MANUAL_APPROVAL = "manual_approval"
-    BELOW_CALL_THRESHOLD = "below_call_threshold"
+    BELOW_AUTO_CALL_TIER = "below_auto_call_tier"
     COD_OUT_OF_RANGE = "cod_out_of_range"
     CHANNEL_NOT_AUTOMATED = "channel_not_automated"
-    BRANCH_NOT_AUTOMATED = "branch_not_automated"
     OUTSIDE_CALL_WINDOW = "outside_call_window"
 
 

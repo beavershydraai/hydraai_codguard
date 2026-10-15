@@ -121,10 +121,9 @@ class TierPolicy(ApiModel):
 
 _DEFAULT_AUTOMATION = {
     "mode": "auto",
-    "min_risk_score": None,
+    "min_tier": None,
     "cod_ranges": [],
     "channels": None,
-    "branches": None,
     "call_window": None,
     "max_attempts": 2,
     "retry_after_minutes": 30,
@@ -201,10 +200,9 @@ class CallAutomation(ApiModel):
             "examples": [
                 {
                     "mode": "auto",
-                    "min_risk_score": 60,
+                    "min_tier": "high",
                     "cod_ranges": [{"currency": "VND", "min_cod": 200000, "max_cod": 5000000}],
                     "channels": ["facebook", "tiktok", "zalo"],
-                    "branches": None,
                     "call_window": {
                         "start": "09:00",
                         "end": "20:00",
@@ -218,13 +216,10 @@ class CallAutomation(ApiModel):
     )
 
     mode: CallAutomationMode = CallAutomationMode.AUTO
-    min_risk_score: int | None = Field(
+    min_tier: RiskTier | None = Field(
         default=None,
-        ge=0,
-        le=100,
-        description="Auto-call orders scoring at least this (0-100): a ship-now or link decision "
-        "becomes an AI call when the call pays for itself, and an AI call below it is only "
-        "suggested. Null keeps the tier policy.",
+        description="Auto-call from this risk tier up; an AI call for a lower tier is only "
+        "suggested. Which tiers get a call at all is the tier policy's choice. Null: every tier.",
     )
     cod_ranges: list[CodRange] = Field(
         default_factory=list,
@@ -232,10 +227,6 @@ class CallAutomation(ApiModel):
     )
     channels: list[SalesChannel] | None = Field(
         default=None, description="Sales channels to auto-call. Null: all."
-    )
-    branches: list[str] | None = Field(
-        default=None,
-        description="Branch IDs to auto-call (config/branches.yaml). Null: all.",
     )
     call_window: CallWindow | None = Field(
         default=None, description="Null: whenever contact hours allow."
