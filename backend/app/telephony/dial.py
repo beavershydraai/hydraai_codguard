@@ -1,7 +1,10 @@
-"""Dev tool: have Asterisk call a softphone and talk to it with the gemini_live agent, on a
-built-in sample order. Prints the CallResult as JSON.
+"""Dev tool: have Asterisk call a softphone or a phone and talk to it with the gemini_live agent,
+on a built-in sample order. Prints the CallResult as JSON.
 
-    python -m app.telephony.dial 6001 [--language en]
+    python -m app.telephony.dial 6001 [--language en]       softphone on the Mesh (sip)
+    python -m app.telephony.dial +84XXXXXXXXX                phone, via the Twilio trunk (pstn)
+
+An address starting with `+` is a phone; it needs infra/asterisk/trunk-setup.sh on the VM.
 
 Needs ARI_URL, ARI_USER, ARI_PASSWORD and the Gemini Live variables (GOOGLE_CLOUD_PROJECT,
 GEMINI_LIVE_LOCATION, GEMINI_LIVE_MODEL). It registers its own ARI app, `codguard-dial`, so it
@@ -12,6 +15,7 @@ import argparse
 import asyncio
 import logging
 import os
+import re
 import sys
 from datetime import UTC, datetime
 
@@ -23,6 +27,7 @@ from app.telephony.ari import AriClient
 from app.telephony.call import CallRunner
 
 APP = "codguard-dial"
+E164 = re.compile(r"^\+[1-9][0-9]{7,14}$")
 
 # English spoken forms for the sample order; the Vietnamese ones come from the contract example.
 ENGLISH_SPOKEN = {
@@ -74,17 +79,24 @@ async def dial(job: CallJob) -> CallResult:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("address", help="softphone extension (sip), for example 6001")
+    parser.add_argument("address", help="softphone extension (sip), or a phone in E.164 (pstn)")
     parser.add_argument("--language", choices=[lang.value for lang in CallLanguage], default="vi")
-    parser.add_argument("--kind", choices=[kind.value for kind in CallTargetKind], default="sip")
+    parser.add_argument(
+        "--kind",
+        choices=[kind.value for kind in CallTargetKind],
+        help="default: pstn when the address starts with +, otherwise sip",
+    )
     args = parser.parse_args()
+    kind = CallTargetKind(args.kind or ("pstn" if args.address.startswith("+") else "sip"))
+    if kind == CallTargetKind.PSTN and not E164.match(args.address):
+        parser.error("a phone number must be in E.164 form, like +84XXXXXXXXX")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    job = sample_job(args.address, CallLanguage(args.language), CallTargetKind(args.kind))
+    job = sample_job(args.address, CallLanguage(args.language), kind)
     try:
         result = asyncio.run(dial(job))
     except (OSError, websockets.exceptions.InvalidStatus) as exc:
         sys.exit(f"Cannot reach ARI at {os.environ['ARI_URL']}: {exc}")
-    # Sample data only, so the transcript may go to the terminal.
+    # Sample data only, so the transcript may go to the terminal (not to a log).
     sys.stdout.write(result.model_dump_json(indent=2) + "\n")
 
 
