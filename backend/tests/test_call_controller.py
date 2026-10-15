@@ -13,7 +13,7 @@ from google.genai import types
 from app.schemas.enums import CallFailureReason, CallLanguage, CallOutcome
 from app.telephony import live
 from app.telephony.ari import AriError
-from app.telephony.audio import Framer, Resampler, swap16
+from app.telephony.audio import Downsampler, Framer, Resampler, pcm16_to_ulaw, ulaw_to_pcm16
 from app.telephony.call import CallRunner, endpoint_for
 from app.telephony.dial import sample_job
 from app.telephony.live import LiveAgent, Timing
@@ -30,26 +30,44 @@ def job(language=CallLanguage.VI):
 # Audio
 
 
-def test_swap16_round_trips():
-    pcm = struct.pack("<3h", 1, -2, 300)
-    assert swap16(pcm) == struct.pack(">3h", 1, -2, 300)
-    assert swap16(swap16(pcm)) == pcm
+def test_ulaw_known_codes_and_round_trip():
+    assert pcm16_to_ulaw(struct.pack("<3h", 0, 32767, -32768)) == bytes([0xFF, 0x80, 0x00])
+    assert ulaw_to_pcm16(bytes([0xFF, 0x7F])) == struct.pack("<2h", 0, 0)
+    x = np.linspace(-30000, 30000, 1001).astype("<i2")
+    back = np.frombuffer(ulaw_to_pcm16(pcm16_to_ulaw(x.tobytes())), "<i2").astype(float)
+    assert np.max(np.abs(back - x) / (np.abs(x) + 64)) < 0.07  # μ-law keeps relative error small
+
+
+def chunked(processor, pcm, sizes=(2, 954, 6, 1000, 2, 2838)):
+    pieces, offset = [], 0
+    for size in sizes:
+        pieces.append(processor.process(pcm[offset : offset + size]))
+        offset += size
+    pieces.append(processor.process(pcm[offset:]))
+    return b"".join(pieces)
+
+
+def tone(rate, hz, seconds=0.25, amplitude=10_000):
+    t = np.arange(int(rate * seconds)) / rate
+    return (np.sin(2 * np.pi * hz * t) * amplitude).astype("<i2").tobytes()
 
 
 def test_resampler_gives_the_same_output_in_chunks_as_in_one_go():
-    t = np.arange(2400) / 24_000
-    pcm = (np.sin(2 * np.pi * 440 * t) * 10_000).astype("<i2").tobytes()
-    whole = Resampler(24_000, 16_000).process(pcm)
-    chunked = Resampler(24_000, 16_000)
-    sizes = [2, 954, 6, 1000, 1, 2838]  # odd byte counts never happen; sample counts vary
-    pieces, offset = [], 0
-    for size in sizes:
-        size -= size % 2
-        pieces.append(chunked.process(pcm[offset : offset + size]))
-        offset += size
-    pieces.append(chunked.process(pcm[offset:]))
-    assert b"".join(pieces) == whole
-    assert abs(len(whole) // 2 - 1600) <= 1
+    pcm = tone(8_000, 440)
+    whole = Resampler(8_000, 16_000).process(pcm)
+    assert chunked(Resampler(8_000, 16_000), pcm) == whole
+    assert abs(len(whole) // 2 - 4000) <= 1
+
+
+def test_downsampler_keeps_speech_drops_what_would_alias_and_ignores_chunking():
+    def rms(pcm):
+        return float(np.sqrt(np.mean(np.frombuffer(pcm, "<i2")[50:].astype(float) ** 2)))
+
+    speech, hiss = tone(24_000, 1000), tone(24_000, 9000)
+    assert chunked(Downsampler(3), speech) == Downsampler(3).process(speech)
+    assert len(Downsampler(3).process(speech)) == len(speech) // 3
+    assert rms(Downsampler(3).process(speech)) > 6500  # amplitude 10 000: RMS about 7 071
+    assert rms(Downsampler(3).process(hiss)) < 100
 
 
 def test_framer_cuts_fixed_frames_and_keeps_the_rest():
@@ -75,7 +93,7 @@ def test_rtp_round_trip_skips_csrc_extension_and_padding():
     assert parse_rtp(b"\x00" * 12) is None
 
 
-async def test_rtp_endpoint_swaps_bytes_both_ways_and_answers_the_sender():
+async def test_rtp_endpoint_decodes_and_encodes_ulaw_and_answers_the_sender():
     heard = []
     endpoint = await RtpEndpoint.open(heard.append)
     asterisk = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -83,16 +101,15 @@ async def test_rtp_endpoint_swaps_bytes_both_ways_and_answers_the_sender():
     asterisk.setblocking(False)
     try:
         host, port = endpoint.local_address.split(":")
-        asterisk.sendto(build_rtp(118, 1, 0, 9, struct.pack(">2h", 1, -1)), (host, int(port)))
+        asterisk.sendto(build_rtp(0, 1, 0, 9, bytes([0xFF, 0x80])), (host, int(port)))
         await asyncio.sleep(0.05)
-        assert heard == [struct.pack("<2h", 1, -1)]
+        assert heard == [ulaw_to_pcm16(bytes([0xFF, 0x80]))]
 
-        endpoint.play(struct.pack("<320h", *range(320)))  # one 20 ms frame
+        frame = struct.pack("<160h", *range(0, 16_000, 100))  # one 20 ms frame at 8 kHz
+        endpoint.play(frame)
         loop = asyncio.get_running_loop()
         packet = await asyncio.wait_for(loop.sock_recv(asterisk, 2048), 1)
-        payload_type, payload = parse_rtp(packet)
-        assert payload_type == 118
-        assert payload == struct.pack(">320h", *range(320))
+        assert parse_rtp(packet) == (0, pcm16_to_ulaw(frame))
         assert packet[1] & 0x80  # marker on the first packet of a talk spurt
     finally:
         endpoint.close()
@@ -299,17 +316,17 @@ CONFIRM_CALL = (
 async def test_live_agent_confirms_and_hangs_up_after_the_closing_line():
     session, out = FakeSession(*CONFIRM_CALL), FakeOut()
     agent = LiveAgent(job(), session, out, FAST)
-    agent.caller_audio(b"\x00\x00" * 320)
+    agent.caller_audio(b"\x00\x00" * 160)  # 20 ms at 8 kHz
     report = await asyncio.wait_for(agent.run(), 2)
 
     assert report.end_reason == "closed"
     assert report.decision.outcome == CallOutcome.CONFIRMED
     assert report.buyer_spoke
     assert session.events[0] == "[CALL_CONNECTED]"
-    assert session.audio_in == 640
+    assert abs(session.audio_in - 640) <= 2  # upsampled to 16 kHz; the last sample waits
     response = session.tool_responses[0]
     assert response.id == "c1" and response.response["status"] == "ok"
-    assert len(out.played) == 2 * 640  # two 480-sample model chunks, at 16 kHz
+    assert len(out.played) == 2 * 320  # two 480-sample model chunks at 24 kHz, now at 8 kHz
     assert [t.speaker for t in report.transcript] == ["agent", "buyer", "agent"]
 
 
@@ -372,7 +389,7 @@ class FakeAri:
     async def hangup(self, channel_id):
         self.calls.append(("hangup", channel_id))
 
-    async def external_media(self, channel_id, external_host, audio_format="slin16"):
+    async def external_media(self, channel_id, external_host, audio_format="ulaw"):
         self.calls.append(("external_media", channel_id, audio_format))
 
     async def create_bridge(self, bridge_id):

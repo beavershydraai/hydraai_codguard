@@ -21,15 +21,16 @@ from google.genai import types
 
 from app.schemas.enums import CallLanguage
 from app.schemas.telephony import CallJob, TranscriptTurn
-from app.telephony.audio import SAMPLE_RATE, Resampler
+from app.telephony.audio import PHONE_RATE, Downsampler, Resampler
 from app.telephony.outcome import Decision, OutcomeError, closing_instruction, validate_outcome
 
 log = logging.getLogger(__name__)
 
 PROMPTS = Path(__file__).resolve().parents[2] / "voice" / "prompts"
 LANGUAGES = {CallLanguage.VI: "VIETNAMESE", CallLanguage.EN: "ENGLISH"}
-MODEL_RATE = 24_000
-INPUT_MIME = f"audio/pcm;rate={SAMPLE_RATE}"
+MODEL_IN_RATE = 16_000
+MODEL_OUT_RATE = 24_000
+INPUT_MIME = f"audio/pcm;rate={MODEL_IN_RATE}"
 MAX_TURN_TEXT = 2000
 
 
@@ -130,8 +131,8 @@ class AgentReport:
 class LiveAgent:
     """Bridges the caller's audio and the Live session until the call should end.
 
-    Feed caller audio (16 kHz little-endian PCM) with `caller_audio`, keys with `dtmf`, and call
-    `stop` when the line drops. `run` returns once the call is over.
+    Feed caller audio (8 kHz 16-bit little-endian PCM) with `caller_audio`, keys with `dtmf`,
+    and call `stop` when the line drops. `run` returns once the call is over.
     """
 
     def __init__(
@@ -148,7 +149,8 @@ class LiveAgent:
         self._timing = timing or Timing()
         self._clock = clock
         self._inbound: asyncio.Queue[bytes] = asyncio.Queue(maxsize=250)  # 5 s of audio
-        self._resampler = Resampler(MODEL_RATE, SAMPLE_RATE)
+        self._upsampler = Resampler(PHONE_RATE, MODEL_IN_RATE)
+        self._downsampler = Downsampler(MODEL_OUT_RATE // PHONE_RATE)
         self._done = asyncio.Event()
         self._started = clock()
         self._accepted: list[tuple[str, Decision]] = []
@@ -231,7 +233,7 @@ class LiveAgent:
             while True:
                 chunk = await self._inbound.get()
                 await self._session.send_realtime_input(
-                    audio=types.Blob(data=chunk, mime_type=INPUT_MIME)
+                    audio=types.Blob(data=self._upsampler.process(chunk), mime_type=INPUT_MIME)
                 )
         except asyncio.CancelledError:
             raise
@@ -261,7 +263,7 @@ class LiveAgent:
                 self._model_turn_ended = None
                 for part in content.model_turn.parts:
                     if part.inline_data and part.inline_data.data:
-                        self._out.play(self._resampler.process(part.inline_data.data))
+                        self._out.play(self._downsampler.process(part.inline_data.data))
                         self._spoke_since_decision = True
             if content.input_transcription and content.input_transcription.text:
                 self._heard_buyer()

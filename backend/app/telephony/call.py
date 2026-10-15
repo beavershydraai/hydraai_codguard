@@ -25,6 +25,7 @@ log = logging.getLogger(__name__)
 # Q.850 hang-up causes before the answer. Anything else also counts as no answer.
 UNREACHABLE_CAUSES = {3, 20}  # no route; subscriber absent (softphone not registered)
 ANSWER_GRACE_S = 15  # beyond ring_timeout_seconds, before giving up on events
+MEDIA_JOIN_TRIES = 30  # 3 s
 
 SessionFactory = Callable[[CallJob], AbstractAsyncContextManager[Any]]
 
@@ -131,9 +132,14 @@ class CallRunner:
     async def _converse(self) -> AgentReport:
         rtp = await RtpEndpoint.open(self._caller_audio)
         try:
-            await self._ari.external_media(self._media_id, rtp.local_address)
+            media = await self._ari.external_media(self._media_id, rtp.local_address)
+            variables = (media or {}).get("channelvars") or {}
+            host = variables.get("UNICASTRTP_LOCAL_ADDRESS")
+            port = variables.get("UNICASTRTP_LOCAL_PORT")
+            if host and port:
+                rtp.set_remote(host, int(port))
             await self._ari.create_bridge(self._bridge_id)
-            await self._ari.add_channels(self._bridge_id, self.channel_id, self._media_id)
+            await self._join_bridge()
             async with self._connect(self.job) as session:
                 agent = LiveAgent(self.job, session, rtp, self._timing)
                 self._agent = agent
@@ -146,6 +152,18 @@ class CallRunner:
             self._agent = None
             rtp.close()
             log.info("rtp packets in %s, out %s", rtp.packets_in, rtp.packets_out)
+
+    async def _join_bridge(self) -> None:
+        # The External Media channel enters the app a moment after it is created; until then
+        # ARI answers 422 "Channel not in Stasis application".
+        for attempt in range(MEDIA_JOIN_TRIES):
+            try:
+                await self._ari.add_channels(self._bridge_id, self.channel_id, self._media_id)
+                return
+            except AriError as exc:
+                if exc.status != 422 or attempt == MEDIA_JOIN_TRIES - 1:
+                    raise
+                await asyncio.sleep(0.1)
 
     def _caller_audio(self, pcm: bytes) -> None:
         if self._agent:

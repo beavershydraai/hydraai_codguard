@@ -1,5 +1,5 @@
 """RTP for the External Media channel: Asterisk sends the caller's audio here, and we send the
-agent's audio back, both as 16 kHz L16 in 20 ms packets."""
+agent's audio back, both as 8 kHz G.711 μ-law in 20 ms packets."""
 
 import asyncio
 import logging
@@ -9,12 +9,17 @@ import time
 from collections import deque
 from collections.abc import Callable
 
-from app.telephony.audio import FRAME_BYTES, FRAME_MS, Framer, swap16
+from app.telephony.audio import (
+    FRAME_MS,
+    PHONE_FRAME_SAMPLES,
+    Framer,
+    pcm16_to_ulaw,
+    ulaw_to_pcm16,
+)
 
 log = logging.getLogger(__name__)
 
-SAMPLES_PER_FRAME = FRAME_BYTES // 2
-DEFAULT_PAYLOAD_TYPE = 118  # Asterisk's dynamic payload type for slin16
+PCMU = 0  # static RTP payload type of G.711 μ-law
 
 
 def parse_rtp(packet: bytes) -> tuple[int, bytes] | None:
@@ -46,14 +51,15 @@ def build_rtp(
 
 
 class RtpEndpoint(asyncio.DatagramProtocol):
-    """One UDP socket per call. Incoming payloads go to `on_audio` as little-endian PCM;
-    `play()` queues little-endian PCM that a paced sender writes out every 20 ms."""
+    """One UDP socket per call. Incoming μ-law goes to `on_audio` as 8 kHz 16-bit little-endian
+    PCM; `play()` queues PCM in the same format, which a paced sender encodes and writes out
+    every 20 ms."""
 
     def __init__(self, on_audio: Callable[[bytes], None]) -> None:
         self._on_audio = on_audio
         self._transport: asyncio.DatagramTransport | None = None
         self._remote: tuple[str, int] | None = None
-        self._payload_type = DEFAULT_PAYLOAD_TYPE
+        self._payload_type = PCMU
         self._framer = Framer()
         self._queue: deque[bytes] = deque()
         self._seq = int.from_bytes(os.urandom(2))
@@ -94,7 +100,12 @@ class RtpEndpoint(asyncio.DatagramProtocol):
         self._payload_type = payload_type
         self.packets_in += 1
         if payload:
-            self._on_audio(swap16(payload))
+            self._on_audio(ulaw_to_pcm16(payload))
+
+    def set_remote(self, host: str, port: int) -> None:
+        """Where Asterisk listens (UNICASTRTP_LOCAL_* of the External Media channel), so the
+        agent can speak first, before any audio has come in."""
+        self._remote = (host, port)
 
     def play(self, pcm: bytes) -> None:
         self._queue.extend(self._framer.push(pcm))
@@ -126,7 +137,7 @@ class RtpEndpoint(asyncio.DatagramProtocol):
                     self._seq,
                     self._timestamp,
                     self._ssrc,
-                    swap16(frame),
+                    pcm16_to_ulaw(frame),
                     marker=not self._talking,
                 )
                 self._transport.sendto(packet, self._remote)
@@ -136,7 +147,7 @@ class RtpEndpoint(asyncio.DatagramProtocol):
             else:
                 self._talking = False
             # The timestamp advances in silence too, so the receiver sees real time.
-            self._timestamp += SAMPLES_PER_FRAME
+            self._timestamp += PHONE_FRAME_SAMPLES
             delay = next_at - time.monotonic()
             if delay < -0.2:  # fell far behind (paused loop): resync instead of bursting
                 next_at = time.monotonic()

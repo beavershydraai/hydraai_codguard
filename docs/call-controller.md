@@ -127,7 +127,7 @@ The backend marks a call `failed` (`controller_error`) when it stays `dialing` o
 
 - Model, session config, instruction, tool and events exactly as in [gemini-live.md](gemini-live.md): `render_instruction`, `live_config`, `[CALL_CONNECTED]`, `[NO_RESPONSE]`, `[TIME_UP]`, `record_call_outcome`.
 - The order context is the job minus what the model must not see: drop `orders[].order_id`, the `_vnd` amounts, `call_id`, `target` and everything about routing. Keep `shop_name`, `buyer`, `orders[]` and `total_cod_amount_spoken`.
-- Audio: on answer, the controller creates an External Media channel (`format=slin16`, `encapsulation=rtp`, `transport=udp`, `external_host=127.0.0.1:<port>`) and bridges it with the caller. Caller audio arrives as 16 kHz PCM, which `send_realtime_input` takes as is. Model audio is 24 kHz: resample it to 16 kHz with a stateful resampler and send it back in 20 ms RTP frames. On `interrupted`, drop the queued audio.
+- Audio: on answer, the controller creates an External Media channel (`format=ulaw`, `encapsulation=rtp`, `transport=udp`, `external_host=127.0.0.1:<port>`), sends to the address in its `UNICASTRTP_LOCAL_*` variables so the agent can speak first, and bridges it with the caller. Caller audio arrives as 8 kHz μ-law: decode it and upsample to the 16 kHz PCM that `send_realtime_input` takes. Model audio is 24 kHz: low-pass filter it, keep every third sample, encode it as μ-law and send it back in 20 ms RTP frames. On `interrupted`, drop the queued audio. Not `slin16`: Asterisk 20.6 sends slin16 to the application but drops what the application sends back (checked against a local Asterisk); μ-law is what the phone leg carries anyway.
 - Keys pressed during a Gemini call are sent as `[DTMF:<digit>]` with `send_client_content`. The instruction does not know this event yet (open question 2).
 - Mapping the tool call to the result: `order_ref` → `order_id` through the job, the uppercase outcome → the lowercase `CallOutcome`, `summary` → `summary_vi`.
 
@@ -209,7 +209,7 @@ sudo docker run --rm --network host --env-file /etc/codguard/controller.env \
 - `infra/asterisk/dev-setup.sh` turns on ARI and writes `/etc/codguard/controller.env`: `ARI_URL`, `ARI_USER`, `ARI_PASSWORD` and the Gemini Live variables.
 - Every deploy from `main` also tags the image `main` in Artifact Registry. Pull it once with `sudo gcloud auth configure-docker asia-southeast1-docker.pkg.dev`, then `sudo docker pull …/backend:main` to update. The VM pulls as `codguard-runtime`, which needs reader on the repository (one-time setup).
 - Answer, talk, and press keys: keys reach the model as `[DTMF:<digit>]`. The call ends after the agent's closing line, when you hang up, after two silences of 8 s, or at `max_duration_seconds`.
-- The log shows ringing, answer, RTP packet counts and the token count, never the transcript. If the call connects but you hear noise instead of speech, the byte order of the RTP payload is wrong (`swap16` in `rtp.py`).
+- The log shows ringing, answer, RTP packet counts and the token count, never the transcript. `rtp packets in 0` means Asterisk sent no caller audio; `out 0` means the model never spoke.
 
 ### The controller service (planned)
 

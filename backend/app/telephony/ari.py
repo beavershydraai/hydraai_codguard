@@ -95,7 +95,7 @@ class AriClient:
         )
 
     async def external_media(
-        self, channel_id: str, external_host: str, audio_format: str = "slin16"
+        self, channel_id: str, external_host: str, audio_format: str = "ulaw"
     ) -> dict:
         return await self._request(
             "POST",
