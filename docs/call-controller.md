@@ -211,12 +211,37 @@ sudo docker run --rm --network host --env-file /etc/codguard/controller.env \
 - Answer, talk, and press keys: keys reach the model as `[DTMF:<digit>]`. The call ends after the agent's closing line, when you hang up, after two silences of 8 s, or at `max_duration_seconds`.
 - The log shows ringing, answer, RTP packet counts and the token count, never the transcript. `rtp packets in 0` means Asterisk sent no caller audio; `out 0` means the model never spoke.
 
-### The controller service (planned)
+### The controller service
 
-- On the VM, Docker Compose runs `asterisk` and `controller`, both with host networking. The controller uses the backend image from Artifact Registry. Update it with `docker compose pull controller && docker compose up -d controller`. CI does not deploy to the VM yet.
-- Daily testing needs no local setup: register a softphone on the VM over Mesh and start calls from the deployed backend, with `CALL_TARGET_OVERRIDE=sip:<your extension>`.
-- To work on the controller itself: run the backend locally with `CALL_ENV=dev-<name>` and `INTERNAL_AUTH=off`, and the controller against `call-jobs-dev-<name>`. Use Asterisk in Docker on your machine, or the VM's ARI through an SSH tunnel.
-- Unit tests use a fake ARI client and fake Live session. CI never needs Asterisk.
+`python -m app.telephony.controller` (`backend/app/telephony/controller.py`) runs on the VM next to Asterisk, from the backend image:
+
+- It pulls one job at a time from `CALL_JOBS_SUBSCRIPTION` over the Pub/Sub REST API, claims the call (`dialing`), acks, places the call as ARI app `codguard` with `CallRunner`, reports `in_progress` on the answer and posts the `CallResult`.
+- 409 on the claim: the call is cancelled, finished or claimed elsewhere, so the job is acked and dropped. Any other failure: the message is nacked and Pub/Sub redelivers it.
+- The result is written to `OUTBOX_DIR` (`/var/lib/codguard/outbox`, the volume `codguard-outbox`) before it is posted, retried with backoff, and posted again at the start of every loop until the backend answers 2xx or 409.
+- Auth: an ID token of the VM's service account from the metadata server, audience `BACKEND_URL`, cached for 55 minutes. `ID_TOKEN=off` sends none, for a local backend with `INTERNAL_AUTH=off`.
+- The log shows claims, ringing, the answer and delivery, never the transcript.
+
+On the VM, from `infra/asterisk/` (after `dev-setup.sh` wrote `/etc/codguard/controller.env`):
+
+```bash
+sudo docker compose pull controller && sudo docker compose up -d controller   # start or update
+sudo docker logs -f codguard-controller
+```
+
+Without the Compose plugin:
+
+```bash
+sudo docker run -d --name codguard-controller --network host --restart unless-stopped \
+  --env-file /etc/codguard/controller.env \
+  -e CALL_JOBS_SUBSCRIPTION=projects/ai-codguard/subscriptions/call-jobs-vm \
+  -e BACKEND_URL=https://codguard-api-186430269525.asia-southeast1.run.app \
+  -v codguard-outbox:/var/lib/codguard/outbox \
+  asia-southeast1-docker.pkg.dev/ai-codguard/codguard/backend:main python -m app.telephony.controller
+```
+
+- Daily testing needs no local setup: register a softphone on the VM over Mesh and start calls from the deployed backend, which sends every call to `CALL_TARGET_OVERRIDE` (`sip:6001`).
+- To work on the controller itself: run the backend locally with `CALL_ENV=dev-<name>` and `INTERNAL_AUTH=off`, and the controller against `call-jobs-dev-<name>` with `ID_TOKEN=off`. Use Asterisk in Docker on your machine, or the VM's ARI through an SSH tunnel.
+- Unit tests use a fake ARI client, a fake Live session, and fake Pub/Sub and backend (`tests/test_controller_service.py`). CI never needs Asterisk. CI does not deploy to the VM: pull the new image after a merge.
 
 ## One-time setup
 
