@@ -26,7 +26,9 @@ import {
   login,
   type Options,
   overrideOrder,
+  recordCallResult,
   recordDeliveryOutcomes,
+  reportCallStatus,
   resetDemo,
   respondConfirmation,
   runSpamSimulation,
@@ -84,9 +86,15 @@ import type {
   OverrideOrderData,
   OverrideOrderError,
   OverrideOrderResponse,
+  RecordCallResultData,
+  RecordCallResultError,
+  RecordCallResultResponse,
   RecordDeliveryOutcomesData,
   RecordDeliveryOutcomesError,
   RecordDeliveryOutcomesResponse,
+  ReportCallStatusData,
+  ReportCallStatusError,
+  ReportCallStatusResponse,
   ResetDemoData,
   ResetDemoError,
   ResetDemoResponse,
@@ -772,6 +780,56 @@ export const runSpamSimulationMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await runSpamSimulation({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      })
+      return data
+    },
+  }
+  return mutationOptions
+}
+
+/**
+ * Report call progress; `dialing` claims the call
+ *
+ * `dialing` is accepted only for a `queued` call, or again from the controller that already claimed it. `in_progress` is accepted only from that controller. Otherwise 409 `call_not_active`: the call was cancelled, finished or claimed elsewhere, so the controller acks the job and does not dial.
+ */
+export const reportCallStatusMutation = (
+  options?: Partial<Options<ReportCallStatusData>>,
+): UseMutationOptions<ReportCallStatusResponse, ReportCallStatusError, Options<ReportCallStatusData>> => {
+  const mutationOptions: UseMutationOptions<
+    ReportCallStatusResponse,
+    ReportCallStatusError,
+    Options<ReportCallStatusData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await reportCallStatus({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      })
+      return data
+    },
+  }
+  return mutationOptions
+}
+
+/**
+ * Record the final result of a call
+ *
+ * Idempotent: repeating the same result returns the call again; a different result for a finished call is 409 `conflict`. A completed result updates the orders (an `edited` outcome applies the changes and triggers a rescore).
+ */
+export const recordCallResultMutation = (
+  options?: Partial<Options<RecordCallResultData>>,
+): UseMutationOptions<RecordCallResultResponse, RecordCallResultError, Options<RecordCallResultData>> => {
+  const mutationOptions: UseMutationOptions<
+    RecordCallResultResponse,
+    RecordCallResultError,
+    Options<RecordCallResultData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await recordCallResult({
         ...options,
         ...fnOptions,
         throwOnError: true,

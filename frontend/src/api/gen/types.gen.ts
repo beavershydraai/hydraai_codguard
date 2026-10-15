@@ -4,6 +4,8 @@ export type ClientOptions = {
   baseUrl: 'http://localhost:8080' | (string & {})
 }
 
+export type Webhooks = CallJobWebhookRequest
+
 /**
  * ActionCount
  */
@@ -278,6 +280,34 @@ export type Call = {
 }
 
 /**
+ * CallAgent
+ *
+ * Who speaks for the shop on a call.
+ *
+ * script: Kịch bản (pre-recorded prompts and TTS; keypad first, speech as fallback) ·
+ * gemini_live: Gemini Live (free conversation)
+ */
+export type CallAgent = 'script' | 'gemini_live'
+
+/**
+ * CallBuyer
+ */
+export type CallBuyer = {
+  /**
+   * Full Name
+   *
+   * Name on the order, for the identity check.
+   */
+  full_name: string
+  /**
+   * Salutation
+   *
+   * "anh" or "chị" when the shop knows it; empty means "quý khách".
+   */
+  salutation?: 'anh' | 'chị' | ''
+}
+
+/**
  * CallChange
  *
  * A change the buyer confirmed during the read-back.
@@ -309,6 +339,186 @@ export type CallChangeField =
   'delivery_address' | 'recipient_name' | 'item_variant' | 'item_quantity' | 'delivery_note' | 'cancel_order'
 
 /**
+ * CallFailureReason
+ *
+ * Why a call failed technically. A call that rang without an answer is not a failure:
+ * it completes with outcome no_answer.
+ *
+ * target_unreachable: the softphone or browser is not registered, or the trunk refused ·
+ * asterisk_unavailable: the controller could not reach Asterisk (ARI) ·
+ * agent_error: the script or the Gemini Live session failed ·
+ * controller_error: any other error in the call controller
+ */
+export type CallFailureReason =
+  'target_unreachable' | 'asterisk_unavailable' | 'agent_error' | 'controller_error'
+
+/**
+ * CallInputMethod
+ *
+ * How the buyer gave the answer that decided the outcome.
+ *
+ * dtmf: keypad · voice: speech · none: no answer
+ */
+export type CallInputMethod = 'dtmf' | 'voice' | 'none'
+
+/**
+ * CallItem
+ */
+export type CallItem = {
+  /**
+   * Name
+   */
+  name: string
+  /**
+   * Variant
+   */
+  variant?: string
+  /**
+   * Quantity
+   */
+  quantity: number
+}
+
+/**
+ * CallJob
+ *
+ * Message on the Pub/Sub topic `call-jobs`: one per call attempt.
+ *
+ * Attributes on the message: `env`, `call_id`, `target_kind`, `agent`. Subscriptions filter on
+ * `env`. The controller claims the job with `report_call_status` (dialing) before it acks.
+ */
+export type CallJob = {
+  /**
+   * Call Id
+   */
+  call_id: string
+  /**
+   * Attempt
+   */
+  attempt: number
+  /**
+   * Env
+   *
+   * Which controller takes the job: `demo` for the VM, `dev-<name>` for a developer's own controller.
+   */
+  env: string
+  target: CallTarget
+  agent: CallAgent
+  language: CallLanguage
+  /**
+   * Script
+   *
+   * Script ID when agent is script (backend/voice/scripts/).
+   */
+  script?: string
+  /**
+   * Shop Name
+   */
+  shop_name: string
+  buyer: CallBuyer
+  /**
+   * Orders
+   *
+   * Orders to the same phone within 15 minutes share one call.
+   */
+  orders: Array<CallOrder>
+  /**
+   * Total Cod Amount Vnd
+   *
+   * Amount in VND (integer, no decimals).
+   */
+  total_cod_amount_vnd: number
+  /**
+   * Total Cod Amount Spoken
+   */
+  total_cod_amount_spoken: string
+  /**
+   * Ring Timeout Seconds
+   */
+  ring_timeout_seconds?: number
+  /**
+   * Max Duration Seconds
+   */
+  max_duration_seconds?: number
+  /**
+   * Created At
+   */
+  created_at: string
+}
+
+/**
+ * CallLanguage
+ *
+ * Language of a call. vi: Tiếng Việt · en: Tiếng Anh
+ */
+export type CallLanguage = 'vi' | 'en'
+
+/**
+ * CallOrder
+ *
+ * One order on the call. `order_id` and the `_vnd` amounts are for the controller only and
+ * never go into the Gemini instruction; the `_spoken` fields are read out word for word.
+ */
+export type CallOrder = {
+  /**
+   * Order Id
+   *
+   * Internal ID. Used to map changes back; never spoken.
+   */
+  order_id: string
+  /**
+   * Ref
+   *
+   * Short code the buyer can recognise.
+   */
+  ref: string
+  /**
+   * Placed At Spoken
+   */
+  placed_at_spoken: string
+  /**
+   * Items
+   */
+  items: Array<CallItem>
+  /**
+   * Cod Amount Vnd
+   *
+   * Amount still to collect.
+   */
+  cod_amount_vnd: number
+  /**
+   * Cod Amount Spoken
+   */
+  cod_amount_spoken: string
+  /**
+   * Deposit Paid Vnd
+   *
+   * Amount in VND (integer, no decimals).
+   */
+  deposit_paid_vnd?: number
+  /**
+   * Deposit Paid Spoken
+   */
+  deposit_paid_spoken?: string
+  /**
+   * Recipient Name
+   */
+  recipient_name: string
+  /**
+   * Delivery Address
+   */
+  delivery_address: string
+  /**
+   * Is Gift
+   */
+  is_gift?: boolean
+  /**
+   * Expected Delivery Spoken
+   */
+  expected_delivery_spoken?: string
+}
+
+/**
  * CallOutcome
  *
  * Exactly one result per completed call (the voice tool's uppercase values map 1:1).
@@ -320,11 +530,140 @@ export type CallOutcome =
   'confirmed' | 'edited' | 'cancelled' | 'not_ordered' | 'no_answer' | 'wrong_person' | 'unclear'
 
 /**
+ * CallResult
+ *
+ * Final result of a call, sent exactly once per call (repeats must be identical).
+ *
+ * The controller, not the model, sets `no_answer` and the `unclear` fallback.
+ */
+export type CallResult = {
+  /**
+   * Status
+   */
+  status: 'completed' | 'failed'
+  /**
+   * Required when completed.
+   */
+  outcome?: CallOutcome | null
+  /**
+   * Required when failed.
+   */
+  failure_reason?: CallFailureReason | null
+  /**
+   * Controller Id
+   *
+   * Which controller sent this. Set from CONTROLLER_ID.
+   */
+  controller_id: string
+  agent: CallAgent
+  /**
+   * Language at the end, after any switch.
+   */
+  language: CallLanguage
+  input_method: CallInputMethod
+  /**
+   * Dial Started At
+   */
+  dial_started_at: string
+  /**
+   * Answered At
+   */
+  answered_at?: string | null
+  /**
+   * Ended At
+   */
+  ended_at: string
+  /**
+   * Dtmf
+   *
+   * Keys pressed, in order.
+   */
+  dtmf?: string
+  /**
+   * Changes
+   */
+  changes?: Array<CallChange>
+  /**
+   * Cancel Reason
+   */
+  cancel_reason?: string | null
+  /**
+   * Human Callback Requested
+   */
+  human_callback_requested?: boolean
+  /**
+   * Buyer Requests
+   */
+  buyer_requests?: string | null
+  /**
+   * Summary Vi
+   */
+  summary_vi?: string | null
+  /**
+   * Transcript
+   *
+   * Personal data: store with the call, never log it.
+   */
+  transcript?: Array<TranscriptTurn>
+  /**
+   * Recording Uri
+   */
+  recording_uri?: string | null
+}
+
+/**
  * CallStatus
  *
  * Technical state of a call. queued · dialing · in_progress · completed · failed
  */
 export type CallStatus = 'queued' | 'dialing' | 'in_progress' | 'completed' | 'failed'
+
+/**
+ * CallStatusUpdate
+ *
+ * Progress of a call. `dialing` claims the call; `in_progress` means the buyer answered.
+ */
+export type CallStatusUpdate = {
+  /**
+   * Status
+   */
+  status: 'dialing' | 'in_progress'
+  /**
+   * At
+   */
+  at: string
+  /**
+   * Controller Id
+   *
+   * Which controller sent this. Set from CONTROLLER_ID.
+   */
+  controller_id: string
+}
+
+/**
+ * CallTarget
+ *
+ * Where the controller dials.
+ */
+export type CallTarget = {
+  kind: CallTargetKind
+  /**
+   * Address
+   *
+   * sip: extension. webrtc: browser session ID. pstn: E.164 number.
+   */
+  address: string
+}
+
+/**
+ * CallTargetKind
+ *
+ * Where the call controller dials.
+ *
+ * sip: a softphone extension on Asterisk · webrtc: a browser tab registered on Asterisk ·
+ * pstn: a real phone through the SIP trunk (after M4)
+ */
+export type CallTargetKind = 'sip' | 'webrtc' | 'pstn'
 
 /**
  * Carrier
@@ -618,6 +957,7 @@ export type ErrorCode =
   | 'forbidden'
   | 'not_found'
   | 'conflict'
+  | 'call_not_active'
   | 'contact_blocked'
   | 'order_not_editable'
   | 'link_expired'
@@ -1618,6 +1958,26 @@ export type TierPolicy = {
   no_response_after_minutes?: number | null
 }
 
+/**
+ * TranscriptTurn
+ */
+export type TranscriptTurn = {
+  /**
+   * Speaker
+   */
+  speaker: 'agent' | 'buyer'
+  /**
+   * Text
+   */
+  text: string
+  /**
+   * Offset Ms
+   *
+   * Milliseconds since the buyer answered.
+   */
+  offset_ms: number
+}
+
 export type LoginData = {
   body: LoginRequest
   path?: never
@@ -2460,3 +2820,100 @@ export type RunSpamSimulationResponses = {
 }
 
 export type RunSpamSimulationResponse = RunSpamSimulationResponses[keyof RunSpamSimulationResponses]
+
+export type ReportCallStatusData = {
+  body: CallStatusUpdate
+  path: {
+    /**
+     * Call Id
+     *
+     * Call ID from the CallJob.
+     */
+    call_id: string
+  }
+  query?: never
+  url: '/api/v1/internal/calls/{call_id}/status'
+}
+
+export type ReportCallStatusErrors = {
+  /**
+   * Missing or invalid credentials.
+   */
+  401: ProblemDetail
+  /**
+   * Resource not found.
+   */
+  404: ProblemDetail
+  /**
+   * Request conflicts with the current state. See `code`.
+   */
+  409: ProblemDetail
+  /**
+   * Request body or parameters failed validation. See `errors`.
+   */
+  422: ProblemDetail
+}
+
+export type ReportCallStatusError = ReportCallStatusErrors[keyof ReportCallStatusErrors]
+
+export type ReportCallStatusResponses = {
+  /**
+   * Successful Response
+   */
+  200: Call
+}
+
+export type ReportCallStatusResponse = ReportCallStatusResponses[keyof ReportCallStatusResponses]
+
+export type RecordCallResultData = {
+  body: CallResult
+  path: {
+    /**
+     * Call Id
+     *
+     * Call ID from the CallJob.
+     */
+    call_id: string
+  }
+  query?: never
+  url: '/api/v1/internal/calls/{call_id}/result'
+}
+
+export type RecordCallResultErrors = {
+  /**
+   * Missing or invalid credentials.
+   */
+  401: ProblemDetail
+  /**
+   * Resource not found.
+   */
+  404: ProblemDetail
+  /**
+   * Request conflicts with the current state. See `code`.
+   */
+  409: ProblemDetail
+  /**
+   * Request body or parameters failed validation. See `errors`.
+   */
+  422: ProblemDetail
+}
+
+export type RecordCallResultError = RecordCallResultErrors[keyof RecordCallResultErrors]
+
+export type RecordCallResultResponses = {
+  /**
+   * Successful Response
+   */
+  200: Call
+}
+
+export type RecordCallResultResponse = RecordCallResultResponses[keyof RecordCallResultResponses]
+
+export type CallJobWebhookPayload = CallJob
+
+export type CallJobWebhookRequest = {
+  body: CallJobWebhookPayload
+  key: 'call-job'
+  path?: never
+  query?: never
+}

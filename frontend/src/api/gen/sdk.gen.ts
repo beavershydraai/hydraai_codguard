@@ -58,9 +58,15 @@ import type {
   OverrideOrderData,
   OverrideOrderErrors,
   OverrideOrderResponses,
+  RecordCallResultData,
+  RecordCallResultErrors,
+  RecordCallResultResponses,
   RecordDeliveryOutcomesData,
   RecordDeliveryOutcomesErrors,
   RecordDeliveryOutcomesResponses,
+  ReportCallStatusData,
+  ReportCallStatusErrors,
+  ReportCallStatusResponses,
   ResetDemoData,
   ResetDemoErrors,
   ResetDemoResponses,
@@ -126,7 +132,13 @@ export const getMe = <ThrowOnError extends boolean = false>(
   options?: Options<GetMeData, ThrowOnError>,
 ): RequestResult<GetMeResponses, GetMeErrors, ThrowOnError> =>
   (options?.client ?? client).get<GetMeResponses, GetMeErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/me',
     ...options,
   })
@@ -138,7 +150,13 @@ export const getShop = <ThrowOnError extends boolean = false>(
   options?: Options<GetShopData, ThrowOnError>,
 ): RequestResult<GetShopResponses, GetShopErrors, ThrowOnError> =>
   (options?.client ?? client).get<GetShopResponses, GetShopErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/shop',
     ...options,
   })
@@ -150,7 +168,13 @@ export const updateShop = <ThrowOnError extends boolean = false>(
   options: Options<UpdateShopData, ThrowOnError>,
 ): RequestResult<UpdateShopResponses, UpdateShopErrors, ThrowOnError> =>
   (options.client ?? client).patch<UpdateShopResponses, UpdateShopErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/shop',
     ...options,
     headers: {
@@ -166,7 +190,13 @@ export const getPolicy = <ThrowOnError extends boolean = false>(
   options?: Options<GetPolicyData, ThrowOnError>,
 ): RequestResult<GetPolicyResponses, GetPolicyErrors, ThrowOnError> =>
   (options?.client ?? client).get<GetPolicyResponses, GetPolicyErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/shop/policy',
     ...options,
   })
@@ -180,7 +210,13 @@ export const updatePolicy = <ThrowOnError extends boolean = false>(
   options: Options<UpdatePolicyData, ThrowOnError>,
 ): RequestResult<UpdatePolicyResponses, UpdatePolicyErrors, ThrowOnError> =>
   (options.client ?? client).put<UpdatePolicyResponses, UpdatePolicyErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/shop/policy',
     ...options,
     headers: {
@@ -196,7 +232,13 @@ export const listPolicyVersions = <ThrowOnError extends boolean = false>(
   options?: Options<ListPolicyVersionsData, ThrowOnError>,
 ): RequestResult<ListPolicyVersionsResponses, ListPolicyVersionsErrors, ThrowOnError> =>
   (options?.client ?? client).get<ListPolicyVersionsResponses, ListPolicyVersionsErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/shop/policy/versions',
     ...options,
   })
@@ -210,7 +252,13 @@ export const listOrders = <ThrowOnError extends boolean = false>(
   options?: Options<ListOrdersData, ThrowOnError>,
 ): RequestResult<ListOrdersResponses, ListOrdersErrors, ThrowOnError> =>
   (options?.client ?? client).get<ListOrdersResponses, ListOrdersErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/orders',
     ...options,
   })
@@ -224,7 +272,13 @@ export const createOrder = <ThrowOnError extends boolean = false>(
   options: Options<CreateOrderData, ThrowOnError>,
 ): RequestResult<CreateOrderResponses, CreateOrderErrors, ThrowOnError> =>
   (options.client ?? client).post<CreateOrderResponses, CreateOrderErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/orders',
     ...options,
     headers: {
@@ -243,7 +297,13 @@ export const importOrders = <ThrowOnError extends boolean = false>(
 ): RequestResult<ImportOrdersResponses, ImportOrdersErrors, ThrowOnError> =>
   (options.client ?? client).post<ImportOrdersResponses, ImportOrdersErrors, ThrowOnError>({
     ...formDataBodySerializer,
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/orders/import',
     ...options,
     headers: {
@@ -259,7 +319,13 @@ export const getOrder = <ThrowOnError extends boolean = false>(
   options: Options<GetOrderData, ThrowOnError>,
 ): RequestResult<GetOrderResponses, GetOrderErrors, ThrowOnError> =>
   (options.client ?? client).get<GetOrderResponses, GetOrderErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/orders/{order_id}',
     ...options,
   })
@@ -273,7 +339,13 @@ export const updateOrder = <ThrowOnError extends boolean = false>(
   options: Options<UpdateOrderData, ThrowOnError>,
 ): RequestResult<UpdateOrderResponses, UpdateOrderErrors, ThrowOnError> =>
   (options.client ?? client).patch<UpdateOrderResponses, UpdateOrderErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/orders/{order_id}',
     ...options,
     headers: {
@@ -291,7 +363,13 @@ export const overrideOrder = <ThrowOnError extends boolean = false>(
   options: Options<OverrideOrderData, ThrowOnError>,
 ): RequestResult<OverrideOrderResponses, OverrideOrderErrors, ThrowOnError> =>
   (options.client ?? client).post<OverrideOrderResponses, OverrideOrderErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/orders/{order_id}/override',
     ...options,
     headers: {
@@ -309,7 +387,13 @@ export const startCall = <ThrowOnError extends boolean = false>(
   options: Options<StartCallData, ThrowOnError>,
 ): RequestResult<StartCallResponses, StartCallErrors, ThrowOnError> =>
   (options.client ?? client).post<StartCallResponses, StartCallErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/orders/{order_id}/calls',
     ...options,
   })
@@ -321,7 +405,13 @@ export const getCall = <ThrowOnError extends boolean = false>(
   options: Options<GetCallData, ThrowOnError>,
 ): RequestResult<GetCallResponses, GetCallErrors, ThrowOnError> =>
   (options.client ?? client).get<GetCallResponses, GetCallErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/calls/{call_id}',
     ...options,
   })
@@ -337,7 +427,13 @@ export const recordDeliveryOutcomes = <ThrowOnError extends boolean = false>(
     RecordDeliveryOutcomesErrors,
     ThrowOnError
   >({
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/delivery-outcomes',
     ...options,
     headers: {
@@ -358,7 +454,13 @@ export const importDeliveryOutcomes = <ThrowOnError extends boolean = false>(
     ThrowOnError
   >({
     ...formDataBodySerializer,
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/delivery-outcomes/import',
     ...options,
     headers: {
@@ -374,7 +476,13 @@ export const getDashboardSummary = <ThrowOnError extends boolean = false>(
   options: Options<GetDashboardSummaryData, ThrowOnError>,
 ): RequestResult<GetDashboardSummaryResponses, GetDashboardSummaryErrors, ThrowOnError> =>
   (options.client ?? client).get<GetDashboardSummaryResponses, GetDashboardSummaryErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/dashboard/summary',
     ...options,
   })
@@ -386,7 +494,13 @@ export const getBacktest = <ThrowOnError extends boolean = false>(
   options?: Options<GetBacktestData, ThrowOnError>,
 ): RequestResult<GetBacktestResponses, GetBacktestErrors, ThrowOnError> =>
   (options?.client ?? client).get<GetBacktestResponses, GetBacktestErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/dashboard/backtest',
     ...options,
   })
@@ -444,7 +558,13 @@ export const resetDemo = <ThrowOnError extends boolean = false>(
   options?: Options<ResetDemoData, ThrowOnError>,
 ): RequestResult<ResetDemoResponses, ResetDemoErrors, ThrowOnError> =>
   (options?.client ?? client).post<ResetDemoResponses, ResetDemoErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/demo/reset',
     ...options,
   })
@@ -456,7 +576,61 @@ export const runSpamSimulation = <ThrowOnError extends boolean = false>(
   options?: Options<RunSpamSimulationData, ThrowOnError>,
 ): RequestResult<RunSpamSimulationResponses, RunSpamSimulationErrors, ThrowOnError> =>
   (options?.client ?? client).post<RunSpamSimulationResponses, RunSpamSimulationErrors, ThrowOnError>({
-    security: [{ scheme: 'bearer', type: 'http' }],
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
     url: '/api/v1/demo/spam-simulation',
     ...options,
+  })
+
+/**
+ * Report call progress; `dialing` claims the call
+ *
+ * `dialing` is accepted only for a `queued` call, or again from the controller that already claimed it. `in_progress` is accepted only from that controller. Otherwise 409 `call_not_active`: the call was cancelled, finished or claimed elsewhere, so the controller acks the job and does not dial.
+ */
+export const reportCallStatus = <ThrowOnError extends boolean = false>(
+  options: Options<ReportCallStatusData, ThrowOnError>,
+): RequestResult<ReportCallStatusResponses, ReportCallStatusErrors, ThrowOnError> =>
+  (options.client ?? client).post<ReportCallStatusResponses, ReportCallStatusErrors, ThrowOnError>({
+    security: [
+      {
+        key: 'googleIdToken',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/v1/internal/calls/{call_id}/status',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  })
+
+/**
+ * Record the final result of a call
+ *
+ * Idempotent: repeating the same result returns the call again; a different result for a finished call is 409 `conflict`. A completed result updates the orders (an `edited` outcome applies the changes and triggers a rescore).
+ */
+export const recordCallResult = <ThrowOnError extends boolean = false>(
+  options: Options<RecordCallResultData, ThrowOnError>,
+): RequestResult<RecordCallResultResponses, RecordCallResultErrors, ThrowOnError> =>
+  (options.client ?? client).post<RecordCallResultResponses, RecordCallResultErrors, ThrowOnError>({
+    security: [
+      {
+        key: 'googleIdToken',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/v1/internal/calls/{call_id}/result',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
   })

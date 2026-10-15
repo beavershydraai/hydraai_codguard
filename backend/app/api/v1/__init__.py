@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1.auth import auth_router
 from app.api.v1.external import demo_router, intake_router, public_router
+from app.api.v1.internal import call_job_webhooks, internal_router
 from app.api.v1.shop_app import (
     calls_router,
     dashboard_router,
@@ -23,5 +24,8 @@ for r in (
     intake_router,
     public_router,
     demo_router,
+    internal_router,
 ):
     router.include_router(r)
+
+__all__ = ["call_job_webhooks", "router"]

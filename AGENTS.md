@@ -29,13 +29,15 @@ backend/        Python service on Cloud Run: API, decision engine, ADK agents
   app/          FastAPI app: routes (api/v1/) and request/response schemas (schemas/)
     decision/   order lifecycle, rescoring, confirmed-order guard (E4.1) and tier policy (E4.2)
     agents/     ADK workflows (E4.7), advisory assessment and the decision log
+    telephony/  call controller: Pub/Sub consumer, ARI client, call agents (runs on the Asterisk VM)
   config/       rule set YAML; only `tier_policy` is read by the code so far
   scoring/      hard rules, expected loss, model calls
   voice/        Gemini Live session handling
     prompts/    AI call system instruction and the record_call_outcome tool
+    scripts/    scripted call: steps, prompts and key map
   tests/
-docs/           Technical notes (Gemini Live integration)
-frontend/       Shop web app + buyer confirmation page (Vite + React, Firebase Hosting)
+docs/           Technical notes (Gemini Live integration, call controller)
+frontend/       Shop web app + buyer confirmation page (Vite + React, served by nginx on Cloud Run)
   src/routes/   TanStack Router file routes; _shop/ is the shop layout, c/ the public buyer page
   src/api/gen/  Hey API client generated from api/openapi.yaml (do not edit)
   src/components/ui/, src/components/reui/  shadcn and ReUI registry components
@@ -58,6 +60,7 @@ scripts/        Demo reset, abuse simulation, call test runner
 - Data: BigQuery ML boosted trees (risk model), BigQuery (training data, analytics), Firestore (app state)
 - Secrets in Secret Manager; region `asia-southeast1`. Exceptions: the Gemini assessment (`GEMINI_MODEL`, `gemini-3.1-flash-lite` in `ci.yml`) calls Vertex AI in `GOOGLE_CLOUD_LOCATION=global`, because that model is not served from `asia-southeast1`; Gemini Live API sessions run in `GEMINI_LIVE_LOCATION` (`us-central1`), because the Live API is not served from Asia regions.
 - Model IDs come from environment variables (`GEMINI_MODEL`, `GEMINI_LIVE_MODEL`). Never hard-code them.
+- Telephony: Asterisk and the call controller run on the VM `codguard-asterisk` (`us-central1`); the backend sends them call jobs on the Pub/Sub topic `call-jobs`. Read `docs/call-controller.md` before changing call code.
 - Before changing voice code or the call prompt, read `docs/gemini-live.md`. Live models changed in September 2026 (`gemini-3.8-live`), and older tutorials use config that 3.8 rejects.
 - The pipeline is written against `google-adk` 2.x (`>=2.11,<3` in `backend/pyproject.toml`). ADK 2.0 replaced the template workflows with a graph engine: most tutorials online are still 1.x, and the 1.x pattern (`SequentialAgent`, subclassing `BaseAgent` and overriding `_run_async_impl`) is ignored without an error on 2.x. Use `Workflow` with function nodes.
 - ADK caps `websockets` below 16 and `opentelemetry-api` at 1.42.1, and its `google-genai` dependency caps `tenacity` below 9.2. The `opentelemetry-api` cap also holds `fastapi` and `google-api-core` back. The Gemini Live client (E5) therefore runs on `websockets` 15.x.
@@ -96,6 +99,7 @@ Backend commands run from `backend/` and need [uv](https://docs.astral.sh/uv/).
 - Order reads: `GET /orders` filters, searches, sorts and pages one shop's orders in Python (`app/decision/inbox.py`) after a single Firestore query on `shop_id` and `placed_at`. A new Firestore query that filters or orders on more than one field needs its index added to `infra/firestore.indexes.json`.
 - Routes that are not implemented yet return 501 `not_implemented`. The frontend answers them from its in-browser mock (`frontend/src/mocks/`) until then. When you implement an endpoint, keep the mock's behaviour in line or remove what the backend now covers; the mock must keep following the domain rules below.
 - Every schema example must validate against its model (also enforced by the tests), because the mock server returns those examples.
+- Endpoints for the call controller have the tag `internal` and accept only a Google ID token of a controller service account. The Pub/Sub call job is documented as the `call-job` webhook. See `docs/call-controller.md`.
 
 ## Domain rules
 

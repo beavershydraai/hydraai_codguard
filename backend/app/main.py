@@ -7,6 +7,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.routing import APIRoute
 
 from app.api.errors import PROBLEM_JSON, install_error_handlers, problem_responses
+from app.api.v1 import call_job_webhooks
 from app.api.v1 import router as v1_router
 
 API_VERSION = "0.1.0"
@@ -25,6 +26,11 @@ TAGS = [
         "description": "Buyer confirmation page. No login; the link token is the credential.",
     },
     {"name": "demo", "description": "Demo controls for the hackathon. Not for production."},
+    {
+        "name": "internal",
+        "description": "Call controller on the Asterisk VM (service account only). "
+        "See docs/call-controller.md.",
+    },
 ]
 
 DESCRIPTION = """
@@ -63,6 +69,11 @@ def _use_problem_json(schema: dict[str, Any]) -> None:
                     }
                 if code[0] in "45" and "application/json" in content:
                     resp["content"] = {PROBLEM_JSON: content["application/json"]}
+    for hook in schema.get("webhooks", {}).values():  # Pub/Sub messages: no HTTP responses
+        for op in hook.values():
+            op["responses"] = {
+                "200": {"description": "No HTTP response: the controller acks the message."}
+            }
     components = schema.get("components", {}).get("schemas", {})
     if "HTTPValidationError" not in str(schema.get("paths")):
         components.pop("HTTPValidationError", None)
@@ -79,6 +90,7 @@ def create_app() -> FastAPI:
     )
     install_error_handlers(app)
     app.include_router(v1_router)
+    app.webhooks.include_router(call_job_webhooks)
 
     # Not /healthz: Cloud Run reserves some paths ending in "z" and answers them itself.
     @app.get("/health", include_in_schema=False)
@@ -93,6 +105,7 @@ def create_app() -> FastAPI:
             version=app.version,
             description=app.description,
             routes=app.routes,
+            webhooks=app.webhooks.routes,
             tags=app.openapi_tags,
         )
         _use_problem_json(schema)

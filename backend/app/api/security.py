@@ -24,6 +24,14 @@ intake_api_key = APIKeyHeader(
     auto_error=False,
 )
 
+controller_id_token = HTTPBearer(
+    scheme_name="googleIdToken",
+    bearerFormat="JWT",
+    description="Google-signed ID token of the call controller's service account "
+    "(codguard-runtime), with the backend URL as audience. See docs/call-controller.md.",
+    auto_error=False,
+)
+
 
 def current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Security(bearer_auth)],
