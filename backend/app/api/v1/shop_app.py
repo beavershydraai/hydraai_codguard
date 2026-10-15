@@ -1,17 +1,23 @@
 """Endpoints used by the shop web app (bearer token from /auth/login)."""
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Path, Query, Security, UploadFile, status
 
+from app.agents.agent import Pipeline
+from app.agents.intake import receive
+from app.agents.log import DecisionLog, entry, get_decision_log
 from app.api.errors import ApiError, NotImplementedYet, problem_example, problem_responses
 from app.api.security import CurrentUser, bearer_auth
 from app.calls.service import CallService, get_call_service
+from app.data import order_csv
 from app.data.orders import to_utc
 from app.data.store import OrderStore, get_store
+from app.decision import lifecycle
 from app.decision.inbox import InvalidCursor, order_page
-from app.decision.views import order_detail
+from app.decision.views import order_detail, order_summary
 from app.risk import artifacts
 from app.schemas.calls import Call
 from app.schemas.dashboard import BacktestResult, DashboardSummary
@@ -19,6 +25,7 @@ from app.schemas.delivery import DeliveryImportResult, DeliveryOutcomeBatch
 from app.schemas.enums import ContactBlockReason, ErrorCode, OrderStatus, RiskTier
 from app.schemas.orders import (
     ImportResult,
+    ImportRowError,
     OrderCreate,
     OrderDetail,
     OrderPage,
@@ -26,6 +33,7 @@ from app.schemas.orders import (
     OrderUpdate,
     OverrideRequest,
 )
+from app.schemas.scoring import Decision
 from app.schemas.shops import Me, Policy, PolicyUpdate, Shop, ShopUpdate
 
 auth = [Security(bearer_auth)]
@@ -113,6 +121,7 @@ _CONTACT_BLOCKED = problem_example(
     block_reasons=[ContactBlockReason.DAILY_CALL_LIMIT.value],
 )
 
+IMPORT_WORKERS = 8
 orders_router = APIRouter(prefix="/orders", tags=["orders"], dependencies=auth)
 OrderSort = Literal["-placed_at", "placed_at", "-risk_score", "-cod_amount_vnd", "-updated_at"]
 
@@ -174,8 +183,30 @@ def list_orders(
     summary="Create one order",
     description="Scoring runs asynchronously; poll the order to see the score.",
 )
-async def create_order(body: OrderCreate) -> OrderSummary:
-    raise NotImplementedYet("create_order")
+def create_order(
+    body: OrderCreate,
+    user: CurrentUser,
+    store: Annotated[OrderStore, Depends(get_store)],
+    decision_log: Annotated[DecisionLog, Depends(get_decision_log)],
+    calls: Annotated[CallService | None, Depends(get_call_service)],
+) -> OrderSummary:
+    # Sync, like the intake route: the pipeline's nodes make blocking Firestore calls.
+    pipeline = Pipeline(store=store, log=decision_log, calls=calls)
+    doc, duplicate = receive(
+        body,
+        user.shop_id,
+        pipeline=pipeline,
+        actor=user.email,
+        message="Shop created the order manually.",
+    )
+    if duplicate:
+        raise ApiError(
+            409,
+            ErrorCode.CONFLICT,
+            "Conflict",
+            f"An order with external_id {body.external_id} already exists.",
+        )
+    return order_summary(doc)
 
 
 @orders_router.post(
@@ -183,13 +214,58 @@ async def create_order(body: OrderCreate) -> OrderSummary:
     response_model=ImportResult,
     responses=problem_responses(400, 401, 422),
     summary="Import orders from a CSV file",
-    description="One row per order, columns as in OrderCreate (items as JSON). "
-    "Up to 1,000 rows per file.",
+    description="One row per order, columns as in OrderCreate. `address` is the address as "
+    "written (or an Address as JSON); `items` is JSON, or one item per row in `item_name`, "
+    "`quantity` and `unit_price_vnd`. Up to 1,000 rows per file. Every imported order runs "
+    "the pipeline at once, without the Gemini assessment and with simulated AI calls.",
 )
-async def import_orders(
+def import_orders(
     file: Annotated[UploadFile, File(description="CSV, UTF-8.")],
+    user: CurrentUser,
+    store: Annotated[OrderStore, Depends(get_store)],
+    decision_log: Annotated[DecisionLog, Depends(get_decision_log)],
 ) -> ImportResult:
-    raise NotImplementedYet("import_orders")
+    now = datetime.now(UTC)
+    try:
+        rows = order_csv.read_rows(file.file.read(order_csv.MAX_BYTES + 1))
+    except order_csv.BadFile as error:
+        raise ApiError(400, ErrorCode.VALIDATION_ERROR, "Bad request", str(error)) from error
+    orders: list[OrderCreate] = []
+    rejected: list[ImportRowError] = []
+    repeats, seen = 0, set()
+    for number, row in enumerate(rows, start=1):
+        parsed = order_csv.parse_row(number, row, now)
+        if isinstance(parsed, ImportRowError):
+            rejected.append(parsed)
+        elif parsed.external_id and parsed.external_id in seen:
+            repeats += 1  # the same order twice in one file
+        else:
+            seen.add(parsed.external_id)
+            orders.append(parsed)
+    # A file is a batch: its orders skip the Gemini assessment, which keeps the daily quota, and
+    # their AI calls stay simulated, so one upload cannot queue hundreds of real calls.
+    pipeline = Pipeline(store=store, log=decision_log, assess=False)
+
+    def duplicate(order: OrderCreate) -> bool:
+        _, known = receive(
+            order,
+            user.shop_id,
+            pipeline=pipeline,
+            actor=user.email,
+            message="Order imported from a CSV file.",
+        )
+        return known
+
+    # Each order runs its own pipeline (asyncio.run in a worker thread); a few at a time keeps a
+    # 1,000-row file within the request timeout.
+    with ThreadPoolExecutor(max_workers=IMPORT_WORKERS) as pool:
+        known = sum(pool.map(duplicate, orders))
+    return ImportResult(
+        received=len(rows),
+        imported=len(orders) - known,
+        duplicates=repeats + known,
+        rejected=rejected,
+    )
 
 
 @orders_router.get(
@@ -217,8 +293,16 @@ def get_order(
     summary="Edit an order before it ships",
     description="Triggers a new scoring run. 409 `order_not_editable` once shipped.",
 )
-async def update_order(order_id: OrderId, body: OrderUpdate) -> OrderDetail:
-    raise NotImplementedYet("update_order")
+def update_order(
+    order_id: OrderId,
+    body: OrderUpdate,
+    user: CurrentUser,
+    store: Annotated[OrderStore, Depends(get_store)],
+) -> OrderDetail:
+    doc = lifecycle.edit_order(
+        store, order_id, user.shop_id, body, datetime.now(UTC), actor=user.email
+    )
+    return order_detail(doc)
 
 
 @orders_router.post(
@@ -229,8 +313,20 @@ async def update_order(order_id: OrderId, body: OrderUpdate) -> OrderDetail:
     description="Recorded in the audit log. The action must be in "
     "`allowed_overrides` of the order.",
 )
-async def override_order(order_id: OrderId, body: OverrideRequest) -> OrderDetail:
-    raise NotImplementedYet("override_order")
+def override_order(
+    order_id: OrderId,
+    body: OverrideRequest,
+    user: CurrentUser,
+    store: Annotated[OrderStore, Depends(get_store)],
+    decision_log: Annotated[DecisionLog, Depends(get_decision_log)],
+) -> OrderDetail:
+    now = datetime.now(UTC)
+    doc = lifecycle.override_order(
+        store, order_id, user.shop_id, body.action, body.reason, user.email, now
+    )
+    row = entry(doc, Decision.model_validate(doc["decision"]), workflow="staff", step="override")
+    decision_log.write(row | {"actor": user.email, "reason": body.reason})
+    return order_detail(doc)
 
 
 @orders_router.post(

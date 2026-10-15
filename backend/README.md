@@ -110,9 +110,26 @@ An invalid-phone hard rule can still hold a confirmed order for review; it sched
 Staff decisions retain their status during rescoring. In the demo, increasing `prepaid_vnd` on an
 engine-decided order awaiting a deposit releases it after rescoring, unless the phone is invalid.
 
-Shop order-detail and edit routes stay at `501 not_implemented` until they are wired to the lifecycle;
-the trusted shop identity now comes from `CurrentUser` (see "Sign-in"). The lifecycle functions are available for integration by those routes;
-buyer-page tokens, call sessions, contact limits and timer scheduling belong to their own epics.
+## Shop order writes (E7.2, E4.5)
+
+The shop app's order routes take the shop from `CurrentUser` (see "Sign-in"):
+
+- `POST /orders` and `POST /orders/import` store each order and run `on_new_order` through
+  `app/agents/intake.py`, the same path as the intake API. A repeated `external_id` is a 409 for
+  one order and counts as a duplicate in a file.
+- `app/data/order_csv.py` reads the CSV: the fields of `OrderCreate`, with `address` as written
+  and either `items` as JSON or one item per row (`item_name`, `quantity`, `unit_price_vnd`), as in
+  the shop app's template. Up to 1,000 rows; a bad row is reported in `rejected` and the rest are
+  imported. Imported orders skip the Gemini assessment and keep their AI calls simulated, so one
+  file cannot use the day's quota or queue hundreds of calls.
+- `PATCH /orders/{id}` is `edit_order`, which records the editor on the timeline.
+- `POST /orders/{id}/override` is `override_order`: one of `lifecycle.OVERRIDES` (ship now,
+  require deposit, hold for review, cancel), never the action already in force, before the order
+  ships. The timeline entry and a `decision_log` row (`workflow: staff`) record who, when and why.
+  A staff cancellation is stored as reason `shop`, so it never becomes a "failed" training label.
+  `allowed_overrides` on the order page comes from the same rule.
+
+Buyer-page tokens, contact limits and timer scheduling belong to their own epics.
 
 ## ADK orchestration (E4.7)
 

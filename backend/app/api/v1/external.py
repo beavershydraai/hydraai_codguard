@@ -1,33 +1,21 @@
 """Endpoints outside the shop app: intake API, buyer confirmation page, demo controls."""
 
-import logging
-from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Security, status
 
 from app.agents.agent import Pipeline
+from app.agents.intake import receive
 from app.agents.log import DecisionLog, get_decision_log
-from app.agents.runner import run_new_order_sync
 from app.api.errors import ApiError, NotImplementedYet, problem_example, problem_responses
 from app.api.security import bearer_auth, intake_api_key
 from app.calls.service import CallService, get_call_service
-from app.data.orders import order_document
-from app.data.store import (
-    OrderStore,
-    agents_for_key,
-    branch_for_key,
-    get_store,
-    order_id_for,
-    phone_key,
-    shop_for_key,
-)
+from app.data.store import OrderStore, agents_for_key, branch_for_key, get_store, shop_for_key
 from app.schemas.confirm import BuyerOrderView, BuyerResponse, BuyerResponseResult
 from app.schemas.demo import DemoResetResult, SpamSimulationResult
 from app.schemas.enums import ErrorCode
 from app.schemas.orders import IntakeAccepted, OrderCreate
 
-log = logging.getLogger(__name__)
 intake_router = APIRouter(
     prefix="/intake", tags=["intake"], dependencies=[Security(intake_api_key)]
 )
@@ -53,34 +41,15 @@ def intake_order(
     shop_id = shop_for_key(api_key)
     if shop_id is None:
         raise ApiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized", "Missing or unknown X-Api-Key.")
-    doc = order_document(
+    pipeline = Pipeline(store=store, log=decision_log, calls=calls)
+    doc, duplicate = receive(
         body,
-        order_id=order_id_for(shop_id, body.external_id),
-        shop_id=shop_id,
-        phone_key=phone_key(),
-        now=datetime.now(UTC),
+        shop_id,
+        pipeline=pipeline,
         branch_id=branch_for_key(api_key),
+        skip_agents=not agents_for_key(api_key),
     )
-    order_id = doc["order_id"]
-    if body.currency and body.currency != doc["currency"]:
-        raise ApiError(
-            422,
-            ErrorCode.VALIDATION_ERROR,
-            "Validation error",
-            f"This branch takes orders in {doc['currency']}, not {body.currency}.",
-        )
-    if not agents_for_key(api_key):  # a test key: the pipeline skips the Gemini assessment
-        doc["skip_agents"] = True
-    existing = store.create(doc)
-    if existing:
-        return IntakeAccepted(order_id=order_id, status=existing["status"], duplicate=True)
-    try:  # a pipeline problem must never lose the order: it stays stored, for review or unscored
-        pipeline = Pipeline(store=store, log=decision_log, calls=calls)
-        run_new_order_sync(order_id, shop_id, pipeline=pipeline)
-        doc = store.get(order_id) or doc
-    except Exception:
-        log.exception("The pipeline failed for %s", order_id)
-    return IntakeAccepted(order_id=order_id, status=doc["status"], duplicate=False)
+    return IntakeAccepted(order_id=doc["order_id"], status=doc["status"], duplicate=duplicate)
 
 
 public_router = APIRouter(prefix="/public", tags=["public"])

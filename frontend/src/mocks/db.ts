@@ -39,6 +39,7 @@ import {
   FAILED_DELIVERY_COST,
   maskPhone,
   type MockOrder,
+  OVERRIDE_ACTIONS,
   rng,
   seedData,
   tierFor,
@@ -246,7 +247,7 @@ export class MockDb {
   private setStatus(order: MockOrder, status: OrderStatus) {
     order.status = status
     order.allowed_overrides = PRE_SHIP.includes(status)
-      ? ALL_ACTIONS.filter((a) => a !== order.current_action)
+      ? OVERRIDE_ACTIONS.filter((a) => a !== order.current_action)
       : []
   }
 
@@ -799,7 +800,7 @@ export class MockDb {
                 : 'Not contacted: the phone was batched into one contact, then blocked after "I didn\'t order this".',
           },
         ],
-        allowed_overrides: ALL_ACTIONS,
+        allowed_overrides: OVERRIDE_ACTIONS,
         confirmation_token: null,
       })
     }

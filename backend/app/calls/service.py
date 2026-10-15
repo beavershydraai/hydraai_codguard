@@ -26,7 +26,7 @@ from app.api.errors import ApiError
 from app.calls import jobs
 from app.calls.pubsub import PubSubPublisher
 from app.calls.store import CallNotFound, CallStore, get_call_store
-from app.data.orders import VN_TIME
+from app.data import branches
 from app.data.store import OrderStore, get_store
 from app.decision import lifecycle
 from app.decision.policy import MAX_CALL_ATTEMPTS
@@ -195,7 +195,7 @@ class CallService:
             return []
         blocks = []
         start, end = _contact_hours()
-        if not start <= now.astimezone(VN_TIME).time() < end:
+        if not start <= now.astimezone(branches.country_of(doc).tz).time() < end:
             blocks.append(ContactBlockReason.OUTSIDE_CONTACT_HOURS)
         phone_hash = doc.get("buyer_phone_hash")
         if phone_hash:

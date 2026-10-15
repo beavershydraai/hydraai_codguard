@@ -1,6 +1,9 @@
 from fastapi.testclient import TestClient
 
+from app.agents.log import get_decision_log
+from app.data.store import get_store
 from app.main import create_app
+from tests.test_intake import FakeDecisionLog, FakeStore
 
 client = TestClient(create_app())
 PROBLEM = "application/problem+json"
@@ -22,7 +25,10 @@ def test_contract_stub_returns_501_problem() -> None:
 
 
 def test_validation_error_is_problem_json() -> None:
-    response = client.post("/api/v1/orders", json={"buyer_phone": "not-a-phone"})
+    app = create_app()
+    app.dependency_overrides[get_store] = FakeStore
+    app.dependency_overrides[get_decision_log] = FakeDecisionLog
+    response = TestClient(app).post("/api/v1/intake/orders", json={"buyer_phone": "not-a-phone"})
     assert response.status_code == 422
     assert response.headers["content-type"] == PROBLEM
     body = response.json()

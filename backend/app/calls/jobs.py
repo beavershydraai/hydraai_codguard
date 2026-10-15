@@ -12,6 +12,7 @@ import re
 from datetime import datetime
 
 from app.calls import spoken
+from app.data import branches
 from app.demo.world import SHOP_ID, SHOP_NAME
 from app.schemas.enums import CallAgent, CallLanguage, CallTargetKind
 from app.schemas.telephony import CallBuyer, CallItem, CallJob, CallOrder, CallTarget
@@ -74,7 +75,9 @@ def call_order(doc: dict, now: datetime, language: CallLanguage) -> CallOrder:
     return CallOrder(
         order_id=doc["order_id"],
         ref=order_ref(doc),
-        placed_at_spoken=spoken.placed_at(doc["placed_at"], now, language),
+        placed_at_spoken=spoken.placed_at(
+            doc["placed_at"], now, language, branches.country_of(doc).tz
+        ),
         items=[
             CallItem(name=i["name"], variant=i.get("variant") or "", quantity=i["quantity"])
             for i in doc["items"]

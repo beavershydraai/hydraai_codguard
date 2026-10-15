@@ -67,6 +67,7 @@ class Pipeline:
     policy: Policy | None = None
     now: datetime | None = None
     calls: "CallService | None" = None  # places real AI calls (E5); None keeps them simulated
+    assess: bool = True  # False skips the Gemini assessment, e.g. for a file import
 
 
 @dataclass
@@ -149,9 +150,11 @@ async def assess_order(node_input: dict) -> dict:
         return node_input
     pipe = current()
     now = pipe.now or datetime.now(UTC)
-    result = AssessmentResult.model_validate(
-        await assessment.assess(deepcopy(node_input["order"] | fields), log=pipe.log, now=now)
-    )
+    if pipe.assess:
+        raw = await assessment.assess(deepcopy(node_input["order"] | fields), log=pipe.log, now=now)
+    else:
+        raw = {"status": "skipped", "reasons": []}
+    result = AssessmentResult.model_validate(raw)
     # Over the daily budget the order goes on like `disabled`: the engine decides, without Gemini
     # reasons. Raising here held every later order of the day for review.
     fields = deepcopy(fields)
@@ -287,11 +290,12 @@ def call_buyer(node_input: dict) -> dict:
 
 
 def _place_call(pipe: Pipeline, doc: dict, attempt: int, now: datetime) -> dict:
-    """Hand the claimed attempt to the call controller. Simulated orders (`SIM-`/`SIMAI-`, the
-    demo simulator) and an instance without calls configured keep the call simulated. A failure
+    """Hand the claimed attempt to the call controller. Test orders (`skip_agents`: sent with a
+    `noagents` intake key, as the demo simulator does) and an instance without calls configured
+    keep the call simulated. A failure
     to place the call is logged and leaves the order waiting for its no-response timer: nothing
     reaches the buyer on an error."""
-    if pipe.calls is None or str(doc.get("external_id") or "").startswith("SIM"):
+    if pipe.calls is None or doc.get("skip_agents"):
         return {}
     try:
         return pipe.calls.start_for_pipeline(doc["order_id"], attempt, now)
