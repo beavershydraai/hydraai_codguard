@@ -22,3 +22,10 @@ def test_simulated_orders_are_valid_intake_orders_from_their_shop():
 def test_only_keys_of_simulated_shops_are_used():
     keys = keys_by_shop("k1:shop_la_vang,k2:shop_demo,k3:shop_bep_nam,broken")
     assert keys == {"shop_la_vang": "k1", "shop_bep_nam": "k3"}
+
+
+def test_agents_switch_picks_the_prefix_the_assessment_checks():
+    rng, now = random.Random(2), datetime(2026, 10, 15, 14, 0, tzinfo=UTC)
+    assert make_order(rng, "shop_go_moc", now)["external_id"].startswith("SIM-")
+    with_agents = make_order(rng, "shop_go_moc", now, agents=True)["external_id"]
+    assert with_agents.startswith("SIMAI-") and not with_agents.startswith("SIM-")

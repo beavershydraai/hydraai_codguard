@@ -4,8 +4,9 @@ Posts random orders from five fictional shops to the live intake API at random (
 intervals until the time is up, so the order list and the dashboard keep moving. In the cloud it is
 the Cloud Run job `codguard-simulate`, which costs nothing while it is not running.
 
-- Every order has an `external_id` starting with `SIM-`: the pipeline scores and decides it but
-  skips the Gemini assessment, which keeps the daily quota for people trying the app.
+- By default every order has an `external_id` starting with `SIM-`: the pipeline scores and
+  decides it but skips the Gemini assessment, which keeps the daily quota for people trying the
+  app. `--agents` uses `SIMAI-` instead, so the two agents run (and use the quota).
 - Most phones reuse the +84000 range of the vn-synthetic history, so buyers arrive with past
   orders, some of them at other shops.
 - API keys come from INTAKE_API_KEYS (`key:shop_id,...`), the same secret the service reads.
@@ -103,7 +104,7 @@ CHATS = [
 ]
 
 
-def make_order(rng: random.Random, shop_id: str, now: datetime) -> dict:
+def make_order(rng: random.Random, shop_id: str, now: datetime, agents: bool = False) -> dict:
     """One random order for `shop_id`, valid against the intake schema (OrderCreate)."""
     shop = SHOPS[shop_id]
     known = rng.random() < 0.85  # a buyer from the vn-synthetic history, or a new phone
@@ -121,8 +122,9 @@ def make_order(rng: random.Random, shop_id: str, now: datetime) -> dict:
         )
     total = sum(i["quantity"] * i["unit_price_vnd"] for i in items) + 30_000
     prepaid = rng.choices([0, 50_000, total], [90, 5, 5])[0]  # COD, small deposit, fully prepaid
+    tag = uuid.UUID(int=rng.getrandbits(128)).hex[:12]
     return {
-        "external_id": f"SIM-{shop_id}-{uuid.UUID(int=rng.getrandbits(128)).hex[:12]}",
+        "external_id": f"{'SIMAI' if agents else 'SIM'}-{shop_id}-{tag}",
         "channel": rng.choices(list(shop["channels"]), list(shop["channels"].values()))[0],
         "buyer_name": f"{rng.choice(SURNAMES)} {rng.choice(GIVEN)}",
         "buyer_phone": phone,
@@ -164,6 +166,7 @@ def main() -> None:
     parser.add_argument("--minutes", type=float, default=60)
     parser.add_argument("--orders-per-hour", type=float, default=30)
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--agents", action="store_true", help="run the Gemini agents (uses quota)")
     args = parser.parse_args()
     url = os.environ["INTAKE_URL"].rstrip("/")
     keys = keys_by_shop(os.environ["INTAKE_API_KEYS"])
@@ -177,7 +180,7 @@ def main() -> None:
     while (wait := rng.expovariate(args.orders_per_hour / 3600)) < deadline - time.monotonic():
         time.sleep(wait)
         shop = rng.choices(shops, weights)[0]
-        order = make_order(rng, shop, datetime.now(UTC))
+        order = make_order(rng, shop, datetime.now(UTC), args.agents)
         try:
             result = post(url, keys[shop], order)
         except (
