@@ -200,8 +200,10 @@ jobs:
       # The shop the sign-in account and the order simulator (app/demo/simulate.py) use.
       APP_ENV: ADMIN_SHOP_ID=shop_demo
       # AI calls (docs/call-controller.md): jobs go to Pub/Sub for the controller on the Asterisk
-      # VM, and every call rings the team's test softphone 6001 until real calls are allowed.
-      CALLS_ENV: CALL_JOBS_TOPIC=projects/ai-codguard/topics/call-jobs,CALL_ENV=demo,CALL_TARGET_OVERRIDE=sip:6001,INTERNAL_AUDIENCE=https://codguard-api-186430269525.asia-southeast1.run.app,CONTROLLER_SERVICE_ACCOUNTS=codguard-runtime@ai-codguard.iam.gserviceaccount.com
+      # VM. Every call rings CALL_TARGET_OVERRIDE, from Secret Manager below so a team phone number
+      # stays out of the repo: `sip:6001` (softphone) or `pstn:+84...` (a phone, via Twilio).
+      # Buyers' phones are never dialled (CALL_DIAL_BUYERS is not set).
+      CALLS_ENV: CALL_JOBS_TOPIC=projects/ai-codguard/topics/call-jobs,CALL_ENV=demo,INTERNAL_AUDIENCE=https://codguard-api-186430269525.asia-southeast1.run.app,CONTROLLER_SERVICE_ACCOUNTS=codguard-runtime@ai-codguard.iam.gserviceaccount.com
       SOURCE_IMAGE: ghcr.io/${{ github.repository }}/backend
     steps:
       - uses: actions/checkout@v7
@@ -241,14 +243,16 @@ jobs:
           # revision shares it. Users sign in again after a deploy.
           AUTH_TOKEN_SECRET=$(openssl rand -hex 32)
           echo "::add-mask::$AUTH_TOKEN_SECRET"
+          # CALL_TARGET_OVERRIDE used to be a plain variable; it is dropped as one before it is
+          # set from its secret (gcloud applies env var changes first), so a re-run is a no-op.
           gcloud run deploy "$SERVICE" --image "$TARGET_IMAGE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --service-account "$GCP_RUNTIME_SA" --allow-unauthenticated \
             --port 8080 --cpu 1 --memory 512Mi --min-instances 0 --max-instances 2 \
             --update-env-vars "$DATA_ENV,$GEMINI_ENV,$APP_ENV,$CALLS_ENV,AUTH_TOKEN_SECRET=$AUTH_TOKEN_SECRET" \
             --update-env-vars "ADMIN_USERNAME=$DEMO_ADMIN_USERNAME,ADMIN_PASSWORD=$DEMO_ADMIN_PASSWORD" \
-            --remove-env-vars MODEL_URI \
-            --update-secrets "PHONE_HASH_KEY=phone-hash-key-synthetic:latest,INTAKE_API_KEYS=intake-api-keys:latest" --quiet
+            --remove-env-vars MODEL_URI,CALL_TARGET_OVERRIDE \
+            --update-secrets "PHONE_HASH_KEY=phone-hash-key-synthetic:latest,INTAKE_API_KEYS=intake-api-keys:latest,CALL_TARGET_OVERRIDE=call-target-override:latest" --quiet
           URL=$(gcloud run services describe "$SERVICE" --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" --format 'value(status.url)')
           echo "URL=$URL" >> "$GITHUB_ENV"

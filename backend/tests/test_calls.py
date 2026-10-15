@@ -10,13 +10,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api import security
+from app.api.errors import ApiError
 from app.calls import jobs, spoken
 from app.calls.pubsub import PubSubPublisher
 from app.calls.service import CallService, call_id_for, get_call_service, mask_phone
 from app.calls.store import CallNotFound
 from app.main import create_app
 from app.risk import engine
-from app.schemas.enums import CallLanguage, CallTargetKind, OrderStatus
+from app.schemas.enums import CallLanguage, CallTargetKind, ErrorCode, OrderStatus
 from app.schemas.telephony import CallJob, CallResult, CallStatusUpdate
 from tests.test_pipeline import pipe, run, scorer  # noqa: F401 (pytest fixture)
 from tests.test_policy import NOW
@@ -65,6 +66,7 @@ class FakePublisher:
 @pytest.fixture
 def calls(pipe, monkeypatch):  # noqa: F811
     monkeypatch.setenv("CALL_TARGET_OVERRIDE", OVERRIDE)
+    monkeypatch.delenv("CALL_DIAL_BUYERS", raising=False)
     monkeypatch.setattr(engine, "score", scorer("high", "call"))
     return CallService(
         orders=pipe.store, calls=FakeCallStore(), log=pipe.log, publisher=FakePublisher()
@@ -153,12 +155,27 @@ def test_the_job_carries_the_order_in_spoken_form(calls):
     assert job.buyer.full_name == "Nguyễn Văn A"
 
 
-def test_without_the_override_the_call_dials_the_buyers_phone(calls, monkeypatch):
+def test_without_the_override_the_buyers_phone_is_dialled_only_when_allowed(calls, monkeypatch):
     monkeypatch.delenv("CALL_TARGET_OVERRIDE")
+    with pytest.raises(jobs.NoTarget, match="turned off"):
+        jobs.target_for(order(calls))
+    monkeypatch.setenv("CALL_DIAL_BUYERS", "on")
     target = jobs.target_for(order(calls))
     assert target.kind == CallTargetKind.PSTN and target.address == "+84000000001"
-    with pytest.raises(jobs.NoTarget):
+    with pytest.raises(jobs.NoTarget, match="no valid phone"):
         jobs.target_for(order(calls) | {"buyer_phone": "12345", "buyer_phone_hash": None})
+
+
+def test_without_a_target_nothing_is_published_and_the_order_says_why(calls, monkeypatch):
+    monkeypatch.delenv("CALL_TARGET_OVERRIDE")
+    with pytest.raises(ApiError) as blocked:
+        calls.start_for_shop("ord_test", "shop_a", "admin@gmail.com", NOW)
+    assert blocked.value.problem.code == ErrorCode.CONTACT_BLOCKED
+    assert "turned off" in str(blocked.value.problem.detail)
+    outcome = calls.start_for_pipeline("ord_test", 2, NOW)
+    assert outcome["call_id"] is None and calls.publisher.jobs == []
+    note = order(calls)["timeline"][0]["message_vi"]
+    assert note == "AI call not placed: calls to buyers' phones are turned off on this server."
 
 
 def test_phones_are_masked():
@@ -213,6 +230,7 @@ def test_a_failed_publish_fails_the_call_without_reaching_anyone(calls):
 
 def test_phone_rules_apply_when_a_real_phone_is_dialled(calls, monkeypatch):
     monkeypatch.delenv("CALL_TARGET_OVERRIDE")
+    monkeypatch.setenv("CALL_DIAL_BUYERS", "on")
     monkeypatch.setenv("CONTACT_HOURS", "08:00-21:00")
     late = NOW.replace(hour=22)  # NOW is Vietnam time
     with pytest.raises(Exception) as blocked:

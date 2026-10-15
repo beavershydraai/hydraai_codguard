@@ -8,6 +8,7 @@ What exists so far:
 - One call with the `gemini_live` agent, in `backend/app/telephony/`: ARI client (`ari.py`), RTP for External Media (`rtp.py`, `audio.py`), the Live agent (`live.py`), the outcome checks (`outcome.py`) and the call runner (`call.py`). The dev tool `app.telephony.dial` drives them; see "Try a Gemini call from a softphone".
 - The backend side, in `backend/app/calls/`: `POST /orders/{id}/calls` and the pipeline's `call_buyer` node create the call and publish its `CallJob`; `GET /calls/{id}` and the order page show its progress; the internal endpoints take the controller's status and result, and the result runs the rule set's L4 table on the order (see "Backend").
 - The controller service on the VM, `python -m app.telephony.controller`: pulls the jobs, claims and places each call, and reports the result from an outbox (see "The controller service").
+- The Twilio trunk: `infra/asterisk/trunk-setup.sh` adds the `twilio` endpoint, so a `pstn` target rings a real phone (see "Call a phone through Twilio").
 - Not yet: the `script` agent, recording, language switching, batching several orders into one call.
 
 ## Why a controller
@@ -34,7 +35,7 @@ The controller code lives in `backend/app/telephony/` and ships in the backend i
 |---|---|---|---|---|
 | `sip` | Softphone (Zoiper, Linphone) registered as extension `6001`–`6009`, over Cloudflare Mesh (`100.96.0.0/12`) | `PJSIP/6001` | Team testing | First |
 | `webrtc` | Browser tab with JsSIP or SIP.js: SIP over WSS, DTLS-SRTP media | `PJSIP/web-<session>` | Judges trying the demo | After `sip`; needs TLS on a domain and a TURN server |
-| `pstn` | Twilio Elastic SIP Trunk to `34.60.118.169` | `PJSIP/<E.164>@twilio` | Real phones, demo video | After M4 (#70, #36) |
+| `pstn` | Twilio Elastic SIP Trunk, from `34.60.118.169` (`infra/asterisk/trunk-setup.sh`) | `PJSIP/<E.164>@twilio` | Real phones: the demo video and the live demo, ringing a team phone | Now |
 
 The controller treats all three alike; only the endpoint string changes. Two dialplan extensions help testing from a softphone: `200` is an echo test, and `100` runs the `confirm-v1` script on a built-in sample order without touching the backend.
 
@@ -95,7 +96,7 @@ The backend marks a call `failed` (`controller_error`) when it stays `dialing` o
 - Two ways to start a call, sharing the same two attempts per order (claims `order_id:ai_call:1` and `:2` in `pipeline_claims`):
   - the pipeline: when the engine decides `ai_call`, the `call_buyer` node claims the attempt and places it. Orders from the simulator (`SIM-`, `SIMAI-`) keep a simulated call, so the demo traffic never rings a phone;
   - the shop: `POST /orders/{id}/calls` from the order page. A second click while a call runs returns that call.
-- Contact rules checked before a call: a confirmed order and an order whose two attempts are used are never called (409 `contact_blocked`). For the buyer's phone: contact hours (`CONTACT_HOURS`, 08:00–21:00 Vietnam time), at most one AI call per phone per 24 hours across shops (retries of the same order excepted), none for 30 days after `not_ordered`. These phone rules are skipped while `CALL_TARGET_OVERRIDE` sends every call to a test softphone. A call the pipeline wanted but a phone rule stopped is noted on the order, which then waits for its no-response timer.
+- Contact rules checked before a call: a confirmed order and an order whose two attempts are used are never called (409 `contact_blocked`). For the buyer's phone: contact hours (`CONTACT_HOURS`, 08:00–21:00 Vietnam time), at most one AI call per phone per 24 hours across shops (retries of the same order excepted), none for 30 days after `not_ordered`. These phone rules are skipped while `CALL_TARGET_OVERRIDE` sends every call to a test target. Without the override, the buyer's phone is dialled only with `CALL_DIAL_BUYERS=on`; otherwise the call is not placed (409 `contact_blocked` for the shop). A call the pipeline wanted but a rule stopped is noted on the order, which then waits for its no-response timer.
 - The `CallJob` reads amounts and the order time in words (`app/calls/spoken.py`): `450000` → "bốn trăm năm mươi nghìn đồng", "chiều nay", "tối ngày 7 tháng 10". The shop name comes from the simulator's demo shops until shops have profiles (E7).
 - The call is stored in `calls/{call_id}` (docs/data-model.md), with a copy of the public `Call` on each order. The transcript stays in the call document.
 - A failed publish fails the call (`controller_error`) at once. A call the controller never claims within 10 minutes, or that stays `dialing` or `in_progress` past `ring_timeout_seconds` + `max_duration_seconds` + 2 minutes, fails with `controller_error` when it is next read; a late result from the controller still replaces it.
@@ -194,7 +195,8 @@ Backend:
 |---|---|---|
 | `CALL_JOBS_TOPIC` | `projects/ai-codguard/topics/call-jobs` | Where jobs go. Unset: calls are not configured, the call endpoints answer 501 (the frontend's mock simulates the call) and the pipeline keeps simulated calls |
 | `CALL_ENV` | `demo` | `env` attribute on published jobs; `dev-<name>` on a developer's machine |
-| `CALL_TARGET_OVERRIDE` | `sip:6001` | Demo only: send every call to this target instead of the buyer's phone. The per-phone contact rules are skipped while it is set |
+| `CALL_TARGET_OVERRIDE` | `sip:6001`, `pstn:+84XXXXXXXXX` | Demo only: send every call to this target instead of the buyer's phone. Deployed from Secret Manager (`call-target-override`), so a team phone number never lands in the repo. The per-phone contact rules are skipped while it is set |
+| `CALL_DIAL_BUYERS` | unset | `on` lets a call without the override dial the buyer's phone. Not set in the demo: its buyers are made up, and their numbers may belong to someone |
 | `CALL_AGENT`, `CALL_LANGUAGE` | `gemini_live`, `vi` | Agent and language of new calls (the defaults) |
 | `CONTACT_HOURS` | `08:00-21:00` | When a real buyer may be called, Vietnam time |
 | `INTERNAL_AUDIENCE` | the backend URL | Expected audience of controller tokens |
@@ -227,6 +229,36 @@ sudo docker run --rm --network host --env-file /etc/codguard/controller.env \
 - Every deploy from `main` also tags the image `main` in Artifact Registry. Pull it once with `sudo gcloud auth configure-docker asia-southeast1-docker.pkg.dev`, then `sudo docker pull …/backend:main` to update. The VM pulls as `codguard-runtime`, which needs reader on the repository (one-time setup).
 - Answer, talk, and press keys: keys reach the model as `[DTMF:<digit>]`. The call ends after the agent's closing line, when you hang up, after two silences of 8 s, or at `max_duration_seconds`.
 - The log shows ringing, answer, RTP packet counts and the token count, never the transcript. `rtp packets in 0` means Asterisk sent no caller audio; `out 0` means the model never spoke.
+
+### Call a phone through Twilio
+
+Once per VM, after the Twilio console setup under "One-time setup", from `infra/asterisk/`:
+
+```bash
+sudo TWILIO_TERMINATION_URI=<name>.pstn.twilio.com CALLER_ID=<Twilio number, E.164> ./trunk-setup.sh
+```
+
+- It adds a UDP transport on the VM's internal address, port 5060, that advertises the external address (`34.60.118.169`), and the endpoint `twilio` (u-law, RFC 4733 keys, caller ID in the `From` header). Twilio lets the VM in by that address. `TWILIO_USERNAME=<user>` also sends a Credential List login; the script asks for the password.
+- Calls from Twilio to the VM are hung up: only outbound calls are used.
+- The caller ID and the phones you call stay out of the repo: pass them on the command line.
+
+A Gemini call to a phone, with the sample order:
+
+```bash
+sudo docker run --rm --network host --env-file /etc/codguard/controller.env \
+  asia-southeast1-docker.pkg.dev/ai-codguard/codguard/backend:main \
+  python -m app.telephony.dial +84XXXXXXXXX
+```
+
+To have the deployed backend ring a team phone instead of the softphone, change the secret and roll a new revision (a secret in a variable is read when an instance starts):
+
+```bash
+printf 'pstn:+84XXXXXXXXX' | gcloud secrets versions add call-target-override --project ai-codguard --data-file=-
+gcloud run services update codguard-api --project ai-codguard --region asia-southeast1 \
+  --update-secrets CALL_TARGET_OVERRIDE=call-target-override:latest
+```
+
+Back to the softphone: the same with `sip:6001`. Deploys from `main` keep the latest version.
 
 ### The controller service
 
@@ -267,6 +299,9 @@ All in project `ai-codguard`. The repo owner keeps the script for it outside the
 - Pub/Sub topics and subscriptions as in the table above. The Pub/Sub service agent needs publisher on `call-jobs-dead` and subscriber on `call-jobs-vm` for dead-lettering.
 - `codguard-runtime`: publisher on `call-jobs` (backend), subscriber on `call-jobs-vm` (controller), object user on the recordings bucket, reader on Artifact Registry (to pull the image on the VM). It already has the Speech-to-Text client role.
 - Bucket `ai-codguard-call-recordings` in `us-central1` (Cloud Storage's free tier is in US regions), uniform access, public access prevented, delete after 30 days.
+- Secret `call-target-override` (first version `sip:6001`); `codguard-runtime` needs secret accessor on it.
+- Firewall: `codguard-sip-from-twilio` (UDP and TCP 5060, TCP 5061 from Twilio's signalling addresses) and `codguard-rtp-from-twilio` (UDP 10000–10100 from `168.86.128.0/18`), both to the VM.
+- Twilio, on an upgraded account: an Elastic SIP Trunk whose Termination SIP URI has an IP Access Control List with `34.60.118.169/32`, a Twilio number for the caller ID, and Voice geo permissions for Vietnam.
 
 ## Open questions
 

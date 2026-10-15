@@ -1,11 +1,12 @@
 # Asterisk on the VM: softphone testing
 
-This folder runs Asterisk on the VM (`codguard-asterisk`) and sets up softphone accounts, so the team can test calls without the phone network. See [docs/call-controller.md](../../docs/call-controller.md) for how the VM fits in.
+This folder runs Asterisk on the VM (`codguard-asterisk`) and sets up softphone accounts, so the team can test calls without the phone network, and the Twilio trunk for calls to real phones. See [docs/call-controller.md](../../docs/call-controller.md) for how the VM fits in.
 
 | File | What it is |
 |---|---|
 | `Dockerfile`, `docker-compose.yml` | Asterisk 20 from Alpine's packages, on the VM's own network |
 | `dev-setup.sh` | Softphone accounts and test extensions |
+| `trunk-setup.sh` | Twilio Elastic SIP Trunking: calls to real phones |
 
 What `dev-setup.sh` does:
 
@@ -130,6 +131,23 @@ sudo docker logs -f codguard-controller
 
 It is in the Compose profile `controller`, so a plain `docker compose up` starts only Asterisk. Run the same two commands after each merge to `main` to update it.
 
+## 7. Connect Twilio (real phones)
+
+In the Twilio console (upgraded account), once:
+
+1. Elastic SIP Trunking → Trunks → create a trunk.
+2. Termination: choose the Termination SIP URI (`<name>.pstn.twilio.com`) and add an IP Access Control List with the VM's external address, `34.60.118.169/32`.
+3. Numbers: add the account's Twilio number. It is the caller ID.
+4. Voice → Settings → Geo permissions: allow Vietnam.
+
+Then on the VM, from this folder:
+
+```bash
+sudo TWILIO_TERMINATION_URI=<name>.pstn.twilio.com CALLER_ID=<Twilio number, E.164> ./trunk-setup.sh
+```
+
+The firewall rules for Twilio (SIP on 5060, media on 10000–10100) come with the VM setup. To call a phone with the Gemini agent, follow "Call a phone through Twilio" in [docs/call-controller.md](../../docs/call-controller.md). Keep the caller ID and team phone numbers out of the repo.
+
 ## Troubleshooting
 
 | Problem | Check |
@@ -142,3 +160,5 @@ It is in the Compose profile `controller`, so a plain `docker compose up` starts
 | Keys do nothing on `301` | Zoiper DTMF must be RFC-2833 |
 | The script stops at "ARI did not start" | `sudo docker exec asterisk asterisk -rx "http show status"`: ARI needs `res_ari` and the HTTP server on 127.0.0.1:8088 |
 | The script stops at "dialplan did not load" | `sudo docker exec asterisk asterisk -rx "dialplan show codguard-dev"` |
+| Twilio call: 403 Forbidden | The trunk's IP Access Control List lacks `34.60.118.169/32`, the caller ID is not a number on the account, or geo permissions block the country. The Twilio console's Monitor → Logs → Errors says which |
+| Twilio call connects, no audio | `sudo docker exec asterisk asterisk -rx "rtp show settings"` must say 10000–10100 (the firewall rule) |

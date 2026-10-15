@@ -1,8 +1,11 @@
 """Build the CallJob for an order (docs/call-controller.md). Settings from the environment:
 
 - CALL_ENV: `env` of published jobs, `demo` (the VM) or `dev-<name>` (default `demo`)
-- CALL_TARGET_OVERRIDE: `<kind>:<address>`, e.g. `sip:6001`. Demo and testing only: every call
-  rings this softphone instead of the buyer's phone, so no real buyer is ever called.
+- CALL_TARGET_OVERRIDE: `<kind>:<address>`, e.g. `sip:6001` or `pstn:<team phone, E.164>`. Demo
+  and testing only: every call rings this target instead of the buyer's phone. Deployed from
+  Secret Manager (`call-target-override`), so a real number never lands in the repo.
+- CALL_DIAL_BUYERS: `on` lets a call without the override dial the buyer's phone. Off by default:
+  with the Twilio trunk up, a missing override must not ring the made-up buyers of demo data.
 - CALL_AGENT: `gemini_live` (default) or `script`
 - CALL_LANGUAGE: `vi` (default) or `en`
 """
@@ -23,7 +26,7 @@ _REF = re.compile(r"^[A-Za-z0-9-]{1,12}$")
 
 
 class NoTarget(ValueError):
-    """The order has no number the call can dial."""
+    """The call has nothing it may dial; the message says why."""
 
 
 def target_override() -> CallTarget | None:
@@ -34,14 +37,20 @@ def target_override() -> CallTarget | None:
     return CallTarget(kind=CallTargetKind(kind), address=address)
 
 
+def dial_buyers() -> bool:
+    return os.environ.get("CALL_DIAL_BUYERS", "").strip().lower() == "on"
+
+
 def target_for(doc: dict) -> CallTarget:
-    """The override when set, otherwise the buyer's phone. A phone that failed validation at
-    intake has no hash and is never dialled."""
+    """The override when set, otherwise the buyer's phone if CALL_DIAL_BUYERS is on. A phone that
+    failed validation at intake has no hash and is never dialled."""
     override = target_override()
     if override:
         return override
+    if not dial_buyers():
+        raise NoTarget("calls to buyers' phones are turned off on this server")
     if not doc.get("buyer_phone_hash") or not str(doc.get("buyer_phone", "")).startswith("+"):
-        raise NoTarget(doc["order_id"])
+        raise NoTarget("the order has no valid phone number")
     return CallTarget(kind=CallTargetKind.PSTN, address=doc["buyer_phone"])
 
 
