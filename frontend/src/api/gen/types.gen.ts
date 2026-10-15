@@ -302,6 +302,70 @@ export type Call = {
 export type CallAgent = 'script' | 'gemini_live'
 
 /**
+ * CallAutomation
+ *
+ * When the agent places an AI call by itself. The engine still scores every order and picks
+ * the action; an AI call outside these rules is not placed but suggested: the order waits in
+ * review with `suggested_action: ai_call` until the shop confirms the call
+ * (`POST /orders/{id}/calls`) or chooses something else. The defaults are the tier policy as it
+ * was: every call the engine picks is placed. Contact protection (contact hours, one call per
+ * phone per day, blocked phones) applies to every call on top of these rules.
+ */
+export type CallAutomation = {
+  mode?: CallAutomationMode
+  /**
+   * Min Risk Score
+   *
+   * Auto-call orders scoring at least this (0-100): a ship-now or link decision becomes an AI call when the call pays for itself, and an AI call below it is only suggested. Null keeps the tier policy.
+   */
+  min_risk_score?: number | null
+  /**
+   * Cod Ranges
+   *
+   * Per currency; a currency without a range is not limited.
+   */
+  cod_ranges?: Array<CodRange>
+  /**
+   * Channels
+   *
+   * Sales channels to auto-call. Null: all.
+   */
+  channels?: Array<SalesChannel> | null
+  /**
+   * Branches
+   *
+   * Branch IDs to auto-call (config/branches.yaml). Null: all.
+   */
+  branches?: Array<string> | null
+  /**
+   * Null: whenever contact hours allow.
+   */
+  call_window?: CallWindow | null
+  /**
+   * Max Attempts
+   *
+   * AI calls the agent makes per order (at most 2).
+   */
+  max_attempts?: number
+  /**
+   * Retry After Minutes
+   *
+   * Wait before the next call (at least 30).
+   */
+  retry_after_minutes?: number
+}
+
+/**
+ * CallAutomationMode
+ *
+ * Who starts an AI call the engine chooses.
+ *
+ * auto: the agent calls by itself when the order is inside the shop's automation rules ·
+ * suggest: the agent only suggests the call; the shop confirms it
+ */
+export type CallAutomationMode = 'auto' | 'suggest'
+
+/**
  * CallBuyer
  */
 export type CallBuyer = {
@@ -678,11 +742,55 @@ export type CallTarget = {
 export type CallTargetKind = 'sip' | 'webrtc' | 'pstn'
 
 /**
+ * CallWindow
+ *
+ * When the agent may start an AI call by itself, in the branch's local time. It must lie
+ * inside the contact hours every call obeys (08:00-21:00).
+ */
+export type CallWindow = {
+  /**
+   * Start
+   */
+  start?: string
+  /**
+   * End
+   *
+   * Exclusive.
+   */
+  end?: string
+  /**
+   * Days
+   */
+  days?: Array<Weekday>
+}
+
+/**
  * Carrier
  *
  * Delivery carrier.
  */
 export type Carrier = 'ghn' | 'ghtk' | 'viettel_post' | 'jt' | 'spx' | 'other'
+
+/**
+ * CodRange
+ *
+ * Auto-call only orders whose amount to collect is in this range, for one currency. Amounts
+ * in the currency's minor unit; a missing bound is open.
+ */
+export type CodRange = {
+  /**
+   * Currency
+   */
+  currency: 'VND' | 'SGD' | 'PHP'
+  /**
+   * Min Cod
+   */
+  min_cod?: number | null
+  /**
+   * Max Cod
+   */
+  max_cod?: number | null
+}
 
 /**
  * ContactAttempt
@@ -735,7 +843,13 @@ export type ContactAttempt = {
  * phone_trusted: phone trusted for 7 days after a confirmation ·
  * already_confirmed: order already confirmed ·
  * batched: batched into another order's contact within 15 minutes ·
- * attempts_exhausted: both call attempts used
+ * attempts_exhausted: both call attempts used ·
+ * manual_approval: the shop approves every AI call (call automation mode "suggest") ·
+ * below_call_threshold: risk score below the shop's auto-call threshold ·
+ * cod_out_of_range: amount to collect outside the shop's auto-call range ·
+ * channel_not_automated: the shop does not auto-call orders from this sales channel ·
+ * branch_not_automated: the shop does not auto-call orders of this branch ·
+ * outside_call_window: outside the hours or days the shop allows automatic calls
  */
 export type ContactBlockReason =
   | 'expected_loss_below_cost'
@@ -746,6 +860,12 @@ export type ContactBlockReason =
   | 'already_confirmed'
   | 'batched'
   | 'attempts_exhausted'
+  | 'manual_approval'
+  | 'below_call_threshold'
+  | 'cod_out_of_range'
+  | 'channel_not_automated'
+  | 'branch_not_automated'
+  | 'outside_call_window'
 
 /**
  * ContactChannel
@@ -858,6 +978,10 @@ export type Decision = {
    * Next Action At
    */
   next_action_at?: string | null
+  /**
+   * An AI call the engine chose but the shop's call automation leaves to the shop: the order waits in review, and `block_reasons` say why it was not placed.
+   */
+  suggested_action?: DecisionAction | null
   /**
    * Decided By
    */
@@ -1319,6 +1443,10 @@ export type OrderDetail = {
   risk_score?: number | null
   current_action?: DecisionAction | null
   /**
+   * An AI call waiting for the shop to confirm it (call automation).
+   */
+  suggested_action?: DecisionAction | null
+  /**
    * Placed At
    */
   placed_at: string
@@ -1574,6 +1702,10 @@ export type OrderSummary = {
   risk_score?: number | null
   current_action?: DecisionAction | null
   /**
+   * An AI call waiting for the shop to confirm it (call automation).
+   */
+  suggested_action?: DecisionAction | null
+  /**
    * Placed At
    */
   placed_at: string
@@ -1652,6 +1784,7 @@ export type Policy = {
    * Tiers
    */
   tiers: [TierPolicy, TierPolicy, TierPolicy, TierPolicy]
+  automation?: CallAutomation
 }
 
 /**
@@ -1681,13 +1814,14 @@ export type PolicyComparison = {
 /**
  * PolicyUpdate
  *
- * Owner only. Must list all four tiers.
+ * Owner only. Must list all four tiers; `automation` left out means the defaults.
  */
 export type PolicyUpdate = {
   /**
    * Tiers
    */
   tiers: [TierPolicy, TierPolicy, TierPolicy, TierPolicy]
+  automation?: CallAutomation
 }
 
 /**
@@ -2032,6 +2166,13 @@ export type TranscriptTurn = {
   offset_ms: number
 }
 
+/**
+ * Weekday
+ *
+ * Day of the week. mon · tue · wed · thu · fri · sat · sun
+ */
+export type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
+
 export type LoginData = {
   body: LoginRequest
   path?: never
@@ -2185,6 +2326,10 @@ export type UpdatePolicyErrors = {
    * Authenticated but not allowed (e.g. staff changing policy).
    */
   403: ProblemDetail
+  /**
+   * Request conflicts with the current state. See `code`.
+   */
+  409: ProblemDetail
   /**
    * Request body or parameters failed validation. See `errors`.
    */

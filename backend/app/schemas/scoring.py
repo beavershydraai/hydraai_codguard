@@ -119,4 +119,9 @@ class Decision(ApiModel):
         default=None, description="Escalation if the buyer does not respond."
     )
     next_action_at: datetime | None = None
+    suggested_action: DecisionAction | None = Field(
+        default=None,
+        description="An AI call the engine chose but the shop's call automation leaves to the "
+        "shop: the order waits in review, and `block_reasons` say why it was not placed.",
+    )
     decided_by: Literal["engine", "staff"] = "engine"

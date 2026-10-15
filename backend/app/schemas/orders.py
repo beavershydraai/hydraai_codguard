@@ -154,6 +154,10 @@ class OrderSummary(ApiModel):
     tier: RiskTier | None = Field(default=None, description="Null until scored or when skipped.")
     risk_score: int | None = Field(default=None, ge=0, le=100)
     current_action: DecisionAction | None = None
+    suggested_action: DecisionAction | None = Field(
+        default=None,
+        description="An AI call waiting for the shop to confirm it (call automation).",
+    )
     placed_at: datetime
     updated_at: datetime
 
