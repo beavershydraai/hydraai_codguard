@@ -162,6 +162,7 @@ export class MockDb {
       effective_from: nowIso(),
       updated_by: by,
       tiers: update.tiers,
+      automation: update.automation ?? this.policies[0]!.automation,
     }
     this.policies.push(next)
     return next
@@ -306,17 +307,27 @@ export class MockDb {
         ? this.policy.tiers.find((t) => t.tier === tier)!.action
         : 'ship_now'
     // A confirmed order is never contacted again.
-    const action: DecisionAction = confirmed && policyAction !== 'hold_for_review' ? 'ship_now' : policyAction
+    const chosen: DecisionAction = confirmed && policyAction !== 'hold_for_review' ? 'ship_now' : policyAction
+    // Call automation "suggest": the engine's AI call waits in review until the shop confirms it.
+    // The mock leaves out the other automation rules (tier, amounts, channels, hours).
+    const suggested = chosen === 'ai_call' && this.policy.automation?.mode === 'suggest'
+    const action: DecisionAction = suggested ? 'hold_for_review' : chosen
     order.decision = {
       decided_at: nowIso(),
       action,
       policy_version: this.policy.version,
       expected_loss_vnd: order.current_score.expected_loss_vnd,
       contact_cost_vnd: null,
-      block_reasons: confirmed && policyAction !== action ? ['already_confirmed'] : [],
+      block_reasons: suggested
+        ? ['manual_approval']
+        : confirmed && policyAction !== action
+          ? ['already_confirmed']
+          : [],
+      suggested_action: suggested ? 'ai_call' : null,
       decided_by: 'engine',
     }
     order.current_action = action
+    order.suggested_action = suggested ? 'ai_call' : null
     this.event(order, 'decided', 'engine', decisionMessage(action))
     this.setStatus(order, statusFor(action))
   }

@@ -184,7 +184,7 @@ export const updateShop = <ThrowOnError extends boolean = false>(
   })
 
 /**
- * Tier policy in force
+ * Tier policy and call automation in force
  */
 export const getPolicy = <ThrowOnError extends boolean = false>(
   options?: Options<GetPolicyData, ThrowOnError>,
@@ -202,9 +202,9 @@ export const getPolicy = <ThrowOnError extends boolean = false>(
   })
 
 /**
- * Replace the tier policy (owner only)
+ * Replace the tier policy and call automation (owner only)
  *
- * Creates a new version. It applies only to decisions made after `effective_from`; earlier decisions keep their version.
+ * Creates a new version. It applies only to decisions made after `effective_from`; earlier decisions keep their version. `automation` sets which AI calls the agent places by itself; the calls it leaves out wait in review as suggestions.
  */
 export const updatePolicy = <ThrowOnError extends boolean = false>(
   options: Options<UpdatePolicyData, ThrowOnError>,

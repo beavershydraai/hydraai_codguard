@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from app.api.errors import ApiError
 from app.data import branches
@@ -107,6 +107,10 @@ def transition(
                 OrderStatus.DELIVERY_FAILED,
             ),
             "call_needs_review": (EDITABLE, OrderStatus.PENDING_REVIEW),
+            "suggestion_accepted": (
+                {OrderStatus.PENDING_REVIEW},
+                OrderStatus.AWAITING_CONFIRMATION,
+            ),
         }
         if event in events:
             allowed, target = events[event]
@@ -230,6 +234,7 @@ def _apply_score(
         policy=policy,
         confirmed=bool(doc.get("confirmation")),
         action=action,
+        order=doc,
     )
     _move(doc, "rescored" if previous else "decided", decision.action)
     _set_decision(doc, decision)
@@ -452,6 +457,54 @@ def override_order(
     return _transact(store, order_id, apply)
 
 
+def accept_suggested_call(
+    store: OrderStore,
+    order_id: str,
+    actor: str,
+    now: datetime,
+    *,
+    settings: ShopSettings | None = None,
+    policy: Policy | None = None,
+) -> dict:
+    """The shop confirms the AI call the engine suggested (call automation): the order then
+    waits for the buyer as after an automatic call, and the timeline records who confirmed it.
+    An order without a suggested call is left alone."""
+
+    def apply(doc):
+        previous = doc.get("decision") or {}
+        if (
+            previous.get("suggested_action") != DecisionAction.AI_CALL
+            or doc["status"] != OrderStatus.PENDING_REVIEW
+        ):
+            return doc
+        current = policy or decisions.default_policy()
+        rule = decisions.tier_rule(current, RiskTier(doc.get("tier") or RiskTier.LOW))
+        next_action, wait = decisions.follow_up(
+            rule, DecisionAction.AI_CALL, calls_made(doc) + 1, current.automation
+        )
+        _move(doc, "suggestion_accepted")
+        _set_decision(
+            doc,
+            Decision(
+                decided_at=now,
+                action=DecisionAction.AI_CALL,
+                policy_version=current.version,
+                expected_loss_vnd=previous.get("expected_loss_vnd"),
+                contact_cost_vnd=decisions.contact_cost(
+                    DecisionAction.AI_CALL, settings or branches.country_of(doc).settings
+                ),
+                next_action=next_action,
+                next_action_at=now + timedelta(minutes=wait) if next_action else None,
+                decided_by="staff",
+            ),
+        )
+        _event(doc, "override", now, "Shop confirmed the suggested AI call.", actor)
+        doc["timeline"][0]["reason"] = "Suggested by the decision engine."
+        return doc
+
+    return _transact(store, order_id, apply)
+
+
 _OVERRIDE_LABELS = {
     DecisionAction.SHIP_NOW: "ship now",
     DecisionAction.REQUIRE_DEPOSIT: "require a deposit",
@@ -576,6 +629,7 @@ def _no_response(
         policy=policy,
         confirmed=bool(doc.get("confirmation")),
         action=previous.next_action,
+        order=doc,
     )
     if decision:
         _move(doc, "no_response", decision.action)
