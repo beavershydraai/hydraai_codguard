@@ -5,6 +5,7 @@ from copy import deepcopy
 from datetime import UTC, datetime
 
 from app.api.errors import ApiError
+from app.data import branches
 from app.data.orders import delivery_fields
 from app.data.phone import phone_hash, to_e164
 from app.data.store import OrderStore, phone_key
@@ -225,7 +226,7 @@ def _apply_score(
         RiskTier(fields["tier"] or RiskTier.LOW),
         raw["expected_loss_vnd"],
         now,
-        settings=settings,
+        settings=settings or branches.country_of(doc).settings,
         policy=policy,
         confirmed=bool(doc.get("confirmation")),
         action=action,
@@ -332,7 +333,7 @@ def _edit(
             "Required order fields cannot be null.",
         )
     if "buyer_phone" in fields:
-        normalised = to_e164(fields["buyer_phone"])
+        normalised = to_e164(fields["buyer_phone"], branches.country_of(doc).calling_code)
         fields["buyer_phone"] = normalised or fields["buyer_phone"]
         fields["buyer_phone_hash"] = phone_hash(normalised, phone_key()) if normalised else None
     changed = {k: v for k, v in fields.items() if doc.get(k) != v}
@@ -571,7 +572,7 @@ def _no_response(
         now,
         unanswered=previous.action,
         call_attempts=call_attempts,
-        settings=settings,
+        settings=settings or branches.country_of(doc).settings,
         policy=policy,
         confirmed=bool(doc.get("confirmation")),
         action=previous.next_action,
@@ -648,7 +649,7 @@ def apply_call_outcome(
                     RiskTier(doc.get("tier") or RiskTier.LOW),
                     (doc.get("scoring") or {}).get("expected_loss_vnd", 0),
                     now,
-                    settings=settings,
+                    settings=settings or branches.country_of(doc).settings,
                     policy=policy,
                     action=DecisionAction.HOLD_FOR_REVIEW,
                 )
@@ -685,7 +686,7 @@ def hold_for_review(
             RiskTier(doc.get("tier") or RiskTier.LOW),
             (doc.get("scoring") or {}).get("expected_loss_vnd") or 0,
             now,
-            settings=settings,
+            settings=settings or branches.country_of(doc).settings,
             policy=policy,
             action=DecisionAction.HOLD_FOR_REVIEW,
         )

@@ -33,11 +33,14 @@ One document per order. It is a top-level collection with a `shop_id` field rath
 |---|---|---|---|
 | `order_id` | string | system | Same as the document ID |
 | `shop_id` | string | system | |
+| `branch_id` | string | intake key | Branch that took the order (`config/branches.yaml`); orders stored before branches have none and are left out of training |
+| `country` | `VN` \| `SG` \| `PH` | branch | Picks the risk model (one per country), the costs, the local time and the phone format |
+| `currency` | `VND` \| `SGD` \| `PHP` | branch | Every amount of the order is an integer in this currency's minor unit (SGD, PHP: cents) |
 | `external_id` | string \| null | `OrderCreate.external_id` | Unique per shop; a repeat is ignored |
 | `channel` | string | `OrderCreate.channel` | One of `SalesChannel` |
 | `placed_at` | timestamp | `OrderCreate.placed_at` | Stored in UTC. A time without a zone is Vietnam time (UTC+7) |
 | `buyer_name` | string | `OrderCreate.buyer_name` | Shown in the app; never copied into snapshots |
-| `buyer_phone` | string | `OrderCreate.buyer_phone` | E.164 (`+84…`). Kept as received if it cannot be normalised |
+| `buyer_phone` | string | `OrderCreate.buyer_phone` | E.164 for the branch's country (`+84…`, `+65…`, `+63…`). Kept as received if it cannot be normalised |
 | `buyer_phone_hash` | string \| null | derived | HMAC-SHA256 of the E.164 number with a secret key. Null means the phone is invalid |
 | `is_gift` | bool | `OrderCreate.is_gift` | |
 | `recipient_name` | string \| null | `OrderCreate.recipient_name` | |
@@ -50,6 +53,7 @@ One document per order. It is a top-level collection with a `shop_id` field rath
 | `prepaid_vnd` | int | `OrderCreate.prepaid_vnd` | Deposit or prepayment |
 | `conversation_text` | string \| null | `OrderCreate.conversation_text` | |
 | `note` | string \| null | `OrderCreate.note` | |
+| `skip_agents` | bool, absent unless true | intake key | Sent with a `noagents` test key (`INTAKE_API_KEYS` entry `key:shop:noagents`): the pipeline skips the Gemini assessment |
 | `status` | string | lifecycle (E4.1) | One of the nine `OrderStatus` values; `new` on creation. Only the lifecycle service changes it |
 | `scoring` | map \| null | scoring (E2.4, E2.5) | Latest run: `probability`, `risk_score`, `tier`, `expected_loss_vnd`, `chosen_by`, `hard_rules`, `top_signals`, `shap`, `reasons`, `assessment`, `model_version`, `scored_at`, and `features`, the exact inputs the model saw. `shap` = exact TreeSHAP of every feature (`base_value`, `prediction`, `contributions`, before calibration); `reasons` = up to 3 reasons the Gemini assessment picked; `assessment` = its status, agents and model. `expected_loss_vnd` = probability × 60,000 VND until E2.5 uses the shop's costs. `top_signals` = the 5 features with the largest SHAP values for this order, rescaled to probability (positive raises risk) |
 | `decision` | map \| null | lifecycle (E4.1), policy (E4.2) | Current `Decision`: `decided_at`, `action`, `policy_version`, `expected_loss_vnd`, `contact_cost_vnd`, `block_reasons`, `next_action`, `next_action_at`, `decided_by`. Null until decided |

@@ -35,7 +35,7 @@ import {
   formatDateTime,
   formatPercent,
   formatRelative,
-  formatVnd,
+  formatMoney,
   HARD_RULE_LABELS,
   SALES_CHANNEL_LABELS,
   SIGNAL_GROUP_LABELS,
@@ -139,11 +139,11 @@ export function OrderDetailView({ order, actions }: { order: OrderDetail; action
                 Left to collect
               </span>
               <span className="text-2xl leading-none font-semibold tracking-tight tabular-nums md:text-3xl">
-                {formatVnd(order.cod_amount_vnd)}
+                {formatMoney(order.cod_amount_vnd, order.currency)}
               </span>
               <span className="text-xs text-muted-foreground tabular-nums">
-                Total {formatVnd(order.total_vnd)}
-                {order.prepaid_vnd > 0 && ` · Prepaid ${formatVnd(order.prepaid_vnd)}`}
+                Total {formatMoney(order.total_vnd, order.currency)}
+                {order.prepaid_vnd > 0 && ` · Prepaid ${formatMoney(order.prepaid_vnd, order.currency)}`}
               </span>
             </div>
           </div>
@@ -154,7 +154,7 @@ export function OrderDetailView({ order, actions }: { order: OrderDetail; action
         <JourneyPanel order={order} />
 
         <div className="flex min-w-0 flex-col gap-6">
-          <RiskPanel score={order.current_score ?? null} />
+          <RiskPanel score={order.current_score ?? null} currency={order.currency ?? 'VND'} />
           <DecisionPanel order={order} />
           <ContactsPanel order={order} onPreviewMessage={actions.onPreviewMessage} />
           <DetailsPanel order={order} />
@@ -248,7 +248,7 @@ function actorLabel(actor: string): string {
 
 // ── Risk ──
 
-function RiskPanel({ score }: { score: RiskScore | null }) {
+function RiskPanel({ score, currency }: { score: RiskScore | null; currency: string }) {
   if (!score) {
     return (
       <PanelFrame eyebrow="Delivery refusal risk" title="Not scored yet">
@@ -288,10 +288,13 @@ function RiskPanel({ score }: { score: RiskScore | null }) {
         />
         <Metric
           label="Expected loss"
-          value={score.expected_loss_vnd != null ? formatVnd(score.expected_loss_vnd) : '—'}
+          value={score.expected_loss_vnd != null ? formatMoney(score.expected_loss_vnd, currency) : '—'}
           estimated
         />
-        <Metric label="Cost of one failed delivery" value={formatVnd(score.failed_delivery_cost_vnd)} />
+        <Metric
+          label="Cost of one failed delivery"
+          value={formatMoney(score.failed_delivery_cost_vnd, currency)}
+        />
       </dl>
 
       {(score.hard_rules?.length ?? 0) > 0 && (
@@ -326,7 +329,7 @@ function RiskPanel({ score }: { score: RiskScore | null }) {
           <h3 className="text-sm font-medium">Top contributing signals</h3>
           <ul className="flex flex-col gap-2.5">
             {signals.map((signal) => (
-              <SignalRow key={signal.key} signal={signal} max={maxContribution} />
+              <SignalRow key={signal.key} signal={signal} max={maxContribution} currency={currency} />
             ))}
           </ul>
         </div>
@@ -340,7 +343,7 @@ function RiskPanel({ score }: { score: RiskScore | null }) {
   )
 }
 
-function SignalRow({ signal, max }: { signal: Signal; max: number }) {
+function SignalRow({ signal, max, currency }: { signal: Signal; max: number; currency: string }) {
   const raises = signal.contribution > 0
   const width = `${Math.round((Math.abs(signal.contribution) / max) * 100)}%`
   return (
@@ -351,7 +354,7 @@ function SignalRow({ signal, max }: { signal: Signal; max: number }) {
           <span className="ms-1.5 text-xs text-muted-foreground">{SIGNAL_GROUP_LABELS[signal.group]}</span>
         </span>
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-          {formatSignalValue(signal.value)}
+          {formatSignalValue(signal, currency)}
         </span>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">
@@ -365,9 +368,9 @@ function SignalRow({ signal, max }: { signal: Signal; max: number }) {
   )
 }
 
-function formatSignalValue(value: Signal['value']): string {
+function formatSignalValue({ key, value }: Signal, currency: string): string {
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
-  if (typeof value === 'number' && value >= 10_000) return formatVnd(value)
+  if (typeof value === 'number' && key === 'cod_amount_vnd') return formatMoney(value, currency)
   return String(value)
 }
 
@@ -399,8 +402,8 @@ function DecisionPanel({ order }: { order: OrderDetail }) {
         <Metric label="Policy" value={`Version ${decision.policy_version}`} />
         <Metric
           label="Expected loss / contact cost"
-          value={`${decision.expected_loss_vnd != null ? formatVnd(decision.expected_loss_vnd) : '—'} / ${
-            decision.contact_cost_vnd != null ? formatVnd(decision.contact_cost_vnd) : '—'
+          value={`${decision.expected_loss_vnd != null ? formatMoney(decision.expected_loss_vnd, order.currency) : '—'} / ${
+            decision.contact_cost_vnd != null ? formatMoney(decision.contact_cost_vnd, order.currency) : '—'
           }`}
           estimated
         />
@@ -560,9 +563,13 @@ function DetailsPanel({ order }: { order: OrderDetail }) {
                 </p>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-0.5 text-sm tabular-nums">
-                <span className="font-semibold">{formatVnd(item.quantity * item.unit_price_vnd)}</span>
+                <span className="font-semibold">
+                  {formatMoney(item.quantity * item.unit_price_vnd, order.currency)}
+                </span>
                 {item.quantity > 1 && (
-                  <span className="text-xs text-muted-foreground">{formatVnd(item.unit_price_vnd)} each</span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatMoney(item.unit_price_vnd, order.currency)} each
+                  </span>
                 )}
               </div>
             </article>
@@ -572,17 +579,29 @@ function DetailsPanel({ order }: { order: OrderDetail }) {
         <Separator />
 
         <dl className="flex flex-col gap-1.5 self-end sm:min-w-72">
-          <SummaryRow label="Subtotal" value={formatVnd(subtotal)} />
-          <SummaryRow label="Shipping" value={formatVnd(order.shipping_fee_vnd)} />
+          <SummaryRow label="Subtotal" value={formatMoney(subtotal, order.currency)} />
+          <SummaryRow label="Shipping" value={formatMoney(order.shipping_fee_vnd, order.currency)} />
           {order.discount_vnd > 0 && (
-            <SummaryRow label="Discount" value={`-${formatVnd(order.discount_vnd)}`} tone="success" />
+            <SummaryRow
+              label="Discount"
+              value={`-${formatMoney(order.discount_vnd, order.currency)}`}
+              tone="success"
+            />
           )}
-          <SummaryRow label="Total" value={formatVnd(order.total_vnd)} />
+          <SummaryRow label="Total" value={formatMoney(order.total_vnd, order.currency)} />
           {order.prepaid_vnd > 0 && (
-            <SummaryRow label="Prepaid" value={`-${formatVnd(order.prepaid_vnd)}`} tone="success" />
+            <SummaryRow
+              label="Prepaid"
+              value={`-${formatMoney(order.prepaid_vnd, order.currency)}`}
+              tone="success"
+            />
           )}
           <Separator className="my-1" />
-          <SummaryRow label="COD to collect" value={formatVnd(order.cod_amount_vnd)} strong />
+          <SummaryRow
+            label="COD to collect"
+            value={formatMoney(order.cod_amount_vnd, order.currency)}
+            strong
+          />
         </dl>
       </FramePanel>
     </Frame>

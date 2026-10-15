@@ -117,10 +117,11 @@ def _part_of_day(hour: int, language: CallLanguage) -> str:
     return "tối" if 18 <= hour < 23 else "đêm"
 
 
-def placed_at(at: datetime, now: datetime, language: CallLanguage) -> str:
-    """When the order was placed, in Vietnam time: "chiều nay", "tối hôm qua",
-    "tối ngày 7 tháng 10" / "this afternoon", "yesterday evening", "on the evening of 7 October"."""
-    local, today = at.astimezone(VN_TIME), now.astimezone(VN_TIME).date()
+def placed_at(at: datetime, now: datetime, language: CallLanguage, tz=VN_TIME) -> str:
+    """When the order was placed, in the branch's local time (default Vietnam): "chiều nay",
+    "tối hôm qua", "tối ngày 7 tháng 10" / "this afternoon", "yesterday evening", "on the evening
+    of 7 October"."""
+    local, today = at.astimezone(tz), now.astimezone(tz).date()
     part = _part_of_day(local.hour, language)
     if language == CallLanguage.EN:
         if local.date() == today:

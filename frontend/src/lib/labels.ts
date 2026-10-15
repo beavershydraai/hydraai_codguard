@@ -116,6 +116,19 @@ const dateTime = new Intl.DateTimeFormat('en-GB', {
 })
 
 export const formatVnd = (amount: number) => vnd.format(amount)
+
+// Amounts are integers in the currency's minor unit: VND has none, SGD and PHP are in cents.
+const MINOR_UNIT: Record<string, number> = { VND: 1, SGD: 100, PHP: 100 }
+const money = new Map<string, Intl.NumberFormat>()
+/** An order amount in its own currency (VN, SG and PH branches). */
+export function formatMoney(amount: number, currency = 'VND'): string {
+  let format = money.get(currency)
+  if (!format) {
+    format = new Intl.NumberFormat('en-US', { style: 'currency', currency })
+    money.set(currency, format)
+  }
+  return format.format(amount / (MINOR_UNIT[currency] ?? 1))
+}
 export const formatDateTime = (iso: string) => dateTime.format(new Date(iso))
 export const formatPercent = (share: number, digits = 0) =>
   new Intl.NumberFormat('en-US', { style: 'percent', maximumFractionDigits: digits }).format(share)

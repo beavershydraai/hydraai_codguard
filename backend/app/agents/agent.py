@@ -290,11 +290,12 @@ def call_buyer(node_input: dict) -> dict:
 
 
 def _place_call(pipe: Pipeline, doc: dict, attempt: int, now: datetime) -> dict:
-    """Hand the claimed attempt to the call controller. Simulated orders (`SIM-`/`SIMAI-`, the
-    demo simulator) and an instance without calls configured keep the call simulated. A failure
+    """Hand the claimed attempt to the call controller. Test orders (`skip_agents`: sent with a
+    `noagents` intake key, as the demo simulator does) and an instance without calls configured
+    keep the call simulated. A failure
     to place the call is logged and leaves the order waiting for its no-response timer: nothing
     reaches the buyer on an error."""
-    if pipe.calls is None or str(doc.get("external_id") or "").startswith("SIM"):
+    if pipe.calls is None or doc.get("skip_agents"):
         return {}
     try:
         return pipe.calls.start_for_pipeline(doc["order_id"], attempt, now)

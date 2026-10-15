@@ -12,7 +12,7 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatDateTime, formatPercent, formatVnd } from '@/lib/labels'
+import { formatDateTime, formatPercent, formatMoney } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 
 import { type Policy, POLICY_LABELS } from './data'
@@ -51,8 +51,8 @@ export function BacktestView({ result, isLoading }: { result?: BacktestResult; i
         <h1 className="text-2xl font-semibold tracking-tight">Model backtest</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {result.dataset} · {result.orders.toLocaleString('en-US')} orders · assumes {result.orders_per_day}{' '}
-          orders/day, {formatVnd(result.failed_delivery_cost_vnd)} per failed delivery · run at{' '}
-          {formatDateTime(result.generated_at)}
+          orders/day, {formatMoney(result.failed_delivery_cost_vnd, result.currency)} per failed delivery ·
+          run at {formatDateTime(result.generated_at)}
         </p>
       </div>
 
@@ -139,7 +139,7 @@ export function BacktestView({ result, isLoading }: { result?: BacktestResult; i
                         row.policy === 'cod_guard' && 'font-semibold text-success',
                       )}
                     >
-                      {formatVnd(row.monthly_savings_vnd)}/month
+                      {formatMoney(row.monthly_savings_vnd, result.currency)}/month
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground tabular-nums">

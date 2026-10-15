@@ -328,10 +328,10 @@ def test_the_pipeline_places_its_call_through_the_controller(calls):
     assert order(calls)["calls"][0]["id"] == outcome["call_id"]
 
 
-def test_simulated_orders_keep_a_simulated_call(calls):
+def test_test_orders_keep_a_simulated_call(calls):
     from app.agents.agent import Pipeline
 
-    calls.orders.docs["ord_test"]["external_id"] = "SIM-shop_a-0001"
+    calls.orders.docs["ord_test"]["skip_agents"] = True  # sent with a `noagents` intake key
     pipeline = Pipeline(store=calls.orders, log=calls.log, now=NOW, calls=calls)
     outcome = asyncio.run(run(pipeline))
     assert outcome["mock"] is True and calls.publisher.jobs == []

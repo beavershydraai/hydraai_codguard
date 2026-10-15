@@ -15,11 +15,12 @@ from datetime import UTC, datetime
 
 import pandas as pd
 
+from app.data import branches
 from app.decision import policy
 from app.risk import artifacts
 from app.risk.features import compute_features
 from app.risk.model import (
-    FAIL_COST,
+    costs_of,
     expected_cost,
     explain1,
     explainer1,
@@ -46,7 +47,7 @@ TIER_RULE = {t.tier.value: ACTION_NAME[t.action] for t in policy.default_policy(
 RANDOM_SLICE = 0.12  # team decision: 10–15 %
 RETRY_SECONDS = 300
 _rng = random.Random()
-_cache: dict = {"at": 0.0, "models": None}
+_cache: dict = {}  # country -> {"at": last load attempt, "models": ...}
 
 
 def tier_of(p: float) -> str:
@@ -54,34 +55,43 @@ def tier_of(p: float) -> str:
     return "low" if p < 0.08 else "medium" if p < 0.20 else "high" if p < 0.40 else "very_high"
 
 
-def expected_loss(p: float) -> int:
-    """ponytail: P(failed) × the default failed-delivery cost until E2.5 uses the shop's costs."""
-    return round(p * FAIL_COST)
+def expected_loss(p: float, country: branches.Country) -> int:
+    """P(failed) × the country's failed-delivery cost, in its currency."""
+    return round(p * country.costs["failed_delivery"])
 
 
-def load_models() -> dict | None:
-    """{'model1', 'model2', 'switched'} from the bucket, or None while no model is trained."""
-    if _cache["models"] is None and time.time() - _cache["at"] > RETRY_SECONDS:
-        _cache["at"] = time.time()
+def load_models(code: str = "VN") -> dict | None:
+    """The country's {'model1', 'model2', 'switched'}, or None while it has no trained model."""
+    cache = _cache.setdefault(code, {"at": 0.0, "models": None})
+    if cache["models"] is None and time.time() - cache["at"] > RETRY_SECONDS:
+        cache["at"] = time.time()
         try:
-            raw1 = artifacts.read("latest/model1.pkl")
+            raw1 = artifacts.read("latest/model1.pkl", code)
             if raw1:
                 raw2, switched = (
-                    artifacts.read("latest/model2.pkl"),
-                    artifacts.read("latest/switched.json"),
+                    artifacts.read("latest/model2.pkl", code),
+                    artifacts.read("latest/switched.json", code),
                 )
-                _cache["models"] = {
+                cache["models"] = {
                     "model1": pickle.loads(raw1),
                     "model2": pickle.loads(raw2) if raw2 else None,
                     "switched": set(json.loads(switched)) if switched else set(),
                 }
         except Exception:  # never let a storage problem break order intake
-            log.exception("Could not load the risk models")
-    return _cache["models"]
+            log.exception("Could not load the risk models for %s", code)
+    return cache["models"]
 
 
-def decide(features: dict, p: float, phone_valid: bool, models: dict, rng=_rng) -> dict:
-    """Tier and action for one order, with the path that chose it."""
+def decide(
+    features: dict,
+    p: float,
+    phone_valid: bool,
+    models: dict,
+    rng=_rng,
+    country: branches.Country | None = None,
+) -> dict:
+    """Tier and action for one order, with the path that chose it, at the country's costs."""
+    country = country or branches.country("VN")
     if features["cod_amount_vnd"] == 0:
         return {"tier": None, "action": "none", "chosen_by": "hard rule: fully prepaid"}
     if not phone_valid:
@@ -101,16 +111,21 @@ def decide(features: dict, p: float, phone_valid: bool, models: dict, rng=_rng) 
         }
     if tier in models["switched"] and models["model2"]:
         X = pd.DataFrame([features])
-        costs = {a: float(expected_cost(models["model2"], X, a)[0]) for a in options}
+        costs = {
+            a: float(expected_cost(models["model2"], X, a, costs_of(country))[0]) for a in options
+        }
         return {"tier": tier, "action": min(costs, key=costs.get), "chosen_by": "model 2"}
-    decision = policy.decide(RiskTier(tier), expected_loss(p), datetime.now(UTC))
+    decision = policy.decide(
+        RiskTier(tier), expected_loss(p, country), datetime.now(UTC), settings=country.settings
+    )
     chosen_by = "tier rule: expected loss ≤ contact cost" if decision.block_reasons else "tier rule"
     return {"tier": tier, "action": ACTION_NAME[decision.action], "chosen_by": chosen_by}
 
 
 def score(doc: dict, history: list[dict]) -> dict | None:
-    """Fields to add to the order document, or None when no model is available yet."""
-    models = load_models()
+    """Fields to add to the order document, or None when its country has no model yet."""
+    country = branches.country_of(doc)
+    models = load_models(country.code)
     if models is None:
         return None
     model1 = models["model1"]
@@ -125,7 +140,7 @@ def score(doc: dict, history: list[dict]) -> dict | None:
         log.exception("Could not explain the score of %s", doc.get("order_id"))
         shap, signals = {"available": False, "method": "tree_shap", "contributions": {}}, []
     decision = {"random_slice": False, "action_probability": 1.0} | decide(
-        features, p, doc["buyer_phone_hash"] is not None, models
+        features, p, doc["buyer_phone_hash"] is not None, models, country=country
     )
     return {
         "tier": decision["tier"],
@@ -136,7 +151,8 @@ def score(doc: dict, history: list[dict]) -> dict | None:
             "probability": round(p, 4),
             "risk_score": round(p * 100),
             "tier": decision["tier"],
-            "expected_loss_vnd": expected_loss(p),
+            "expected_loss_vnd": expected_loss(p, country),
+            "failed_delivery_cost_vnd": country.costs["failed_delivery"],
             "chosen_by": decision["chosen_by"],
             "features": features,
             "shap": shap,

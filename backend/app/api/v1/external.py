@@ -10,7 +10,7 @@ from app.agents.log import DecisionLog, get_decision_log
 from app.api.errors import ApiError, NotImplementedYet, problem_example, problem_responses
 from app.api.security import bearer_auth, intake_api_key
 from app.calls.service import CallService, get_call_service
-from app.data.store import OrderStore, get_store, shop_for_key
+from app.data.store import OrderStore, agents_for_key, branch_for_key, get_store, shop_for_key
 from app.schemas.confirm import BuyerOrderView, BuyerResponse, BuyerResponseResult
 from app.schemas.demo import DemoResetResult, SpamSimulationResult
 from app.schemas.enums import ErrorCode
@@ -42,7 +42,13 @@ def intake_order(
     if shop_id is None:
         raise ApiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized", "Missing or unknown X-Api-Key.")
     pipeline = Pipeline(store=store, log=decision_log, calls=calls)
-    doc, duplicate = receive(body, shop_id, pipeline=pipeline)
+    doc, duplicate = receive(
+        body,
+        shop_id,
+        pipeline=pipeline,
+        branch_id=branch_for_key(api_key),
+        skip_agents=not agents_for_key(api_key),
+    )
     return IntakeAccepted(order_id=doc["order_id"], status=doc["status"], duplicate=duplicate)
 
 

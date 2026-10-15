@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
-import { formatVnd, SALES_CHANNEL_LABELS } from '@/lib/labels'
+import { formatMoney, SALES_CHANNEL_LABELS } from '@/lib/labels'
 
 type OrderRow = Row<DataGridFeatures, OrderSummary>
 
@@ -76,9 +76,13 @@ export const AmountCell = memo(function AmountCell({ row }: { row: OrderRow }) {
   const prepaid = o.total_vnd - o.cod_amount_vnd
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
-      <span className="font-medium text-foreground tabular-nums">{formatVnd(o.cod_amount_vnd)}</span>
+      <span className="font-medium text-foreground tabular-nums">
+        {formatMoney(o.cod_amount_vnd, o.currency)}
+      </span>
       {prepaid > 0 && (
-        <span className="text-xs text-muted-foreground tabular-nums">Prepaid {formatVnd(prepaid)}</span>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          Prepaid {formatMoney(prepaid, o.currency)}
+        </span>
       )}
     </div>
   )

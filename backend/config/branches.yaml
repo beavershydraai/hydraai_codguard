@@ -1,0 +1,37 @@
+# Branches of the demo shop and the countries they sell in (tasks/branches-multi-country.md).
+#
+# One risk model per country: a branch uses its country's model, so a second branch in a country
+# is one more line under `branches`. Amounts are integers in the currency's minor unit: VND has
+# none, SGD and PHP are in cents. The costs are assumptions until the shop sets its own; the VN
+# ones are the ShopSettings defaults.
+
+default_branch: branch_VN_HCM  # for an intake key without a branch (`key:shop`)
+
+branches:
+  branch_VN_HCM: {country: VN}
+  branch_VN_HN: {country: VN}
+  branch_SG: {country: SG}
+  branch_PH: {country: PH}
+
+countries:
+  VN:
+    currency: VND
+    minor_unit: 1
+    timezone: Asia/Ho_Chi_Minh
+    utc_offset_hours: 7
+    calling_code: "84"
+    costs: {failed_delivery: 60000, confirmation_link: 300, ai_call: 1500, deposit_request: 5000}
+  SG:
+    currency: SGD
+    minor_unit: 100
+    timezone: Asia/Singapore
+    utc_offset_hours: 8
+    calling_code: "65"
+    costs: {failed_delivery: 1200, confirmation_link: 2, ai_call: 30, deposit_request: 200}
+  PH:
+    currency: PHP
+    minor_unit: 100
+    timezone: Asia/Manila
+    utc_offset_hours: 8
+    calling_code: "63"
+    costs: {failed_delivery: 25000, confirmation_link: 100, ai_call: 500, deposit_request: 5000}

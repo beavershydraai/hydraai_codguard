@@ -12,7 +12,8 @@ import re
 from datetime import datetime
 
 from app.calls import spoken
-from app.demo.simulate import SHOPS
+from app.data import branches
+from app.demo.world import SHOP_ID, SHOP_NAME
 from app.schemas.enums import CallAgent, CallLanguage, CallTargetKind
 from app.schemas.telephony import CallBuyer, CallItem, CallJob, CallOrder, CallTarget
 
@@ -46,10 +47,9 @@ def target_for(doc: dict) -> CallTarget:
 
 def shop_name(shop_id: str) -> str:
     """The name the call introduces itself with. Shops have no profile yet (E7), so the demo
-    shops use the simulator's names and any other shop its id."""
-    known = SHOPS.get(shop_id)
-    if known:
-        return known["name"]
+    shop uses the name the app shows and any other shop its id."""
+    if shop_id == SHOP_ID:
+        return SHOP_NAME
     return shop_id.removeprefix("shop_").replace("_", " ").title() or "the shop"
 
 
@@ -75,7 +75,9 @@ def call_order(doc: dict, now: datetime, language: CallLanguage) -> CallOrder:
     return CallOrder(
         order_id=doc["order_id"],
         ref=order_ref(doc),
-        placed_at_spoken=spoken.placed_at(doc["placed_at"], now, language),
+        placed_at_spoken=spoken.placed_at(
+            doc["placed_at"], now, language, branches.country_of(doc).tz
+        ),
         items=[
             CallItem(name=i["name"], variant=i.get("variant") or "", quantity=i["quantity"])
             for i in doc["items"]

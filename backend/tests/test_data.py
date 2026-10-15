@@ -144,3 +144,21 @@ def test_snapshot_row_labels_a_buyer_cancellation_without_exposing_it():
     row = snapshot_row(doc)
     assert row["is_failed"] == 1
     assert "cancel" not in row
+
+
+@pytest.mark.parametrize(
+    ("raw", "code", "e164"),
+    [
+        ("+65 0000 0042", "65", "+6500000042"),
+        ("00000042", "65", "+6500000042"),
+        ("+63 000 000 0066", "63", "+630000000066"),
+        ("0000 000 0066", "63", "+630000000066"),
+    ],
+)
+def test_to_e164_accepts_singapore_and_philippine_numbers(raw, code, e164):
+    assert to_e164(raw, code) == e164
+
+
+def test_a_number_of_another_country_is_invalid_for_the_branch():
+    assert to_e164("+84 000 000 001", "65") is None
+    assert to_e164("+65 0000 0042", "84") is None
