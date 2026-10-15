@@ -12,7 +12,14 @@ from app.agents.runner import run_new_order_sync
 from app.api.errors import ApiError, NotImplementedYet, problem_example, problem_responses
 from app.api.security import bearer_auth, intake_api_key
 from app.data.orders import order_document
-from app.data.store import OrderStore, get_store, order_id_for, phone_key, shop_for_key
+from app.data.store import (
+    OrderStore,
+    agents_for_key,
+    get_store,
+    order_id_for,
+    phone_key,
+    shop_for_key,
+)
 from app.schemas.confirm import BuyerOrderView, BuyerResponse, BuyerResponseResult
 from app.schemas.demo import DemoResetResult, SpamSimulationResult
 from app.schemas.enums import ErrorCode
@@ -47,6 +54,8 @@ def intake_order(
     doc = order_document(
         body, order_id=order_id, shop_id=shop_id, phone_key=phone_key(), now=datetime.now(UTC)
     )
+    if not agents_for_key(api_key):  # a test key: the pipeline skips the Gemini assessment
+        doc["skip_agents"] = True
     existing = store.create(doc)
     if existing:
         return IntakeAccepted(order_id=order_id, status=existing["status"], duplicate=True)

@@ -245,7 +245,7 @@ async def assess(
         return {"status": "unscored", "reasons": []}
     if doc.get("confirmation") or str(scoring.get("chosen_by", "")).startswith("hard rule:"):
         return {"status": "skipped", "reasons": []}
-    if str(doc.get("external_id") or "").startswith("SIM-"):  # simulator orders keep the quota
+    if doc.get("skip_agents"):  # sent with a `noagents` test key: keeps the daily quota
         return {"status": "skipped", "reasons": []}
     model_id = model.model if model is not None else os.environ.get("GEMINI_MODEL", "").strip()
     if not model_id:
