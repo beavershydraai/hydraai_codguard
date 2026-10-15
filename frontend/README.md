@@ -64,10 +64,11 @@ before its backend exists and switches to the backend as soon as the endpoint is
 - `seed.ts` generates a deterministic shop: about 80 orders across every order state, with
   scores, at most 3 reasons each tied to a signal on the order, decisions, contacts, AI calls and
   timelines. Names are generated and phones use the invalid `+84000…` prefix.
-- `db.ts` keeps state for the session and follows the domain rules: overrides need a reason, a
+- `db.ts` keeps state for the session and follows the domain rules: overrides need a reason and
+  are one of the backend's four (ship now, require deposit, hold for review, cancel), a
   confirmed or shipped order is never contacted again, "I didn't order this" blocks the phone, two call
   attempts at most. The inbox filters, searches and pages like the backend.
-- The header shows a "Dữ liệu mẫu" badge whenever data comes from the mock, listing which
+- The header shows a "Sample data" badge whenever data comes from the mock, listing which
   endpoints. Simulated Zalo ZNS / SMS and the browser phone are labelled "mock".
 - Demo login: `admin@gmail.com` / `admin12345` (same as the backend's `.env.example`).
 

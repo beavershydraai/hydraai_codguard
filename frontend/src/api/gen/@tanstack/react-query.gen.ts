@@ -434,7 +434,7 @@ export const createOrderMutation = (
 /**
  * Import orders from a CSV file
  *
- * One row per order, columns as in OrderCreate (items as JSON). Up to 1,000 rows per file.
+ * One row per order, columns as in OrderCreate. `address` is the address as written (or an Address as JSON); `items` is JSON, or one item per row in `item_name`, `quantity` and `unit_price_vnd`. Up to 1,000 rows per file. Every imported order runs the pipeline at once, without the Gemini assessment and with simulated AI calls.
  */
 export const importOrdersMutation = (
   options?: Partial<Options<ImportOrdersData>>,

@@ -45,6 +45,13 @@ EDITABLE = frozenset(
 )
 TERMINAL = frozenset({OrderStatus.CANCELLED, OrderStatus.DELIVERED, OrderStatus.DELIVERY_FAILED})
 WAITING = frozenset({OrderStatus.AWAITING_CONFIRMATION, OrderStatus.AWAITING_DEPOSIT})
+# What staff may choose instead of the engine (E4.5): the targets of `staff_override`.
+OVERRIDES = (
+    DecisionAction.SHIP_NOW,
+    DecisionAction.REQUIRE_DEPOSIT,
+    DecisionAction.HOLD_FOR_REVIEW,
+    DecisionAction.CANCEL,
+)
 
 
 class InvalidTransition(ValueError):
@@ -376,16 +383,80 @@ def edit_order(
     *,
     settings: ShopSettings | None = None,
     policy: Policy | None = None,
+    actor: str = "system",
 ) -> dict:
     """Edit an unshipped order owned by the shop; a changed input causes one rescore."""
 
     def apply(doc):
         if doc["shop_id"] != shop_id:
             raise ApiError(404, ErrorCode.NOT_FOUND, "Not found", "Order not found.")
-        _edit(store, doc, update, now, settings=settings, policy=policy)
+        _edit(store, doc, update, now, settings=settings, policy=policy, actor=actor)
         return doc
 
     return _transact(store, order_id, apply)
+
+
+def allowed_overrides(doc: dict) -> list[DecisionAction]:
+    """Actions staff may apply now: any override target except the action already in force,
+    and none once the order has shipped or closed."""
+    if doc["status"] not in EDITABLE:
+        return []
+    current = (doc.get("decision") or {}).get("action")
+    return [action for action in OVERRIDES if action != current]
+
+
+def override_order(
+    store: OrderStore,
+    order_id: str,
+    shop_id: str,
+    action: DecisionAction,
+    reason: str,
+    actor: str,
+    now: datetime,
+) -> dict:
+    """Replace the engine's decision with a staff decision (E4.5). The order keeps it through
+    later rescores; the timeline entry carries who, when and why."""
+    action = DecisionAction(action)
+
+    def apply(doc):
+        if doc["shop_id"] != shop_id:
+            raise ApiError(404, ErrorCode.NOT_FOUND, "Not found", "Order not found.")
+        _editable(doc)
+        if action not in allowed_overrides(doc):
+            raise ApiError(
+                409,
+                ErrorCode.CONFLICT,
+                "Conflict",
+                f"{action.value} is not allowed for this order in its current state.",
+            )
+        previous = doc.get("decision") or {}
+        _move(doc, "staff_override", action)
+        _set_decision(
+            doc,
+            Decision(
+                decided_at=now,
+                action=action,
+                policy_version=previous.get("policy_version", decisions.default_policy().version),
+                expected_loss_vnd=(doc.get("scoring") or {}).get("expected_loss_vnd"),
+                decided_by="staff",
+            ),
+        )
+        if action == DecisionAction.CANCEL:
+            # Not a buyer cancellation, so it never becomes a "failed" training label.
+            doc["cancel"] = {"reason": "shop", "at": now, "by": actor}
+        _event(doc, "override", now, f"Staff chose: {_OVERRIDE_LABELS[action]}.", actor)
+        doc["timeline"][0]["reason"] = reason
+        return doc
+
+    return _transact(store, order_id, apply)
+
+
+_OVERRIDE_LABELS = {
+    DecisionAction.SHIP_NOW: "ship now",
+    DecisionAction.REQUIRE_DEPOSIT: "require a deposit",
+    DecisionAction.HOLD_FOR_REVIEW: "hold for review",
+    DecisionAction.CANCEL: "cancel the order",
+}
 
 
 def _confirm(doc: dict, via: str, now: datetime) -> None:

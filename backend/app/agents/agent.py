@@ -67,6 +67,7 @@ class Pipeline:
     policy: Policy | None = None
     now: datetime | None = None
     calls: "CallService | None" = None  # places real AI calls (E5); None keeps them simulated
+    assess: bool = True  # False skips the Gemini assessment, e.g. for a file import
 
 
 @dataclass
@@ -149,9 +150,11 @@ async def assess_order(node_input: dict) -> dict:
         return node_input
     pipe = current()
     now = pipe.now or datetime.now(UTC)
-    result = AssessmentResult.model_validate(
-        await assessment.assess(deepcopy(node_input["order"] | fields), log=pipe.log, now=now)
-    )
+    if pipe.assess:
+        raw = await assessment.assess(deepcopy(node_input["order"] | fields), log=pipe.log, now=now)
+    else:
+        raw = {"status": "skipped", "reasons": []}
+    result = AssessmentResult.model_validate(raw)
     # Over the daily budget the order goes on like `disabled`: the engine decides, without Gemini
     # reasons. Raising here held every later order of the day for review.
     fields = deepcopy(fields)

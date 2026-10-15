@@ -1,5 +1,6 @@
 """Views of stored order documents for the shop API contract."""
 
+from app.decision.lifecycle import allowed_overrides
 from app.risk.model import FAIL_COST
 from app.schemas.enums import HardRule
 from app.schemas.orders import OrderDetail, OrderEvent, OrderSummary
@@ -122,5 +123,5 @@ def order_detail(doc: dict) -> OrderDetail:
             key=lambda event: event.at,
             reverse=True,
         ),
-        allowed_overrides=doc.get("allowed_overrides", []),
+        allowed_overrides=allowed_overrides(doc),
     )
