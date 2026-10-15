@@ -194,8 +194,14 @@ jobs:
       # Gemini through Vertex AI as the runtime service account (no API key). This model is served
       # only from the global location, not asia-southeast1.
       GEMINI_ENV: GEMINI_MODEL=gemini-3.1-flash-lite,GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=ai-codguard,GOOGLE_CLOUD_LOCATION=global
+      # Temporary demo sign-in for testing; replace with Firebase Auth (E7.1) and remove before submission.
+      DEMO_ADMIN_USERNAME: admin@gmail.com
+      DEMO_ADMIN_PASSWORD: admin1234
+      # The shop the shop-app account belongs to; the simulator's main shop (app/demo/simulate.py).
+      APP_ENV: ADMIN_SHOP_ID=shop_la_vang
       SOURCE_IMAGE: ghcr.io/${{ github.repository }}/backend
     steps:
+      - uses: actions/checkout@v7
       - name: Image names
         run: |
           echo "TAG=sha-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
@@ -219,13 +225,26 @@ jobs:
           # The Asterisk VM runs the call controller from this image and pulls the "main" tag.
           docker tag "$SOURCE_IMAGE:$TAG" "${TARGET_IMAGE%:*}:main"
           docker push "${TARGET_IMAGE%:*}:main"
+      - name: Firestore indexes
+        run: |
+          # Creates the composite indexes in infra/firestore.indexes.json that the database lacks.
+          # A query that needs a missing index fails, and the API answers 500.
+          database=$(tr ',' '\n' <<<"$DATA_ENV" | sed -n 's/^FIRESTORE_DATABASE=//p')
+          python3 .github/scripts/sync_firestore_indexes.py infra/firestore.indexes.json \
+            "$GCP_PROJECT_ID" "$database"
       - name: Deploy
         run: |
+          # A new token signing key on every deploy: never in the repo, and every instance of one
+          # revision shares it. Users sign in again after a deploy.
+          AUTH_TOKEN_SECRET=$(openssl rand -hex 32)
+          echo "::add-mask::$AUTH_TOKEN_SECRET"
           gcloud run deploy "$SERVICE" --image "$TARGET_IMAGE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --service-account "$GCP_RUNTIME_SA" --allow-unauthenticated \
             --port 8080 --cpu 1 --memory 512Mi --min-instances 0 --max-instances 2 \
-            --update-env-vars "$DATA_ENV,$GEMINI_ENV" --remove-env-vars MODEL_URI \
+            --update-env-vars "$DATA_ENV,$GEMINI_ENV,$APP_ENV,AUTH_TOKEN_SECRET=$AUTH_TOKEN_SECRET" \
+            --update-env-vars "ADMIN_USERNAME=$DEMO_ADMIN_USERNAME,ADMIN_PASSWORD=$DEMO_ADMIN_PASSWORD" \
+            --remove-env-vars MODEL_URI \
             --update-secrets "PHONE_HASH_KEY=phone-hash-key-synthetic:latest,INTAKE_API_KEYS=intake-api-keys:latest" --quiet
           URL=$(gcloud run services describe "$SERVICE" --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" --format 'value(status.url)')
@@ -240,6 +259,17 @@ jobs:
               --cpu 1 --memory 2Gi --task-timeout 30m --max-retries 0 \
               --set-env-vars "$DATA_ENV,RETRAIN_MODE=on_demand,REGION=$GCP_REGION" --quiet
           done
+      - name: Deploy the order simulator job
+        run: |
+          # Runs only when executed, e.g. `gcloud run jobs execute codguard-simulate
+          # --args=--minutes=60,--orders-per-hour=30` (add `,--agents` to run the Gemini agents).
+          gcloud run jobs deploy codguard-simulate --image "$TARGET_IMAGE" \
+            --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
+            --service-account "$GCP_RUNTIME_SA" --command "python,-m,app.demo.simulate" \
+            --args="--minutes=60,--orders-per-hour=30" \
+            --cpu 1 --memory 512Mi --task-timeout 3h --max-retries 0 \
+            --set-env-vars "INTAKE_URL=$URL" \
+            --set-secrets "INTAKE_API_KEYS=intake-api-keys:latest" --quiet
       - name: Check the deployed service
         run: |
           echo "Deployed \`$TAG\` to $URL ([API docs]($URL/docs))" >> "$GITHUB_STEP_SUMMARY"
@@ -250,6 +280,11 @@ jobs:
           echo "::error::$URL/health did not return ok"
           curl -sS -i "$URL/health" | head -20
           exit 1
+      - name: Check the demo sign-in
+        run: |
+          body=$(python3 -c 'import json, os; print(json.dumps({"username": os.environ["DEMO_ADMIN_USERNAME"], "password": os.environ["DEMO_ADMIN_PASSWORD"]}))')
+          curl -fsS -X POST "$URL/api/v1/auth/login" -H 'Content-Type: application/json' -d "$body" \
+            | grep -q '"access_token"' || { echo "::error::Sign-in with the demo account failed on $URL"; exit 1; }
 
   deploy-web:
     name: Deploy frontend to Cloud Run (main only)
