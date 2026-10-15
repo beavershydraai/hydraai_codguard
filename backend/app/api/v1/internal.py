@@ -6,10 +6,11 @@ here as the `call-job` webhook so that it is part of the contract.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Security
+from fastapi import APIRouter, Depends, Path, Security
 
 from app.api.errors import NotImplementedYet, problem_example, problem_responses
-from app.api.security import controller_id_token
+from app.api.security import controller_identity
+from app.calls.service import CallService, get_call_service
 from app.schemas.calls import Call
 from app.schemas.enums import ErrorCode
 from app.schemas.telephony import CallJob, CallResult, CallStatusUpdate
@@ -27,8 +28,9 @@ _AUTH = problem_example(
 )
 
 internal_router = APIRouter(
-    prefix="/internal", tags=["internal"], dependencies=[Security(controller_id_token)]
+    prefix="/internal", tags=["internal"], dependencies=[Security(controller_identity)]
 )
+Calls = Annotated[CallService | None, Depends(get_call_service)]
 
 
 @internal_router.post(
@@ -41,8 +43,10 @@ internal_router = APIRouter(
     "Otherwise 409 `call_not_active`: the call was cancelled, finished or claimed elsewhere, "
     "so the controller acks the job and does not dial.",
 )
-async def report_call_status(call_id: CallId, body: CallStatusUpdate) -> Call:
-    raise NotImplementedYet("report_call_status")
+def report_call_status(call_id: CallId, body: CallStatusUpdate, calls: Calls) -> Call:
+    if calls is None:
+        raise NotImplementedYet("report_call_status")
+    return calls.record_status(call_id, body)
 
 
 @internal_router.post(
@@ -54,8 +58,12 @@ async def report_call_status(call_id: CallId, body: CallStatusUpdate) -> Call:
     "result for a finished call is 409 `conflict`. A completed result updates the orders "
     "(an `edited` outcome applies the changes and triggers a rescore).",
 )
-async def record_call_result(call_id: CallId, body: CallResult) -> Call:
-    raise NotImplementedYet("record_call_result")
+def record_call_result(call_id: CallId, body: CallResult, calls: Calls) -> Call:
+    # Sync: applying the outcome runs the pipeline's L4 table, whose nodes make blocking
+    # Firestore calls (see the intake route).
+    if calls is None:
+        raise NotImplementedYet("record_call_result")
+    return calls.record_result(call_id, body)
 
 
 call_job_webhooks = APIRouter()

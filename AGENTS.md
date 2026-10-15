@@ -29,6 +29,7 @@ backend/        Python service on Cloud Run: API, decision engine, ADK agents
   app/          FastAPI app: routes (api/v1/) and request/response schemas (schemas/)
     decision/   order lifecycle, rescoring, confirmed-order guard (E4.1) and tier policy (E4.2)
     agents/     ADK workflows (E4.7), advisory assessment and the decision log
+    calls/      AI calls on the backend: contact rules, call jobs to Pub/Sub, controller results
     telephony/  call controller: Pub/Sub consumer, ARI client, call agents (runs on the Asterisk VM)
   config/       rule set YAML; only `tier_policy` is read by the code so far
   scoring/      hard rules, expected loss, model calls

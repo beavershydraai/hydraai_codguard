@@ -199,6 +199,9 @@ jobs:
       DEMO_ADMIN_PASSWORD: admin1234
       # The shop the shop-app account belongs to; the simulator's main shop (app/demo/simulate.py).
       APP_ENV: ADMIN_SHOP_ID=shop_la_vang
+      # AI calls (docs/call-controller.md): jobs go to Pub/Sub for the controller on the Asterisk
+      # VM, and every call rings the team's test softphone 6001 until real calls are allowed.
+      CALLS_ENV: CALL_JOBS_TOPIC=projects/ai-codguard/topics/call-jobs,CALL_ENV=demo,CALL_TARGET_OVERRIDE=sip:6001,INTERNAL_AUDIENCE=https://codguard-api-186430269525.asia-southeast1.run.app,CONTROLLER_SERVICE_ACCOUNTS=codguard-runtime@ai-codguard.iam.gserviceaccount.com
       SOURCE_IMAGE: ghcr.io/${{ github.repository }}/backend
     steps:
       - uses: actions/checkout@v7
@@ -242,7 +245,7 @@ jobs:
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --service-account "$GCP_RUNTIME_SA" --allow-unauthenticated \
             --port 8080 --cpu 1 --memory 512Mi --min-instances 0 --max-instances 2 \
-            --update-env-vars "$DATA_ENV,$GEMINI_ENV,$APP_ENV,AUTH_TOKEN_SECRET=$AUTH_TOKEN_SECRET" \
+            --update-env-vars "$DATA_ENV,$GEMINI_ENV,$APP_ENV,$CALLS_ENV,AUTH_TOKEN_SECRET=$AUTH_TOKEN_SECRET" \
             --update-env-vars "ADMIN_USERNAME=$DEMO_ADMIN_USERNAME,ADMIN_PASSWORD=$DEMO_ADMIN_PASSWORD" \
             --remove-env-vars MODEL_URI \
             --update-secrets "PHONE_HASH_KEY=phone-hash-key-synthetic:latest,INTAKE_API_KEYS=intake-api-keys:latest" --quiet
