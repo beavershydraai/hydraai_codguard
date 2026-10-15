@@ -1,0 +1,24 @@
+# Asterisk on the VM: sudo docker compose up -d --build (from infra/asterisk/)
+services:
+  asterisk:
+    build: .
+    image: codguard-asterisk
+    container_name: asterisk
+    network_mode: host # SIP and RTP need the VM's own addresses, including the Mesh IP
+    restart: unless-stopped
+    volumes:
+      - etc:/etc/asterisk
+      - lib:/var/lib/asterisk
+      - spool:/var/spool/asterisk
+      - log:/var/log/asterisk
+
+# Fixed names, so plain `docker run -v asterisk-etc:...` (README) uses the same volumes.
+volumes:
+  etc:
+    name: asterisk-etc
+  lib:
+    name: asterisk-lib
+  spool:
+    name: asterisk-spool
+  log:
+    name: asterisk-log
