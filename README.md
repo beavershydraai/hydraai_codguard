@@ -100,7 +100,7 @@ flowchart LR
     DEC --> PAGE[Confirmation page]
     API <--> DB
     SCORE <--> BQ
-    WEB[Shop web app<br/>Firebase Hosting] <--> API
+    WEB[Shop web app<br/>Cloud Run] <--> API
 ```
 
 ### Tech Stack
@@ -111,7 +111,7 @@ flowchart LR
 | Agent orchestration | Agent Development Kit (ADK) |
 | Risk model | BigQuery ML (boosted trees, with explanations per prediction) |
 | Backend | Python service on Cloud Run |
-| Frontend | React + TypeScript on Vite: shadcn/ui and ReUI, TanStack Router and Query, Zustand, Hey API client; Firebase Hosting |
+| Frontend | React + TypeScript on Vite: shadcn/ui and ReUI, TanStack Router and Query, Zustand, Hey API client; nginx on Cloud Run |
 | Data | Firestore (orders and app state, see [data model](docs/data-model.md)), Cloud Storage (training snapshots, models) |
 | Secrets | Secret Manager |
 | Delivery outcomes | GHN staging API, CSV import |
@@ -311,7 +311,7 @@ python scripts/reset_demo.py      # loads pseudonymised seed orders
 
 The backend deploys automatically: every push to `main` that passes CI is deployed to the Cloud Run service `codguard-api` in project `ai-codguard` (`asia-southeast1`). The service URL is in the summary of the CI run. Do not deploy by hand.
 
-The frontend will deploy to Firebase Hosting once it exists (`firebase deploy --only hosting`, planned).
+The frontend deploys the same way, right after the backend: the Cloud Run service `codguard-web` serves the build with nginx and forwards `/api` to `codguard-api`, so the browser talks to one origin. Its URL is in the summary of the CI run. See [frontend/README.md](frontend/README.md#deploy).
 
 ---
 
