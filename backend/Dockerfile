@@ -17,6 +17,8 @@ WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
 COPY --from=build /app/app ./app
 COPY config ./config
+# Call prompts and the outcome tool, read by the call controller (app/telephony).
+COPY voice ./voice
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PORT=8080

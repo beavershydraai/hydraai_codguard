@@ -216,6 +216,9 @@ jobs:
           docker pull "$SOURCE_IMAGE:$TAG"
           docker tag "$SOURCE_IMAGE:$TAG" "$TARGET_IMAGE"
           docker push "$TARGET_IMAGE"
+          # The Asterisk VM runs the call controller from this image and pulls the "main" tag.
+          docker tag "$SOURCE_IMAGE:$TAG" "${TARGET_IMAGE%:*}:main"
+          docker push "${TARGET_IMAGE%:*}:main"
       - name: Deploy
         run: |
           gcloud run deploy "$SERVICE" --image "$TARGET_IMAGE" \

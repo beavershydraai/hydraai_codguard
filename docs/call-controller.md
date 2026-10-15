@@ -1,6 +1,12 @@
 # Call controller: Asterisk, the backend and the AI call
 
-Spec for the voice workstream (E5): how a call gets from the decision engine to a phone and back. Nothing in this file is implemented yet, except the contract: `api/openapi.yaml`, tag `internal` and the `call-job` webhook. For the Gemini Live session itself, read [gemini-live.md](gemini-live.md).
+Spec for the voice workstream (E5): how a call gets from the decision engine to a phone and back. For the Gemini Live session itself, read [gemini-live.md](gemini-live.md).
+
+What exists so far:
+
+- The contract: `api/openapi.yaml`, tag `internal`, and the `call-job` webhook.
+- One call with the `gemini_live` agent, in `backend/app/telephony/`: ARI client (`ari.py`), RTP for External Media (`rtp.py`, `audio.py`), the Live agent (`live.py`), the outcome checks (`outcome.py`) and the call runner (`call.py`). The dev tool `app.telephony.dial` drives them; see "Try a Gemini call from a softphone".
+- Not yet: the controller service (Pub/Sub, internal API, outbox), the `script` agent, recording, language switching.
 
 ## Why a controller
 
@@ -189,6 +195,23 @@ Controller:
 | `GOOGLE_CLOUD_PROJECT`, `GEMINI_LIVE_MODEL`, `GEMINI_LIVE_LOCATION` | see gemini-live.md | Gemini agent |
 
 ## Running it
+
+### Try a Gemini call from a softphone
+
+`app.telephony.dial` places one call with the sample order from the contract, runs the `gemini_live` agent and prints the `CallResult`. It registers its own ARI app (`codguard-dial`), so it can run next to the controller. On the VM, with a softphone registered as `6001`:
+
+```bash
+sudo docker run --rm --network host --env-file /etc/codguard/controller.env \
+  asia-southeast1-docker.pkg.dev/ai-codguard/codguard/backend:main \
+  python -m app.telephony.dial 6001 --language vi
+```
+
+- `infra/asterisk/dev-setup.sh` turns on ARI and writes `/etc/codguard/controller.env`: `ARI_URL`, `ARI_USER`, `ARI_PASSWORD` and the Gemini Live variables.
+- Every deploy from `main` also tags the image `main` in Artifact Registry. Pull it once with `sudo gcloud auth configure-docker asia-southeast1-docker.pkg.dev`, then `sudo docker pull …/backend:main` to update. The VM pulls as `codguard-runtime`, which needs reader on the repository (one-time setup).
+- Answer, talk, and press keys: keys reach the model as `[DTMF:<digit>]`. The call ends after the agent's closing line, when you hang up, after two silences of 8 s, or at `max_duration_seconds`.
+- The log shows ringing, answer, RTP packet counts and the token count, never the transcript. If the call connects but you hear noise instead of speech, the byte order of the RTP payload is wrong (`swap16` in `rtp.py`).
+
+### The controller service (planned)
 
 - On the VM, Docker Compose runs `asterisk` and `controller`, both with host networking. The controller uses the backend image from Artifact Registry. Update it with `docker compose pull controller && docker compose up -d controller`. CI does not deploy to the VM yet.
 - Daily testing needs no local setup: register a softphone on the VM over Mesh and start calls from the deployed backend, with `CALL_TARGET_OVERRIDE=sip:<your extension>`.
