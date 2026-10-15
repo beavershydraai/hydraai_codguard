@@ -21,7 +21,7 @@ import {
   TimelineItem,
   TimelineSeparator,
 } from '@/components/reui/timeline'
-import { Frame, FrameHeader, FramePanel, FrameTitle } from '@/components/reui/frame'
+import { Frame, FrameHeader, FramePanel, FrameTitle } from '@/components/ui/frame'
 import { TierBadge } from '@/components/tier-badge'
 import { Button } from '@/components/ui/button'
 import { Item, ItemMedia } from '@/components/ui/item'
