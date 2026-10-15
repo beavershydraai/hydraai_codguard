@@ -36,8 +36,9 @@ with tags `sha-<commit>` and `main`.
 | `app/data/branches.py` | Branches and countries from `config/branches.yaml`: currency, local time, phone code and costs |
 | `app/decision/inbox.py` | Order inbox for `GET /orders`: status/tier filters, search, sort and cursor paging over one shop's orders |
 | `app/decision/` | Order lifecycle (E4.1): nine statuses, transactional edits and rescoring, buyer/call/delivery outcomes, confirmed-order guard, order-detail view. Policy engine (E4.2): action per tier, expected-loss gate and escalation |
-| `app/agents/` | ADK workflows (E4.7), two advisory assessment agents, runners, decision log and contact claims; contact channels return `mock: true` |
-| `app/telephony/` | Call controller for the Asterisk VM: ARI client, RTP for External Media, the Gemini Live agent, `python -m app.telephony.dial` ([docs/call-controller.md](../docs/call-controller.md)) |
+| `app/agents/` | ADK workflows (E4.7), two advisory assessment agents, runners, decision log and contact claims; contact channels return `mock: true`, except AI calls once calls are configured |
+| `app/calls/` | AI calls on the backend side (E5): contact rules, the `CallJob` with amounts and dates in words, publishing to Pub/Sub `call-jobs`, the controller's status and result, and applying the outcome to the orders ([docs/call-controller.md](../docs/call-controller.md)) |
+| `app/telephony/` | Call controller for the Asterisk VM: ARI client, RTP for External Media, the Gemini Live agent, the controller service `python -m app.telephony.controller` (Pub/Sub, claim, result outbox), and `python -m app.telephony.dial` ([docs/call-controller.md](../docs/call-controller.md)) |
 | `config/cod_guard_rules_apac.yaml` | Rule set: the policy engine reads `tier_policy`; the ADK routing and log read `baseline_alignment.api_actions` and `metadata.rule_set_version`. Tests also inspect `enums.outcomes`. The image copies this folder; `tests/test_rules_file.py` checks consistency |
 | `tests/` | Contract and app tests |
 | `Dockerfile` | Production image: uv-built virtualenv, non-root user, listens on `$PORT` |

@@ -119,6 +119,17 @@ The script also turns on ARI for the call controller: HTTP on `127.0.0.1:8088` o
 
 To have the Gemini agent call your softphone with a sample order, follow "Try a Gemini call from a softphone" in [docs/call-controller.md](../../docs/call-controller.md).
 
+## 6. Run the call controller
+
+The controller takes call jobs from the backend and places them through this Asterisk (docs/call-controller.md). It runs the backend image, so the VM must be able to pull it: `sudo gcloud auth configure-docker asia-southeast1-docker.pkg.dev` once.
+
+```bash
+sudo docker compose pull controller && sudo docker compose up -d controller
+sudo docker logs -f codguard-controller
+```
+
+It is in the Compose profile `controller`, so a plain `docker compose up` starts only Asterisk. Run the same two commands after each merge to `main` to update it.
+
 ## Troubleshooting
 
 | Problem | Check |

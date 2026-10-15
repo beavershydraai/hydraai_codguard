@@ -11,6 +11,7 @@ from app.agents.log import DecisionLog, get_decision_log
 from app.agents.runner import run_new_order_sync
 from app.api.errors import ApiError, NotImplementedYet, problem_example, problem_responses
 from app.api.security import bearer_auth, intake_api_key
+from app.calls.service import CallService, get_call_service
 from app.data.orders import order_document
 from app.data.store import (
     OrderStore,
@@ -47,6 +48,7 @@ def intake_order(
     api_key: Annotated[str | None, Security(intake_api_key)],
     store: Annotated[OrderStore, Depends(get_store)],
     decision_log: Annotated[DecisionLog, Depends(get_decision_log)],
+    calls: Annotated[CallService | None, Depends(get_call_service)],
 ) -> IntakeAccepted:
     shop_id = shop_for_key(api_key)
     if shop_id is None:
@@ -73,7 +75,8 @@ def intake_order(
     if existing:
         return IntakeAccepted(order_id=order_id, status=existing["status"], duplicate=True)
     try:  # a pipeline problem must never lose the order: it stays stored, for review or unscored
-        run_new_order_sync(order_id, shop_id, pipeline=Pipeline(store=store, log=decision_log))
+        pipeline = Pipeline(store=store, log=decision_log, calls=calls)
+        run_new_order_sync(order_id, shop_id, pipeline=pipeline)
         doc = store.get(order_id) or doc
     except Exception:
         log.exception("The pipeline failed for %s", order_id)

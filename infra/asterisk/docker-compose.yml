@@ -12,6 +12,24 @@ services:
       - spool:/var/spool/asterisk
       - log:/var/log/asterisk
 
+  # The call controller (docs/call-controller.md): pulls call jobs and drives Asterisk over ARI.
+  # Start it with `sudo docker compose up -d controller` once the backend publishes call jobs;
+  # update it with `sudo docker compose pull controller && sudo docker compose up -d controller`.
+  controller:
+    image: asia-southeast1-docker.pkg.dev/ai-codguard/codguard/backend:main
+    container_name: codguard-controller
+    command: ["python", "-m", "app.telephony.controller"]
+    network_mode: host # ARI on 127.0.0.1:8088, RTP to Asterisk on 127.0.0.1
+    restart: unless-stopped
+    depends_on: [asterisk]
+    env_file: /etc/codguard/controller.env # ARI and Gemini Live settings, from dev-setup.sh
+    environment:
+      CALL_JOBS_SUBSCRIPTION: projects/ai-codguard/subscriptions/call-jobs-vm
+      BACKEND_URL: https://codguard-api-186430269525.asia-southeast1.run.app
+    volumes:
+      - outbox:/var/lib/codguard/outbox
+    profiles: [controller] # not started by a plain `docker compose up`
+
 # Fixed names, so plain `docker run -v asterisk-etc:...` (README) uses the same volumes.
 volumes:
   etc:
@@ -22,3 +40,5 @@ volumes:
     name: asterisk-spool
   log:
     name: asterisk-log
+  outbox:
+    name: codguard-outbox

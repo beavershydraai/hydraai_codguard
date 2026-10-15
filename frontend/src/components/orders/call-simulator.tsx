@@ -78,10 +78,12 @@ export function CallSimulator({
   )
 }
 
+const FINISHED = new Set<Call['status']>(['completed', 'failed'])
+
 function LiveCallStatus({ call }: { call: Call }) {
   const { data = call } = useQuery({
     ...getCallOptions({ path: { call_id: call.id } }),
-    refetchInterval: (query) => (query.state.data?.status === 'completed' ? false : 2_000),
+    refetchInterval: (query) => (FINISHED.has(query.state.data?.status ?? 'queued') ? false : 2_000),
   })
   return (
     <div className="flex flex-col items-center gap-2 py-6 text-center">

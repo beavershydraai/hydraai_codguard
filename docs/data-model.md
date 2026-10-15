@@ -18,6 +18,7 @@
 | Store | Holds | Read by |
 |---|---|---|
 | Firestore, collection `orders` | Every order: what came in, its status, its latest score and its delivery result | The backend on every request; the training job |
+| Firestore, collection `calls` | Every AI call: its job, progress, result and transcript | The backend (`app/calls/`) |
 | Cloud Storage, `snapshots/v{n}/orders.parquet` | A frozen copy of the labelled orders used for one training run | Training, backtest (E9) |
 | Cloud Storage, `models/v{n}/`, `models/latest` | Model file, metrics, feature list | The backend at startup |
 
@@ -60,6 +61,7 @@ One document per order. It is a top-level collection with a `shop_id` field rath
 | `confirmation` | map \| null | buyer response, call outcome (E4.1) | `at`, `via` (`link` or `call`); set once after confirmation or a buyer correction. A confirmed order is never contacted again |
 | `intervention` | optional map | completed buyer response, call outcome, deposit update (E4.1) | First completed contact assignment: `tier`, `contact_action`, `random_slice`, `action_probability`, original address `province`, plus the original scoring `features` and `probability` when available. Saved before a response or deposit update replaces the current score or decision; preserved on later edits |
 | `attempts` | optional map | ADK pipeline (E4.7) | `ai_call`: the number of the last AI call attempt the pipeline claimed (1 or 2). The no-response timer counts it, or the started calls E5 records if they are more, to choose the second attempt or review |
+| `calls`, `contacts` | optional array of map | AI calls (E5, `app/calls/`) | The public `Call` and its `ContactAttempt` for each AI call on the order, as JSON. The order page reads them; `calls/{call_id}` holds the full record |
 | `cancel` | map \| null | buyer response, staff override | `reason` (`cancelled`, `not_ordered`, `shop`), `at`, `by`; buyer cancellation reasons count as failure labels, `shop` alone does not |
 | `timeline` | array of map | lifecycle (E4.1) | `OrderEvent` entries, newest first; starts with `created` |
 | `delivery` | map \| null | `DeliveryOutcome` | `result`, `carrier`, `tracking_code`, `occurred_at` (UTC) |
@@ -84,6 +86,26 @@ One document per order. It is a top-level collection with a `shop_id` field rath
 - The phone key lives in Secret Manager and is the same for every shop, otherwise a phone would not match
   across shops. A plain SHA-256 of a phone number can be reversed by trying every number, so the key is
   required.
+
+## Firestore: `calls/{call_id}`
+
+One document per AI call attempt, written by `app/calls/` (docs/call-controller.md). The ID is
+`call_<order id without ord_>_<attempt>`, so a retry or a double click finds the call it made.
+
+| Field | Type | Notes |
+|---|---|---|
+| `call_id`, `shop_id`, `order_ids`, `attempt` | | |
+| `phone_hash`, `phone_masked` | string | The buyer's phone hash (contact rules across shops) and the masked number shown in the app |
+| `status` | string | `queued` → `dialing` (claimed by `controller_id`) → `in_progress` (answered) → `completed` or `failed` |
+| `requested_by` | string | `system` (pipeline) or the staff member's email |
+| `queued_at`, `started_at`, `answered_at`, `ended_at` | timestamp | `started_at` is when the controller started dialling |
+| `job` | map | The `CallJob` published to `call-jobs` |
+| `outcome`, `failure_reason`, `changes`, `cancel_reason`, `human_callback_requested`, `buyer_requests`, `summary_vi` | | From the `CallResult` |
+| `transcript`, `recording_uri` | | Personal data: kept here only, never copied to the order or to logs |
+| `result` | map | The `CallResult` as received, to tell an identical repeat from a conflicting one |
+| `expired` | bool | The backend failed the call itself (`controller_error`) because the controller stopped reporting; a late result still replaces it |
+
+- Contact rules query `phone_hash == h` (a single-field index, no composite index needed) and filter by time in Python.
 
 ## Training snapshot: `orders.parquet`
 

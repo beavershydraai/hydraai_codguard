@@ -25,6 +25,7 @@ from datetime import datetime, timedelta
 from app.data import branches
 
 SHOP_ID = "shop_demo"
+SHOP_NAME = "Sample Fashion Shop"  # as the app shows it
 TYPES = {  # base failure probability, orders a buyer places relative to others, burst chance
     "reliable": {"p": 0.02, "rate": 1.6, "burst": 0.0},
     "impulsive": {"p": 0.10, "rate": 1.0, "burst": 0.05},
