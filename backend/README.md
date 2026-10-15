@@ -32,6 +32,7 @@ with tags `sha-<commit>` and `main`.
 | `app/schemas/` | Request and response models with examples |
 | `app/data/` | Order record (`docs/data-model.md`): phone normalisation and hashing, the Firestore document, the training label and snapshot row |
 | `app/risk/` | Scoring engine (features, Model 1, exact TreeSHAP on the pre-calibration probability, hard rules, tier, action) and the jobs `jobs/train.py`, `jobs/monitor.py` (`tasks/E2.3-risk-features.md`) |
+| `app/demo/` | Order simulator for demos (`simulate.py`, Cloud Run job `codguard-simulate`): random orders from five fictional shops at random intervals; `SIM-` orders skip the Gemini assessment |
 | `app/decision/inbox.py` | Order inbox for `GET /orders`: status/tier filters, search, sort and cursor paging over one shop's orders |
 | `app/decision/` | Order lifecycle (E4.1): nine statuses, transactional edits and rescoring, buyer/call/delivery outcomes, confirmed-order guard, order-detail view. Policy engine (E4.2): action per tier, expected-loss gate and escalation |
 | `app/agents/` | ADK workflows (E4.7), two advisory assessment agents, runners, decision log and contact claims; contact channels return `mock: true` |
