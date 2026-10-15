@@ -903,7 +903,7 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
       contacts,
       calls: orderCalls,
       timeline: [...timeline].reverse(),
-      allowed_overrides: preShip ? ALL_ACTIONS.filter((a) => a !== decision?.action) : [],
+      allowed_overrides: preShip ? OVERRIDE_ACTIONS.filter((a) => a !== decision?.action) : [],
       confirmation_token: confirmationToken,
     })
     calls.push(...orderCalls)
@@ -932,6 +932,9 @@ export const ALL_ACTIONS: DecisionAction[] = [
   'hold_for_review',
   'cancel',
 ]
+
+/** What staff may choose instead of the engine, as in the backend's `lifecycle.OVERRIDES`. */
+export const OVERRIDE_ACTIONS: DecisionAction[] = ['ship_now', 'require_deposit', 'hold_for_review', 'cancel']
 
 export function decisionMessage(action: DecisionAction): string {
   switch (action) {
