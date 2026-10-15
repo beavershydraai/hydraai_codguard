@@ -91,6 +91,7 @@ def main() -> None:
     if kind == CallTargetKind.PSTN and not E164.match(args.address):
         parser.error("a phone number must be in E.164 form, like +84XXXXXXXXX")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # its request lines carry the number
     job = sample_job(args.address, CallLanguage(args.language), kind)
     try:
         result = asyncio.run(dial(job))
