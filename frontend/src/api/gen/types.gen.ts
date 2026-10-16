@@ -1615,6 +1615,12 @@ export type OrderDetail = {
    */
   contact_summary?: string | null
   /**
+   * Random Test
+   *
+   * The current action was picked at random among the tier's options (the random test, Settings → Automation), not by the tier policy.
+   */
+  random_test?: boolean
+  /**
    * Placed At
    */
   placed_at: string
@@ -1890,6 +1896,12 @@ export type OrderSummary = {
    */
   contact_summary?: string | null
   /**
+   * Random Test
+   *
+   * The current action was picked at random among the tier's options (the random test, Settings → Automation), not by the tier policy.
+   */
+  random_test?: boolean
+  /**
    * Placed At
    */
   placed_at: string
@@ -1983,6 +1995,12 @@ export type Policy = {
    */
   tiers: [TierPolicy, TierPolicy, TierPolicy, TierPolicy]
   automation?: CallAutomation
+  /**
+   * Random Tests
+   *
+   * On: about 12 % of orders whose tier allows more than one action get one at random, so the shop learns what each action really prevents. Off (e.g. for a demo): every order follows the tier policy.
+   */
+  random_tests?: boolean
 }
 
 /**
@@ -2021,6 +2039,12 @@ export type PolicyUpdate = {
    */
   tiers: [TierPolicy, TierPolicy, TierPolicy, TierPolicy]
   automation?: CallAutomation | null
+  /**
+   * Random Tests
+   *
+   * Left out: keeps the setting.
+   */
+  random_tests?: boolean | null
 }
 
 /**

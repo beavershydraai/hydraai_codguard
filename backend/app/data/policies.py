@@ -50,6 +50,9 @@ class PolicyStore:
                 updated_by=by,
                 tiers=update.tiers,
                 automation=update.automation or current.automation,
+                random_tests=(
+                    current.random_tests if update.random_tests is None else update.random_tests
+                ),
             )
         )
         self._create(shop_id, policy)

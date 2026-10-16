@@ -231,6 +231,14 @@ def _apply_score(
         return
     raw = fields["scoring"]
     action = next(a for a, name in engine.ACTION_NAME.items() if name == fields["contact_action"])
+    if (
+        raw["chosen_by"] == "random slice"
+        and not (policy or decisions.default_policy()).random_tests
+    ):
+        # The shop turned random tests off (Settings → Automation): the tier policy decides, and
+        # the order is no random sample for training.
+        raw["chosen_by"] = "tier rule"
+        doc.update(random_slice=False, action_probability=1.0)
     # Model/random choices and hard rules are retained; ordinary tier rules use today's policy.
     if raw["chosen_by"].startswith("tier rule"):
         action = None

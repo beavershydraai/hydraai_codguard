@@ -415,6 +415,13 @@ function DecisionPanel({
         </span>
       }
     >
+      {order.random_test && (
+        <p className="rounded-lg bg-info/10 p-3 text-sm">
+          <span className="font-medium">Random test:</span> this action was picked at random among the actions
+          this risk tier allows, so COD Guard can measure what each action prevents. Turn random tests off in
+          Settings → Automation.
+        </p>
+      )}
       {order.review_reason && !decision.suggested_action && (
         <p className="rounded-lg bg-warning/10 p-3 text-sm">
           <span className="font-medium">Why it is in review:</span>{' '}

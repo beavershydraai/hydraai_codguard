@@ -72,6 +72,7 @@ def _review_fields(doc: dict) -> dict:
         "review_reason": review_reason(doc),
         "hard_rules": _hard_rules(doc.get("scoring") or {}),
         "contact_summary": contact_summary(doc),
+        "random_test": bool(doc.get("random_slice")),
     }
 
 
@@ -168,6 +169,7 @@ SUMMARY_PROJECTION = (
     "calls",
     "attempts",
     "intervention.contact_action",
+    "random_slice",
     *(
         f"scoring.{name}"
         for name in (

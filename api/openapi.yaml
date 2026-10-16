@@ -4145,6 +4145,12 @@ components:
           - type: 'null'
           title: Contact Summary
           description: The latest AI call, summarised for the shop by the agents (English).
+        random_test:
+          type: boolean
+          title: Random Test
+          description: The current action was picked at random among the tier's options (the random test,
+            Settings → Automation), not by the tier policy.
+          default: false
         placed_at:
           type: string
           format: date-time
@@ -4620,6 +4626,12 @@ components:
           - type: 'null'
           title: Contact Summary
           description: The latest AI call, summarised for the shop by the agents (English).
+        random_test:
+          type: boolean
+          title: Random Test
+          description: The current action was picked at random among the tier's options (the random test,
+            Settings → Automation), not by the tier policy.
+          default: false
         placed_at:
           type: string
           format: date-time
@@ -4796,6 +4808,13 @@ components:
           title: Tiers
         automation:
           $ref: '#/components/schemas/CallAutomation'
+        random_tests:
+          type: boolean
+          title: Random Tests
+          description: 'On: about 12 % of orders whose tier allows more than one action get one at random,
+            so the shop learns what each action really prevents. Off (e.g. for a demo): every order follows
+            the tier policy.'
+          default: true
       additionalProperties: false
       type: object
       required:
@@ -4877,6 +4896,12 @@ components:
           anyOf:
           - $ref: '#/components/schemas/CallAutomation'
           - type: 'null'
+        random_tests:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Random Tests
+          description: 'Left out: keeps the setting.'
       additionalProperties: false
       type: object
       required:

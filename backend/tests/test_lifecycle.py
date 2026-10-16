@@ -505,6 +505,26 @@ def test_randomized_contacts_are_blocked_after_confirmation(store, monkeypatch, 
     assert result["random_slice"] is False and result["action_probability"] == 1.0
 
 
+@pytest.mark.parametrize(
+    ("random_tests", "action"), [(True, "send_confirmation_link"), (False, "ai_call")]
+)
+def test_the_shop_can_turn_random_tests_off(store, monkeypatch, random_tests, action):
+    """A random link for a High order stands while random tests are on; turned off (a demo), the
+    tier policy decides and the order is no random sample."""
+
+    def randomized(doc, history):
+        fields = scored_fields("high", "link")
+        fields.update(random_slice=True, action_probability=0.5)
+        fields["scoring"]["chosen_by"] = "random slice"
+        return fields
+
+    monkeypatch.setattr(engine, "score", randomized)
+    shop_policy = policy.default_policy().model_copy(update={"random_tests": random_tests})
+    result = lifecycle.score_order(store, store.docs["ord_test"], NOW, policy=shop_policy)
+    assert result["decision"]["action"] == action
+    assert result["random_slice"] is random_tests
+
+
 def test_the_expected_loss_gate_applies_to_a_model_selected_contact(store, monkeypatch):
     def model_choice(doc, history):
         fields = scored_fields("high", "call")

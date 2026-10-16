@@ -39,3 +39,10 @@ def test_the_contact_summary_is_the_latest_call_that_has_one():
     calls = [{"summary_vi": "First call."}, {"summary_vi": "Second call."}, {"outcome": None}]
     assert contact_summary({"calls": calls}) == "Second call."
     assert contact_summary({}) is None
+
+
+def test_a_random_test_order_is_flagged_for_the_shop():
+    from app.decision.views import _review_fields
+
+    assert _review_fields({"random_slice": True})["random_test"] is True
+    assert _review_fields({})["random_test"] is False
