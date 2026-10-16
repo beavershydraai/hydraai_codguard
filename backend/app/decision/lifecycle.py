@@ -831,6 +831,24 @@ def apply_delivery(
     return _transact(store, order_id, apply)
 
 
+def record_call_review(
+    store: OrderStore, order_id: str, reasons: list[dict], now: datetime
+) -> dict:
+    """After an AI call, the agents' reasons may rest on what was said too: they replace the
+    order's risk reasons. The score, the tier and the decision stay as they are."""
+
+    def apply(doc):
+        scoring = doc.get("scoring")
+        if not scoring or not reasons:
+            return doc
+        scoring["reasons"] = reasons
+        scoring["assessment"] = (scoring.get("assessment") or {}) | {"after_call": True}
+        doc["updated_at"] = now
+        return doc
+
+    return _transact(store, order_id, apply)
+
+
 def record_call(
     store: OrderStore,
     order_id: str,

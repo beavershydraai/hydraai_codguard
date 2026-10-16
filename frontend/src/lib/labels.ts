@@ -7,6 +7,7 @@ import type {
   ContactChannel,
   DecisionAction,
   HardRule,
+  ReviewReason,
   OrderStatus,
   RiskTier,
   SalesChannel,
@@ -119,6 +120,20 @@ export const COUNTRY_LABELS: Record<string, string> = {
   VN: 'Vietnam',
   SG: 'Singapore',
   PH: 'Philippines',
+}
+
+/** Why an order waits in Pending review (backend `views.review_reason`). */
+export const REVIEW_REASON_LABELS: Record<ReviewReason, string> = {
+  suggested: 'Suggested contact waits for you',
+  invalid_phone: 'Invalid phone number: the buyer cannot be contacted',
+  no_answer_link: 'No answer to the confirmation link',
+  no_answer_call: 'No answer to the AI calls',
+  deposit_unpaid: 'Deposit not paid in time',
+  call_unclear: 'AI call ended before the buyer confirmed',
+  wrong_person: 'AI call reached the wrong person',
+  attempts_used: 'All AI call attempts used',
+  staff: 'Held by staff',
+  other: 'Held for a person to decide',
 }
 
 export const HARD_RULE_LABELS: Record<HardRule, string> = {

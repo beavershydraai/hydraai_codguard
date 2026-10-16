@@ -8,7 +8,9 @@
 - CALL_DIAL_BUYERS: `on` lets a call without the override dial the buyer's phone. Off by default:
   with the Twilio trunk up, a missing override must not ring the made-up buyers of demo data.
 - CALL_AGENT: `gemini_live` (default) or `script`
-- CALL_LANGUAGE: `vi` (default) or `en`
+
+The call's language follows the order's branch: Vietnamese for a branch in Vietnam, English for
+every other branch (whatever the buyer's phone number).
 
 CALL_ALLOWED_PHONES and CALL_TARGET_OVERRIDE are deployed from Secret Manager
 (`call-allowed-phones`, `call-target-override`), so a real number never lands in the repo.
@@ -110,8 +112,14 @@ def cod_amount_vnd(doc: dict) -> int:
     return max(total_vnd(doc) - doc.get("prepaid_vnd", 0), 0)
 
 
+def call_language(doc: dict) -> CallLanguage:
+    """Vietnamese for an order of a branch in Vietnam, English for every other branch."""
+    return CallLanguage.VI if branches.country_of(doc).code == "VN" else CallLanguage.EN
+
+
 def call_order(doc: dict, now: datetime, language: CallLanguage) -> CallOrder:
     cod = cod_amount_vnd(doc)
+    currency = doc.get("currency") or branches.country_of(doc).currency
     prepaid = doc.get("prepaid_vnd", 0)
     return CallOrder(
         order_id=doc["order_id"],
@@ -124,9 +132,9 @@ def call_order(doc: dict, now: datetime, language: CallLanguage) -> CallOrder:
             for i in doc["items"]
         ],
         cod_amount_vnd=cod,
-        cod_amount_spoken=spoken.amount(cod, language),
+        cod_amount_spoken=spoken.amount(cod, language, currency),
         deposit_paid_vnd=prepaid,
-        deposit_paid_spoken=spoken.amount(prepaid, language) if prepaid else "",
+        deposit_paid_spoken=spoken.amount(prepaid, language, currency) if prepaid else "",
         recipient_name=doc.get("recipient_name") or doc["buyer_name"],
         delivery_address=doc["address"]["raw"],
         is_gift=bool(doc.get("is_gift")),
@@ -139,7 +147,7 @@ def build_job(
     """One call about one order, introduced with the shop's name (its profile, E7.1). Batching
     several orders to the same phone into one call (contact protection, E4.3) is not done
     yet."""
-    language = CallLanguage(os.environ.get("CALL_LANGUAGE", CallLanguage.VI.value))
+    language = call_language(doc)
     order = call_order(doc, now, language)
     return CallJob(
         call_id=call_id,

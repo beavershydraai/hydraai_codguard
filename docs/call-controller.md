@@ -198,7 +198,7 @@ Backend:
 | `CALL_ALLOWED_PHONES` | `+84XXXXXXXXX,09XXXXXXXX` | Demo only: the team's phones. An order whose buyer phone is one of them rings it for real (Twilio), without the per-phone contact rules. Deployed from Secret Manager (`call-allowed-phones`) |
 | `CALL_TARGET_OVERRIDE` | `sip:6001`, `pstn:+84XXXXXXXXX` | Demo only: send every other call to this target instead of the buyer's phone. Deployed from Secret Manager (`call-target-override`), so a team phone number never lands in the repo. The per-phone contact rules are skipped while it is set |
 | `CALL_DIAL_BUYERS` | unset | `on` lets a call without the override dial the buyer's phone. Not set in the demo: its buyers are made up, and their numbers may belong to someone |
-| `CALL_AGENT`, `CALL_LANGUAGE` | `gemini_live`, `vi` | Agent and language of new calls (the defaults) |
+| `CALL_AGENT` | `gemini_live` | Agent of new calls. The language follows the order's branch: Vietnamese for Vietnam, English for every other country |
 | `CONTACT_HOURS` | `08:00-21:00` | When a real buyer may be called, Vietnam time |
 | `INTERNAL_AUDIENCE` | the backend URL | Expected audience of controller tokens |
 | `CONTROLLER_SERVICE_ACCOUNTS` | `codguard-runtime@ai-codguard.iam.gserviceaccount.com` | Who may call the internal API |

@@ -3,8 +3,8 @@
 
 - CALL_JOBS_TOPIC: `projects/<project>/topics/call-jobs`. Unset: calls are not configured, the
   shop app's call endpoints answer 501 and the pipeline keeps its simulated ("mock") call.
-- CALL_ALLOWED_PHONES, CALL_TARGET_OVERRIDE, CALL_DIAL_BUYERS, CALL_ENV, CALL_AGENT,
-  CALL_LANGUAGE: see app/calls/jobs.py.
+- CALL_ALLOWED_PHONES, CALL_TARGET_OVERRIDE, CALL_DIAL_BUYERS, CALL_ENV, CALL_AGENT: see
+  app/calls/jobs.py.
 
 Contact protection (AGENTS.md) checked here: a confirmed order and an order whose two attempts
 are used are never called; a phone gets at most one AI call per 24 hours (retries for the same
@@ -19,7 +19,7 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from typing import Protocol
 
@@ -374,7 +374,43 @@ class CallService:
         doc = self._transact(call_id, apply)
         if fresh:
             self._apply_to_orders(doc, result)
+            doc = self._review(call_id, doc) or doc
         return call_view(doc)
+
+    def _review(self, call_id: str, doc: dict) -> dict | None:
+        """After a call the buyer spoke on, the agents summarise it for the shop, in English, and
+        may refine the order's risk reasons with what was said (app/agents/assessment.py).
+        Advisory: on any error the call keeps the controller's summary and the order its
+        reasons. Returns the call with the new summary, if any."""
+        transcript = doc.get("transcript") or []
+        if not os.environ.get("GEMINI_MODEL") or not any(
+            turn.get("speaker") == "buyer" for turn in transcript
+        ):
+            return None
+        from app.agents import assessment  # loads the ADK only when a call is reviewed
+
+        now, summary = datetime.now(UTC), None
+        for order_id in doc["order_ids"]:
+            order = self.orders.get(order_id)
+            if order is None:
+                continue
+            try:
+                review = asyncio.run(
+                    assessment.review_call(order, transcript, log=self.log, now=now)
+                )
+            except Exception:
+                log.exception("Could not review call %s for %s", call_id, order_id)
+                continue
+            if not review:
+                continue
+            summary = summary or review["summary"]
+            if review["reasons"]:
+                lifecycle.record_call_review(self.orders, order_id, review["reasons"], now)
+        if not summary:
+            return None
+        doc = self._transact(call_id, lambda current: current | {"summary_vi": summary})
+        self._mirror(doc, now)
+        return doc
 
     def _apply_to_orders(self, doc: dict, result: CallResult) -> None:
         if result.status == "failed":

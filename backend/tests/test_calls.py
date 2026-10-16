@@ -142,6 +142,28 @@ def test_the_order_time_is_read_relative_to_today_in_vietnam_time():
 # --- the job -------------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize(
+    ("minor", "currency", "en", "vi"),
+    [
+        (4530, "SGD", "forty-five Singapore dollars and thirty cents", None),
+        (120000, "PHP", "one thousand two hundred Philippine pesos", None),
+        (450000, "VND", "four hundred fifty thousand dong", "bốn trăm năm mươi nghìn đồng"),
+    ],
+)
+def test_amounts_are_spoken_in_the_order_currency(minor, currency, en, vi):
+    assert spoken.amount(minor, CallLanguage.EN, currency) == en
+    if vi:
+        assert spoken.amount(minor, CallLanguage.VI, currency) == vi
+
+
+@pytest.mark.parametrize(("branch", "language"), [("branch_VN_HN", "vi"), ("branch_SG", "en")])
+def test_the_call_language_follows_the_order_branch_not_the_phone(calls, branch, language):
+    doc = order(calls) | {"branch_id": branch, "country": branch.split("_")[1]}
+    doc["currency"] = {"VN": "VND", "SG": "SGD"}[doc["country"]]
+    job = jobs.build_job(doc, "call_x_1", 1, NOW)  # the buyer's phone is a +84 number either way
+    assert job.language.value == language
+
+
 def test_the_job_carries_the_order_in_spoken_form(calls):
     job = jobs.build_job(order(calls), "call_x_1", 1, NOW)
     assert job.target.kind == CallTargetKind.SIP and job.target.address == "6001"
@@ -302,6 +324,49 @@ def test_a_call_nobody_claimed_fails_after_the_grace_period(calls):
 
 
 # --- the result ----------------------------------------------------------------------------
+
+
+def test_after_a_call_the_agents_summary_and_reasons_reach_the_order(calls, monkeypatch):
+    from app.agents import assessment
+
+    seen = []
+
+    async def review_call(doc, transcript, *, log, now, model=None):
+        seen.append(transcript)
+        return {
+            "summary": "The buyer confirmed the order.",
+            "reasons": [{"text_vi": "The call was short.", "signal_keys": ["call:1"]}],
+        }
+
+    monkeypatch.setenv("GEMINI_MODEL", "fake-model")
+    monkeypatch.setattr(assessment, "review_call", review_call)
+    asyncio.run(run(_pipe(calls)))
+    call = calls.start_for_shop("ord_test", "shop_a", "admin@gmail.com", NOW)
+    dialing(calls, call.id)
+    spoke = [{"speaker": "buyer", "text": "Yes, it's me.", "offset_ms": 900}]
+    view = calls.record_result(call.id, result(summary_vi="Dạ khách xác nhận.", transcript=spoke))
+    assert seen == [spoke]
+    assert view.summary_vi == "The buyer confirmed the order."
+    doc = order(calls)
+    assert doc["calls"][-1]["summary_vi"] == "The buyer confirmed the order."
+    assert doc["scoring"]["reasons"][0]["signal_keys"] == ["call:1"]
+
+
+def test_a_failed_review_keeps_the_controller_summary(calls, monkeypatch):
+    from app.agents import assessment
+
+    async def review_call(*args, **kwargs):
+        raise TimeoutError
+
+    monkeypatch.setenv("GEMINI_MODEL", "fake-model")
+    monkeypatch.setattr(assessment, "review_call", review_call)
+    asyncio.run(run(_pipe(calls)))
+    call = calls.start_for_shop("ord_test", "shop_a", "admin@gmail.com", NOW)
+    dialing(calls, call.id)
+    spoke = [{"speaker": "buyer", "text": "Yes.", "offset_ms": 900}]
+    assert calls.record_result(call.id, result(transcript=spoke)).summary_vi == (
+        "Buyer confirmed the order."
+    )
 
 
 def test_a_confirmed_call_clears_the_order_and_keeps_the_transcript_off_the_order(calls):

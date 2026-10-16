@@ -1583,9 +1583,25 @@ export type OrderDetail = {
   risk_score?: number | null
   current_action?: DecisionAction | null
   /**
-   * An AI call waiting for the shop to confirm it (call automation).
+   * A contact waiting for the shop to accept it: automation is off, or an AI call is outside the automation rules.
    */
   suggested_action?: DecisionAction | null
+  /**
+   * Why the order waits in Pending review; null otherwise.
+   */
+  review_reason?: ReviewReason | null
+  /**
+   * Hard Rules
+   *
+   * Hard rules that fired on the latest score.
+   */
+  hard_rules?: Array<HardRule>
+  /**
+   * Contact Summary
+   *
+   * The latest AI call, summarised for the shop by the agents (English).
+   */
+  contact_summary?: string | null
   /**
    * Placed At
    */
@@ -1842,9 +1858,25 @@ export type OrderSummary = {
   risk_score?: number | null
   current_action?: DecisionAction | null
   /**
-   * An AI call waiting for the shop to confirm it (call automation).
+   * A contact waiting for the shop to accept it: automation is off, or an AI call is outside the automation rules.
    */
   suggested_action?: DecisionAction | null
+  /**
+   * Why the order waits in Pending review; null otherwise.
+   */
+  review_reason?: ReviewReason | null
+  /**
+   * Hard Rules
+   *
+   * Hard rules that fired on the latest score.
+   */
+  hard_rules?: Array<HardRule>
+  /**
+   * Contact Summary
+   *
+   * The latest AI call, summarised for the shop by the agents (English).
+   */
+  contact_summary?: string | null
   /**
    * Placed At
    */
@@ -2036,6 +2068,30 @@ export type Reason = {
    */
   signal_keys: Array<string>
 }
+
+/**
+ * ReviewReason
+ *
+ * Why an order waits in Pending review, from what is stored on it.
+ *
+ * suggested: a contact the engine suggests waits for the shop to accept it ·
+ * invalid_phone: hard rule, the buyer cannot be contacted · no_answer_link: no answer to the
+ * confirmation link · no_answer_call: no answer to the AI calls · deposit_unpaid: the deposit
+ * was not paid in time · call_unclear: the buyer spoke on the AI call but did not confirm, change
+ * or cancel · wrong_person: the AI call reached someone else · attempts_used: every AI call
+ * attempt is used · staff: a person held the order · other: held by the policy, or a step failed
+ */
+export type ReviewReason =
+  | 'suggested'
+  | 'invalid_phone'
+  | 'no_answer_link'
+  | 'no_answer_call'
+  | 'deposit_unpaid'
+  | 'call_unclear'
+  | 'wrong_person'
+  | 'attempts_used'
+  | 'staff'
+  | 'other'
 
 /**
  * RiskScore

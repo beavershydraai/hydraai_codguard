@@ -4112,7 +4112,25 @@ components:
           anyOf:
           - $ref: '#/components/schemas/DecisionAction'
           - type: 'null'
-          description: An AI call waiting for the shop to confirm it (call automation).
+          description: 'A contact waiting for the shop to accept it: automation is off, or an AI call
+            is outside the automation rules.'
+        review_reason:
+          anyOf:
+          - $ref: '#/components/schemas/ReviewReason'
+          - type: 'null'
+          description: Why the order waits in Pending review; null otherwise.
+        hard_rules:
+          items:
+            $ref: '#/components/schemas/HardRule'
+          type: array
+          title: Hard Rules
+          description: Hard rules that fired on the latest score.
+        contact_summary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Contact Summary
+          description: The latest AI call, summarised for the shop by the agents (English).
         placed_at:
           type: string
           format: date-time
@@ -4569,7 +4587,25 @@ components:
           anyOf:
           - $ref: '#/components/schemas/DecisionAction'
           - type: 'null'
-          description: An AI call waiting for the shop to confirm it (call automation).
+          description: 'A contact waiting for the shop to accept it: automation is off, or an AI call
+            is outside the automation rules.'
+        review_reason:
+          anyOf:
+          - $ref: '#/components/schemas/ReviewReason'
+          - type: 'null'
+          description: Why the order waits in Pending review; null otherwise.
+        hard_rules:
+          items:
+            $ref: '#/components/schemas/HardRule'
+          type: array
+          title: Hard Rules
+          description: Hard rules that fired on the latest score.
+        contact_summary:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Contact Summary
+          description: The latest AI call, summarised for the shop by the agents (English).
         placed_at:
           type: string
           format: date-time
@@ -4608,6 +4644,24 @@ components:
         tier: high
         total_vnd: 330000
         updated_at: '2026-10-09T10:16:31+07:00'
+      - buyer_name: Trần Thị B
+        buyer_phone: '+84000000002'
+        channel: tiktok
+        cod_amount_vnd: 4530000
+        contact_summary: The buyer confirmed being the buyer and agreed while the items were read, then
+          hung up before the address and total were confirmed.
+        current_action: hold_for_review
+        external_id: TT-20261016-0007
+        hard_rules: []
+        id: ord_02
+        is_gift: false
+        placed_at: '2026-10-16T21:00:23+07:00'
+        review_reason: call_unclear
+        risk_score: 24
+        status: pending_review
+        tier: high
+        total_vnd: 4530000
+        updated_at: '2026-10-16T21:01:27+07:00'
     OrderUpdate:
       properties:
         buyer_name:
@@ -4928,6 +4982,29 @@ components:
       description: |-
         A plain-English reason written by Gemini. Each reason cites the signals it is based on;
         reasons that do not match a real signal are rejected before they reach the API.
+    ReviewReason:
+      type: string
+      enum:
+      - suggested
+      - invalid_phone
+      - no_answer_link
+      - no_answer_call
+      - deposit_unpaid
+      - call_unclear
+      - wrong_person
+      - attempts_used
+      - staff
+      - other
+      title: ReviewReason
+      description: |-
+        Why an order waits in Pending review, from what is stored on it.
+
+        suggested: a contact the engine suggests waits for the shop to accept it ·
+        invalid_phone: hard rule, the buyer cannot be contacted · no_answer_link: no answer to the
+        confirmation link · no_answer_call: no answer to the AI calls · deposit_unpaid: the deposit
+        was not paid in time · call_unclear: the buyer spoke on the AI call but did not confirm, change
+        or cancel · wrong_person: the AI call reached someone else · attempts_used: every AI call
+        attempt is used · staff: a person held the order · other: held by the policy, or a step failed
     RiskScore:
       properties:
         id:

@@ -99,6 +99,7 @@ async def test_two_specialists_collaborate_without_changing_the_deterministic_sc
     assert result == {
         "status": "completed",
         "reasons": [REASON],
+        "source": "agents",
         "agents": ["risk_analyst", "evidence_verifier"],
         "model": "fake-assessment-model",
     }
@@ -140,19 +141,57 @@ async def test_prompts_omit_identifiers_personal_data_and_unknown_features():
 
 @pytest.mark.parametrize(
     "response",
-    [
-        {"reasons": [{"text_vi": "The buyer often cancels orders.", "signal_keys": ["fake"]}]},
-        {"reasons": [REASON], "action": "ai_call"},
-        {"reasons": [REASON], "risk_score": 99},
-        {"reasons": [REASON | {"signal_keys": ["phone_failed_all"]}]},
-        {"reasons": [REASON | {"text_vi": "This phone has 4 failed deliveries."}]},
-    ],
+    [{"reasons": [REASON], "action": "ai_call"}, {"reasons": [REASON], "risk_score": 99}],
 )
-async def test_invalid_analyst_output_stops_before_the_verifier(response):
+async def test_an_analyst_answer_outside_the_schema_stops_before_the_verifier(response):
     model = FakeModel(responses=[response])
     with pytest.raises(ValueError):
         await assess(model=model)
     assert len(model.requests) == 1
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        {"text_vi": "The buyer often cancels orders.", "signal_keys": ["fake"]},
+        {
+            "text_vi": "The address has only 1 of the 3 parts.",
+            "signal_keys": ["address_parts_filled"],
+        },
+        REASON | {"text_vi": "This phone has 7 failed deliveries."},
+        {
+            "text_vi": "The province has many failed deliveries.",
+            "signal_keys": ["province_fail_rate_te"],
+        },
+    ],
+)
+async def test_reasons_without_real_evidence_are_dropped_before_the_verifier(reason):
+    model = FakeModel(responses=[{"reasons": [reason]}, {"reasons": []}])
+    result = await assess(model=model)
+    assert model.requests[1]["input"]["proposal"] == {"reasons": []}
+    # Nothing the agents wrote is left: the shop sees the business-rule sentences.
+    assert result["reasons"] == [REASON] and result["source"] == "rules"
+
+
+async def test_an_agent_written_reason_on_a_strong_signal_is_kept():
+    doc = deepcopy(DOC)
+    doc["scoring"]["features"]["total_qty"] = 6
+    doc["scoring"]["shap"] = {"contributions": {"total_qty": 0.4, "phone_failed_all": 0.2}}
+    written = {
+        "text_vi": "The order has 6 items in total, more than this buyer usually orders.",
+        "signal_keys": ["total_qty"],
+    }
+    model = FakeModel(responses=[{"reasons": [REASON, written]}, {"reasons": [REASON, written]}])
+    result = await assess(doc, model=model)
+    assert result["reasons"] == [REASON, written] and result["source"] == "agents"
+    signals = model.requests[0]["input"]["signals"]
+    assert [s["key"] for s in signals] == ["total_qty", "phone_failed_all"]
+    assert signals[0] == {
+        "key": "total_qty",
+        "label": "Total quantity",
+        "value": 6,
+        "contribution": 0.4,
+    }
 
 
 @pytest.mark.parametrize("response", ["", "{}", {"reasons": [REASON], "tier": "very_high"}])
@@ -163,16 +202,18 @@ async def test_missing_or_invalid_verifier_output_fails_the_assessment(response)
     assert len(model.requests) == 2
 
 
-async def test_verifier_cannot_add_evidence_the_analyst_did_not_select():
+async def test_verifier_cannot_add_evidence_the_analyst_did_not_cite():
     doc = deepcopy(DOC)
-    doc["scoring"]["features"]["address_missing_house_number"] = 1
-    invented_selection = {
-        "text_vi": "The address is missing a house number.",
-        "signal_keys": ["address_missing_house_number"],
-    }
-    model = FakeModel(responses=[{"reasons": [REASON]}, {"reasons": [invented_selection]}])
-    with pytest.raises(ValueError):
-        await assess(doc, model=model)
+    doc["scoring"]["features"]["total_qty"] = 6
+    added = {"text_vi": "The order has 6 items.", "signal_keys": ["total_qty"]}
+    model = FakeModel(responses=[{"reasons": [REASON]}, {"reasons": [REASON, added]}])
+    assert (await assess(doc, model=model))["reasons"] == [REASON]
+
+
+async def test_the_verifier_may_correct_the_wording():
+    better = REASON | {"text_vi": "2 of this phone's 4 past orders failed because of the buyer."}
+    model = FakeModel(responses=[{"reasons": [REASON]}, {"reasons": [better]}])
+    assert (await assess(model=model))["reasons"] == [better]
 
 
 async def test_duplicate_reasons_are_returned_once():
@@ -199,7 +240,7 @@ async def test_candidate_reasons_describe_only_actual_feature_values(features, r
     doc["scoring"]["features"] = features
     model = FakeModel(responses=[{"reasons": []}, {"reasons": []}])
     await assess(doc, model=model)
-    assert model.requests[0]["input"]["candidates"] == [
+    assert model.requests[0]["input"]["rules"] == [
         {"text_vi": reason, "signal_keys": list(features)}
     ]
 
@@ -249,7 +290,8 @@ async def _capture_unexplained():
 
 async def test_missing_model_configuration_explicitly_disables_assessment():
     log = FakeDecisionLog()
-    assert await assess(log=log) == {"status": "disabled", "reasons": []}
+    # Without the agents the shop still sees the business-rule sentences.
+    assert await assess(log=log) == {"status": "disabled", "reasons": [REASON], "source": "rules"}
     assert not log.claims
 
 
@@ -265,7 +307,9 @@ async def test_missing_model_configuration_explicitly_disables_assessment():
 )
 async def test_unscored_hard_rule_and_confirmed_orders_use_no_model_requests(change, status):
     model, log = FakeModel(), FakeDecisionLog()
-    assert await assess(DOC | change, model=model, log=log) == {"status": status, "reasons": []}
+    result = await assess(DOC | change, model=model, log=log)
+    assert result["status"] == status
+    assert result["reasons"] == ([] if status == "unscored" else [REASON])
     assert not model.requests and not log.claims
 
 
@@ -278,7 +322,8 @@ async def test_daily_budget_is_shared_across_shops_and_rolls_over_in_utc(monkeyp
     ] == "completed"
     assert await assess(DOC | {"shop_id": "shop_c"}, log=log, model=model) == {
         "status": "quota_exhausted",
-        "reasons": [],
+        "reasons": [REASON],
+        "source": "rules",
     }
     assert len(model.requests) == 4
     assert set(log.claims) == {"assessment_budget:2026-10-14:1", "assessment_budget:2026-10-14:2"}
@@ -302,7 +347,7 @@ async def test_transport_failure_consumes_its_budget_without_retrying(monkeypatc
     model, log = FakeModel(responses=[OSError("synthetic transport failure")]), FakeDecisionLog()
     with pytest.raises(OSError):
         await assess(model=model, log=log)
-    assert await assess(model=model, log=log) == {"status": "quota_exhausted", "reasons": []}
+    assert (await assess(model=model, log=log))["status"] == "quota_exhausted"
     assert len(model.requests) == 1
 
 
@@ -344,9 +389,10 @@ async def test_conflicting_feature_evidence_is_rejected_without_spending_quota()
 
 def test_the_response_schema_is_accepted_by_vertex_ai():
     """Vertex AI rejects `examples` in a response schema; with them every live call failed."""
-    from app.agents.assessment import _Selection
+    from app.agents.assessment import _CallReview, _Reasons
 
-    assert "examples" not in json.dumps(_Selection.model_json_schema())
+    for schema in (_Reasons, _CallReview):
+        assert "examples" not in json.dumps(schema.model_json_schema())
 
 
 async def test_the_agents_read_plain_vietnamese():
@@ -355,12 +401,12 @@ async def test_the_agents_read_plain_vietnamese():
     await assess(model=model)
     text = model.requests[0]["text"]
     assert "\\u" not in text
-    assert any(c["text_vi"] in text for c in model.requests[0]["input"]["candidates"])
+    assert any(c["text_vi"] in text for c in model.requests[0]["input"]["rules"])
 
 
 def test_every_reason_cites_a_key_that_top_signals_uses():
     """The E3.3 reason check matches reasons to `top_signals` by key, so the names must agree."""
-    from app.agents.assessment import _candidates
+    from app.agents.assessment import rule_reasons
     from app.risk.features import SIGNALS
     from app.risk.model import top_signals
 
@@ -372,6 +418,66 @@ def test_every_reason_cites_a_key_that_top_signals_uses():
         "address_missing_house_number": 1,
     }
     every = top_signals(features, dict.fromkeys(SIGNALS, 1.0), top=len(SIGNALS))
-    cited = {key for reason in _candidates(features) for key in reason["signal_keys"]}
+    cited = {key for reason in rule_reasons(features) for key in reason["signal_keys"]}
     assert "address_missing_house_number" in cited
     assert cited <= {s["key"] for s in every}
+
+
+TRANSCRIPT = [
+    {"speaker": "agent", "text": "Is this Synthetic Buyer Private? Your order is 2 jackets."},
+    {"speaker": "buyer", "text": "Yes, that's me."},
+    {"speaker": "agent", "text": "The total is 300000 dong, delivered to"},
+]
+
+
+async def review(doc=DOC, transcript=TRANSCRIPT, *, model, log=None):
+    module = importlib.import_module("app.agents.assessment")
+    return await module.review_call(
+        doc, transcript, log=log or FakeDecisionLog(), now=NOW, model=model
+    )
+
+
+async def test_after_a_call_the_agents_summarise_it_and_may_use_it_as_evidence():
+    summary = {
+        "summary": "The buyer confirmed being the buyer, then the call ended while the address "
+        "was being read.",
+        "summary_lines": [2, 3],
+        "reasons": [
+            REASON,
+            {
+                "text_vi": "The call ended before the address was confirmed.",
+                "signal_keys": ["call:3"],
+            },
+        ],
+    }
+    model = FakeModel(responses=[summary, summary])
+    result = await review(model=model)
+    assert result["summary"] == summary["summary"]
+    assert result["reasons"] == summary["reasons"]
+    call = model.requests[0]["input"]["call"]
+    assert call[0] == {
+        "line": 1,
+        "speaker": "assistant",
+        "text": "Is this the buyer? Your order is 2 jackets.",
+    }
+    assert "Synthetic Buyer Private" not in json.dumps(model.requests)
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        {"summary": "The buyer refused the order.", "summary_lines": [9]},
+        {"summary": "The buyer agreed to pay 500000 dong.", "summary_lines": [3]},
+        {"summary": "", "summary_lines": [2]},
+    ],
+)
+async def test_a_summary_without_real_call_lines_is_dropped(summary):
+    answer = summary | {"reasons": []}
+    result = await review(model=FakeModel(responses=[answer, answer]))
+    assert result["summary"] is None
+
+
+async def test_no_review_without_the_agents_or_a_conversation(monkeypatch):
+    assert await review(model=None) is None  # GEMINI_MODEL unset
+    assert await review(DOC | {"skip_agents": True}, model=FakeModel()) is None
+    assert await review(transcript=[{"speaker": "buyer", "text": " "}], model=FakeModel()) is None
