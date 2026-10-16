@@ -25,6 +25,7 @@ from app.data import branches
 from app.data.orders import final_state
 from app.risk import artifacts
 from app.risk.engine import TIER_OPTIONS, TIER_RULE
+from app.risk.health import start_training, trained_at
 from app.risk.jobs.train import country_docs
 from app.risk.model import ACTIONS, costs_of, expected_cost, fit_model2
 
@@ -178,17 +179,6 @@ def scored_rows(docs: list[dict]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def run_training_job() -> None:
-    import google.auth
-    from google.auth.transport.requests import AuthorizedSession
-
-    creds, project = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-    region = os.environ.get("REGION", "asia-southeast1")
-    job = os.environ.get("TRAIN_JOB", "codguard-train")
-    url = f"https://run.googleapis.com/v2/projects/{project}/locations/{region}/jobs/{job}:run"
-    AuthorizedSession(creds).post(url).raise_for_status()
-
-
 def main() -> None:
     from app.data.store import get_store
 
@@ -208,10 +198,24 @@ def monitor_country(docs: list[dict], code: str) -> None:
     cols = model1["cols"]
     costs = costs_of(branches.country(code))
 
+    learned = trained_at(model1["version"])
+    new_outcomes = sum(
+        1
+        for d in docs
+        if final_state(d)[0] is not None and (learned is None or d["placed_at"] > learned)
+    )
     scored = scored_rows(docs)
-    end = scored["placed_at"].max() if len(scored) else datetime.now(UTC)
-    recent = scored[scored["placed_at"] >= end - WINDOW]
-    summary = {"country": code, "model_version": model1["version"], "recent_orders": len(recent)}
+    if scored.empty:  # no order of this country was scored yet: nothing to check but outcomes
+        recent = scored
+    else:
+        end = scored["placed_at"].max()
+        recent = scored[scored["placed_at"] >= end - WINDOW]
+    summary = {
+        "country": code,
+        "model_version": model1["version"],
+        "recent_orders": len(recent),
+        "new_outcomes": new_outcomes,
+    }
     if len(recent):
         snapshot, summary["drift"] = drift_report(reference, recent, cols)
         day = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -221,13 +225,14 @@ def monitor_country(docs: list[dict], code: str) -> None:
         labelled = recent.dropna(subset=["is_failed"])
         summary["performance"] = performance(labelled, metrics["validation_pr_auc"])
 
-    random_rows = scored[scored["random_slice"] & scored["is_failed"].notna()]
-    raw_switched = artifacts.read("latest/switched.json", code)
-    switched = set(json.loads(raw_switched)) if raw_switched else set()
-    switched, summary["tiers"] = tier_check(random_rows, cols, switched, costs)
-    if len(random_rows):
-        artifacts.write("latest/model2.pkl", pickle.dumps(fit_model2(random_rows, cols)), code)
-    artifacts.write("latest/switched.json", json.dumps(sorted(switched)).encode(), code)
+    if not scored.empty:
+        random_rows = scored[scored["random_slice"] & scored["is_failed"].notna()]
+        raw_switched = artifacts.read("latest/switched.json", code)
+        switched = set(json.loads(raw_switched)) if raw_switched else set()
+        switched, summary["tiers"] = tier_check(random_rows, cols, switched, costs)
+        if len(random_rows):
+            artifacts.write("latest/model2.pkl", pickle.dumps(fit_model2(random_rows, cols)), code)
+        artifacts.write("latest/switched.json", json.dumps(sorted(switched)).encode(), code)
 
     degraded = summary.get("performance", {}).get("degraded", False)
     summary["retrain"] = (
@@ -236,12 +241,11 @@ def monitor_country(docs: list[dict], code: str) -> None:
         else ("needed (RETRAIN_MODE=on_demand)" if degraded else "not needed")
     )
     if summary["retrain"] == "started":
-        run_training_job()
-    artifacts.write(
-        f"monitoring/{datetime.now(UTC):%Y-%m-%d}/summary.json",
-        json.dumps(summary, indent=1, default=str).encode(),
-        code,
-    )
+        start_training()
+    summary["checked_at"] = datetime.now(UTC).isoformat()
+    report = json.dumps(summary, indent=1, default=str).encode()
+    artifacts.write(f"monitoring/{datetime.now(UTC):%Y-%m-%d}/summary.json", report, code)
+    artifacts.write("latest/monitor.json", report, code)  # read by app/risk/health.py
     print(json.dumps(summary, default=str))
 
 

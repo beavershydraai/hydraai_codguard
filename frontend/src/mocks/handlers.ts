@@ -123,6 +123,22 @@ on('GET', '/api/v1/dashboard/summary', ({ url }) => {
   return mockDb.dashboard(url.searchParams.get('from') ?? today, url.searchParams.get('to') ?? today)
 })
 on('GET', '/api/v1/dashboard/backtest', () => mockDb.backtest())
+const MODEL_HEALTH = (['VN', 'SG', 'PH'] as const).map((country) => ({
+  country,
+  status: 'up_to_date' as const,
+  reasons: [],
+  trained_at: '2026-10-15T17:34:50Z',
+  training_orders: 7677,
+  lift_top20: 3.3,
+  checked_at: '2026-10-16T19:00:30Z',
+  new_outcomes: 120,
+  updating: false,
+}))
+on('GET', '/api/v1/dashboard/model-health', () => MODEL_HEALTH)
+on('POST', '/api/v1/dashboard/model-health/update', () => {
+  ownerOnly()
+  return MODEL_HEALTH.map((m) => ({ ...m, updating: true }))
+})
 
 on('GET', '/api/v1/public/confirmations/{token}', ({ params }) => mockDb.confirmation(params.token!))
 on('POST', '/api/v1/public/confirmations/{token}', async ({ params, body }) =>

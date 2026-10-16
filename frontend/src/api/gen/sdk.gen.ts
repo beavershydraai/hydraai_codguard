@@ -28,6 +28,9 @@ import type {
   GetMeData,
   GetMeErrors,
   GetMeResponses,
+  GetModelHealthData,
+  GetModelHealthErrors,
+  GetModelHealthResponses,
   GetOrderData,
   GetOrderErrors,
   GetOrderResponses,
@@ -82,6 +85,9 @@ import type {
   StartCallData,
   StartCallErrors,
   StartCallResponses,
+  UpdateModelsData,
+  UpdateModelsErrors,
+  UpdateModelsResponses,
   UpdateOrderData,
   UpdateOrderErrors,
   UpdateOrderResponses,
@@ -531,6 +537,46 @@ export const getBacktest = <ThrowOnError extends boolean = false>(
       },
     ],
     url: '/api/v1/dashboard/backtest',
+    ...options,
+  })
+
+/**
+ * How each country's risk model is doing, in plain words
+ *
+ * From the daily check (codguard-monitor) and the trained model. `status` is `update_recommended` when the model catches fewer failed deliveries on recent orders, recent orders look different from what it learned, or many orders got a delivery result since.
+ */
+export const getModelHealth = <ThrowOnError extends boolean = false>(
+  options?: Options<GetModelHealthData, ThrowOnError>,
+): RequestResult<GetModelHealthResponses, GetModelHealthErrors, ThrowOnError> =>
+  (options?.client ?? client).get<GetModelHealthResponses, GetModelHealthErrors, ThrowOnError>({
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/v1/dashboard/model-health',
+    ...options,
+  })
+
+/**
+ * Update the risk models (owner only)
+ *
+ * Starts codguard-train: every country's model learns again from all orders with a delivery result, in about two minutes. A new model replaces the current one only if it is at least as good; the current one keeps scoring meanwhile. 409 while an update is running.
+ */
+export const updateModels = <ThrowOnError extends boolean = false>(
+  options?: Options<UpdateModelsData, ThrowOnError>,
+): RequestResult<UpdateModelsResponses, UpdateModelsErrors, ThrowOnError> =>
+  (options?.client ?? client).post<UpdateModelsResponses, UpdateModelsErrors, ThrowOnError>({
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/v1/dashboard/model-health/update',
     ...options,
   })
 
