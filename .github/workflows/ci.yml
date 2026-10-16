@@ -270,11 +270,12 @@ jobs:
       - name: Deploy the order simulator job
         run: |
           # Runs only when executed, e.g. `gcloud run jobs execute codguard-simulate
-          # --args=--minutes=60,--orders-per-hour=30` (add `,--agents` to run the Gemini agents).
+          # --args=--minutes=10,--orders=60` (60 orders per country; `,--countries=SG` for one country,
+          # `,--agents` to run the Gemini agents).
           gcloud run jobs deploy codguard-simulate --image "$TARGET_IMAGE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" \
             --service-account "$GCP_RUNTIME_SA" --command "python,-m,app.demo.simulate" \
-            --args="--minutes=60,--orders-per-hour=30" \
+            --args="--minutes=60,--orders=10" \
             --cpu 1 --memory 512Mi --task-timeout 3h --max-retries 0 \
             --set-env-vars "INTAKE_URL=$URL" \
             --set-secrets "INTAKE_API_KEYS=intake-api-keys:latest" --quiet
