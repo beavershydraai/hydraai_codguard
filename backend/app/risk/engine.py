@@ -55,9 +55,21 @@ def tier_of(p: float) -> str:
     return "low" if p < 0.08 else "medium" if p < 0.20 else "high" if p < 0.40 else "very_high"
 
 
-def expected_loss(p: float, country: branches.Country) -> int:
-    """P(failed) × the country's failed-delivery cost, in its currency."""
-    return round(p * country.costs["failed_delivery"])
+def expected_loss(p: float, failed_cost: int, prepaid: int = 0) -> int:
+    """P(failed) × what a failed delivery still costs the shop: the cost of one failed delivery
+    less what the buyer already paid, which the shop keeps when the buyer refuses (E2.5)."""
+    return round(p * max(failed_cost - prepaid, 0))
+
+
+HIGH = ("high", "very_high")
+
+
+def location_only(features: dict, model1: dict) -> bool:
+    """Whether the province alone lifts the order to High or Very High: scored with the average
+    province (`p0`, what an unknown province gets), it would be below High. Location may raise a
+    score but is never the only reason for High or Very High (AGENTS.md)."""
+    neutral = features | {"province_fail_rate_te": model1["enc"]["p0"]}
+    return tier_of(float(predict1(model1, pd.DataFrame([neutral]))[0])) not in HIGH
 
 
 def load_models(code: str = "VN") -> dict | None:
@@ -89,9 +101,13 @@ def decide(
     models: dict,
     rng=_rng,
     country: branches.Country | None = None,
+    loss: int | None = None,
 ) -> dict:
-    """Tier and action for one order, with the path that chose it, at the country's costs."""
+    """Tier and action for one order, with the path that chose it, at the country's costs.
+    `loss` is the order's expected loss (default: with nothing prepaid)."""
     country = country or branches.country("VN")
+    if loss is None:
+        loss = expected_loss(p, country.costs["failed_delivery"])
     if features["cod_amount_vnd"] == 0:
         return {"tier": None, "action": "none", "chosen_by": "hard rule: fully prepaid"}
     if not phone_valid:
@@ -99,7 +115,9 @@ def decide(
     outcomes, failed = features["phone_outcomes_all"], features["phone_failed_all"]
     if outcomes >= 3 and failed / outcomes >= 0.75:
         return {"tier": "very_high", "action": "deposit", "chosen_by": "hard rule: ≥ 75 % returns"}
-    tier = tier_of(p)
+    tier, capped = tier_of(p), False
+    if tier in HIGH and "model1" in models and location_only(features, models["model1"]):
+        tier, capped = "medium", True
     options = TIER_OPTIONS[tier]
     if len(options) > 1 and rng.random() < RANDOM_SLICE:
         return {
@@ -116,9 +134,11 @@ def decide(
         }
         return {"tier": tier, "action": min(costs, key=costs.get), "chosen_by": "model 2"}
     decision = policy.decide(
-        RiskTier(tier), expected_loss(p, country), datetime.now(UTC), settings=country.settings
+        RiskTier(tier), loss, datetime.now(UTC), settings=country.settings
     )
     chosen_by = "tier rule: expected loss ≤ contact cost" if decision.block_reasons else "tier rule"
+    if capped:
+        chosen_by += ", capped at medium: location was the only reason for high"
     return {"tier": tier, "action": ACTION_NAME[decision.action], "chosen_by": chosen_by}
 
 
@@ -139,8 +159,9 @@ def score(doc: dict, history: list[dict]) -> dict | None:
     except Exception:  # an explanation problem must not stop the order being scored
         log.exception("Could not explain the score of %s", doc.get("order_id"))
         shap, signals = {"available": False, "method": "tree_shap", "contributions": {}}, []
+    loss = expected_loss(p, country.costs["failed_delivery"], doc.get("prepaid_vnd", 0))
     decision = {"random_slice": False, "action_probability": 1.0} | decide(
-        features, p, doc["buyer_phone_hash"] is not None, models, country=country
+        features, p, doc["buyer_phone_hash"] is not None, models, country=country, loss=loss
     )
     return {
         "tier": decision["tier"],
@@ -151,7 +172,7 @@ def score(doc: dict, history: list[dict]) -> dict | None:
             "probability": round(p, 4),
             "risk_score": round(p * 100),
             "tier": decision["tier"],
-            "expected_loss_vnd": expected_loss(p, country),
+            "expected_loss_vnd": loss,
             "failed_delivery_cost_vnd": country.costs["failed_delivery"],
             "chosen_by": decision["chosen_by"],
             "features": features,
