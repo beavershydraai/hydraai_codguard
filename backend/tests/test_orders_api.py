@@ -256,3 +256,10 @@ def test_the_backfill_adds_only_missing_sort_fields():
     del unscored["risk_score"]
     assert changes(unscored) == {"risk_score": None}
     assert changes(make("ord_w")) == {}
+
+
+def test_last_change_is_the_newest_update_of_the_shop(api):
+    response = api.get("/api/v1/orders/last-change")
+    assert response.status_code == 200, response.text
+    # ord_4 is the shop's newest order; ord_b (another shop, newer) does not count.
+    assert response.json()["updated_at"].startswith("2026-10-13T03:04")

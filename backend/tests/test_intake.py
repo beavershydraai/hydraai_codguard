@@ -89,6 +89,10 @@ class FakeStore:
     def count(self, shop_id, filters):
         return len(self._filtered(shop_id, filters))
 
+    def last_change(self, shop_id):
+        times = [d["updated_at"] for d in self.docs.values() if d["shop_id"] == shop_id]
+        return max(times, default=None)
+
     def find(self, shop_id, field, values, fields):
         return [
             project(d, fields)

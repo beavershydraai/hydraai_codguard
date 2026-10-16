@@ -21,6 +21,7 @@ import {
   importDeliveryOutcomes,
   importOrders,
   intakeOrder,
+  lastOrdersChange,
   listOrders,
   listPolicyVersions,
   login,
@@ -74,6 +75,9 @@ import type {
   IntakeOrderData,
   IntakeOrderError,
   IntakeOrderResponse,
+  LastOrdersChangeData,
+  LastOrdersChangeError,
+  LastOrdersChangeResponse,
   ListOrdersData,
   ListOrdersError,
   ListOrdersResponse,
@@ -459,6 +463,33 @@ export const importOrdersMutation = (
   }
   return mutationOptions
 }
+
+export const lastOrdersChangeQueryKey = (options?: Options<LastOrdersChangeData>) =>
+  createQueryKey('lastOrdersChange', options)
+
+/**
+ * When the shop's orders last changed
+ *
+ * One document read. The inbox polls it and reloads its page only when the value changes, so new orders appear within seconds without reloading pages for nothing.
+ */
+export const lastOrdersChangeOptions = (options?: Options<LastOrdersChangeData>) =>
+  queryOptions<
+    LastOrdersChangeResponse,
+    LastOrdersChangeError,
+    LastOrdersChangeResponse,
+    ReturnType<typeof lastOrdersChangeQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await lastOrdersChange({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      })
+      return data
+    },
+    queryKey: lastOrdersChangeQueryKey(options),
+  })
 
 export const getOrderQueryKey = (options: Options<GetOrderData>) => createQueryKey('getOrder', options)
 

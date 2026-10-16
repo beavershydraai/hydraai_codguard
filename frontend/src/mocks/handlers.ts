@@ -82,6 +82,13 @@ on('POST', '/api/v1/orders/import', async ({ request }) => {
   if (!(file instanceof Blob)) throw new MockError(400, 'validation_error', 'Missing file.')
   return mockDb.importOrders(await file.text())
 })
+on('GET', '/api/v1/orders/last-change', () => ({
+  updated_at:
+    [...mockDb.orders.values()]
+      .map((o) => o.updated_at)
+      .sort()
+      .at(-1) ?? null,
+}))
 on('GET', '/api/v1/orders/{order_id}', ({ params }) => mockDb.get(params.order_id!))
 on('PATCH', '/api/v1/orders/{order_id}', async ({ params, body }) =>
   mockDb.update(params.order_id!, (await body()) as never, ME.email),

@@ -1,10 +1,10 @@
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { PlusIcon, TruckIcon, UploadIcon } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { importDeliveryOutcomes, importOrders, type OrderStatus, type RiskTier } from '@/api/gen'
-import { listOrdersInfiniteOptions } from '@/api/gen/@tanstack/react-query.gen'
+import { lastOrdersChangeOptions, listOrdersOptions } from '@/api/gen/@tanstack/react-query.gen'
 import {
   type OrderFilters,
   OrdersDataGrid,
@@ -35,7 +35,8 @@ const TIERS = Object.keys(RISK_TIER_LABELS) as RiskTier[]
 const STATUSES = Object.keys(ORDER_STATUS_LABELS) as OrderStatus[]
 const BRANCHES = Object.keys(BRANCH_LABELS)
 const SORTS: OrderSort[] = ['-placed_at', 'placed_at', '-updated_at', '-risk_score', '-cod_amount_vnd']
-const PAGE_SIZE = 100
+const PAGE_SIZE = 50
+const POLL_MS = 5_000
 
 const ORDER_TEMPLATE = [
   [
@@ -69,8 +70,12 @@ const DELIVERY_TEMPLATE = [
   ['FB-3002', 'refused', 'ghtk'],
 ]
 
-// The server filters, searches, sorts and pages (E7.2): 100 orders at a time, "Load more" for the
-// next 100. Filters, search and sort live in the URL.
+// The server filters, searches, sorts and pages (E7.2): one page of 50 orders at a time, with
+// previous and next. Filters, search and sort live in the URL.
+//
+// New orders show up on their own: every 5 s, while the tab is visible, the page asks when the
+// shop's orders last changed (one document read) and reloads the page it shows only when that
+// changed. The rows on screen stay until the new ones arrive, so nothing flickers.
 export const Route = createFileRoute('/_shop/orders/')({
   staticData: { crumb: 'Orders' },
   validateSearch: (search: Record<string, unknown>): OrdersSearch => ({
@@ -95,13 +100,29 @@ function OrdersPage() {
     branch: search.branch,
     q: search.q,
   }
-  const { data, error, isPending, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useInfiniteQuery({
-      ...listOrdersInfiniteOptions({ query }),
-      initialPageParam: { query: {} },
-      getNextPageParam: (last) => last.next_cursor ?? undefined,
-    })
-  const orders = data?.pages.flatMap((page) => page.items) ?? []
+  // The cursor of each page visited so far: back is the previous one, next the page's own.
+  const [cursors, setCursors] = useState<(string | undefined)[]>([undefined])
+  const queryKey = JSON.stringify(query)
+  const [lastQueryKey, setLastQueryKey] = useState(queryKey)
+  if (queryKey !== lastQueryKey) {
+    setLastQueryKey(queryKey)
+    setCursors([undefined]) // new filters, search or sort: back to the first page
+  }
+  const pageIndex = cursors.length - 1
+  const { data, error, isPending, isFetching, refetch } = useQuery({
+    ...listOrdersOptions({ query: { ...query, cursor: cursors[pageIndex] } }),
+    placeholderData: keepPreviousData,
+  })
+  const orders = data?.items ?? []
+
+  const { data: change } = useQuery({ ...lastOrdersChangeOptions(), refetchInterval: POLL_MS })
+  const changedAt = change?.updated_at
+  const [seenChange, setSeenChange] = useState(changedAt)
+  useEffect(() => {
+    if (changedAt === seenChange) return
+    setSeenChange(changedAt)
+    if (seenChange !== undefined) void refetch()
+  }, [changedAt, seenChange, refetch])
   const queryClient = useQueryClient()
   const [panel, setPanel] = useState<'create' | 'import' | 'delivery' | null>(null)
   const close = (open: boolean) => !open && setPanel(null)
@@ -142,7 +163,7 @@ function OrdersPage() {
           </>
         }
         orders={orders}
-        total={Math.max(data?.pages[0]?.total ?? 0, orders.length)}
+        total={Math.max(data?.total ?? 0, orders.length)}
         isLoading={isPending}
         filters={filters}
         onFiltersChange={setFilters}
@@ -150,9 +171,13 @@ function OrdersPage() {
         onSearchChange={(q) => setSearch({ q: q || undefined })}
         sort={sort}
         onSortChange={(next) => setSearch({ sort: next === '-placed_at' ? undefined : next })}
-        hasMore={hasNextPage}
-        isLoadingMore={isFetchingNextPage}
-        onLoadMore={() => void fetchNextPage()}
+        page={pageIndex}
+        pageSize={PAGE_SIZE}
+        isFetching={isFetching}
+        onPrevious={pageIndex > 0 ? () => setCursors((c) => c.slice(0, -1)) : undefined}
+        onNext={
+          data?.next_cursor ? () => setCursors((c) => [...c, data.next_cursor ?? undefined]) : undefined
+        }
         onRefresh={() => void refetch()}
       />
       <CreateOrderSheet open={panel === 'create'} onOpenChange={close} />

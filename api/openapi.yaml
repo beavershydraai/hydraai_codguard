@@ -577,6 +577,35 @@ paths:
                   type: string_pattern_mismatch
       security:
       - bearerAuth: []
+  /api/v1/orders/last-change:
+    get:
+      tags:
+      - orders
+      summary: When the shop's orders last changed
+      description: One document read. The inbox polls it and reloads its page only when the value changes,
+        so new orders appear within seconds without reloading pages for nothing.
+      operationId: last_orders_change
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrdersChange'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired access token.
+      security:
+      - bearerAuth: []
   /api/v1/orders/{order_id}:
     get:
       tags:
@@ -4327,6 +4356,23 @@ components:
           raw: Số 15 ngõ 34, phường Láng, Hà Nội
           street: Số 15 ngõ 34
           ward: Phường Láng
+    OrdersChange:
+      properties:
+        updated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Updated At
+          description: Null while the shop has no orders.
+      additionalProperties: false
+      type: object
+      required:
+      - updated_at
+      title: OrdersChange
+      description: 'When the shop''s orders last changed: the inbox polls it and reloads only on a change.'
+      examples:
+      - updated_at: '2026-10-16T13:05:12+07:00'
     OverrideRequest:
       properties:
         action:

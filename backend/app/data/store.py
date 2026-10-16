@@ -138,6 +138,17 @@ class OrderStore:
         result = self._filtered(shop_id, filters).count(alias="n").get()
         return int(result[0][0].value)
 
+    def last_change(self, shop_id: str) -> datetime | None:
+        """When one of the shop's orders last changed (one document read)."""
+        query = (
+            self.orders.where(filter=FieldFilter("shop_id", "==", shop_id))
+            .order_by("updated_at", direction=firestore.Query.DESCENDING)
+            .select(["updated_at"])
+            .limit(1)
+        )
+        latest = next(iter(query.stream()), None)
+        return latest.to_dict().get("updated_at") if latest else None
+
     def find(self, shop_id: str, field: str, values: list[str], fields: tuple[str, ...]):
         """A shop's orders whose `field` is one of `values` (search by an exact value)."""
         query = (

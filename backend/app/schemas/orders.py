@@ -277,6 +277,16 @@ class OrderDetail(OrderSummary):
     )
 
 
+class OrdersChange(ApiModel):
+    """When the shop's orders last changed: the inbox polls it and reloads only on a change."""
+
+    model_config = ConfigDict(
+        json_schema_extra={"examples": [{"updated_at": "2026-10-16T13:05:12+07:00"}]}
+    )
+
+    updated_at: datetime | None = Field(description="Null while the shop has no orders.")
+
+
 class OrderPage(ApiModel):
     items: list[OrderSummary]
     next_cursor: str | None = Field(default=None, description="Pass as `cursor` for the next page.")

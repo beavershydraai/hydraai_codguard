@@ -39,7 +39,7 @@ import { BRANCH_LABELS, ORDER_STATUS_LABELS, RISK_TIER_LABELS } from '@/lib/labe
 import { columns } from './columns'
 
 // The inbox is served page by page by the API (E7.2): filters, search and sort run on the server,
-// and "Load more" fetches the next page. Nothing is filtered or sorted in the browser.
+// and each page holds 50 orders, with previous and next. Nothing is filtered or sorted here.
 
 const TIER_ORDER = Object.keys(RISK_TIER_LABELS) as RiskTier[]
 const STATUS_ORDER = Object.keys(ORDER_STATUS_LABELS) as OrderStatus[]
@@ -229,7 +229,7 @@ function Toolbar({ search, onSearchChange, filters, onFiltersChange, onRefresh, 
           <DropdownMenuGroup>
             <DropdownMenuItem onClick={onExport}>
               <FileDownIcon aria-hidden="true" />
-              Export loaded orders
+              Export this page
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onRefresh}>
               <RefreshCwIcon aria-hidden="true" />
@@ -254,13 +254,15 @@ export function OrdersDataGrid({
   onSearchChange,
   sort,
   onSortChange,
-  hasMore,
-  isLoadingMore,
-  onLoadMore,
+  page,
+  pageSize,
+  isFetching,
+  onPrevious,
+  onNext,
   onRefresh,
   headerActions,
 }: {
-  /** The pages loaded so far, in the server's order. */
+  /** The page shown, in the server's order. */
   orders: OrderSummary[]
   /** Orders matching the filters on the server. */
   total: number
@@ -271,9 +273,14 @@ export function OrdersDataGrid({
   onSearchChange: (search: string) => void
   sort: OrderSort
   onSortChange: (sort: OrderSort) => void
-  hasMore: boolean
-  isLoadingMore: boolean
-  onLoadMore: () => void
+  /** 0-based index of the page shown. */
+  page: number
+  pageSize: number
+  isFetching: boolean
+  /** Unset on the first page. */
+  onPrevious?: () => void
+  /** Unset on the last page. */
+  onNext?: () => void
   onRefresh: () => void
   /** Buttons in the frame header, like the block's "Add customer" button. */
   headerActions?: ReactNode
@@ -287,7 +294,7 @@ export function OrdersDataGrid({
     columns,
     data: orders,
     getRowId: (row) => row.id,
-    // Every loaded order on one page: the server sorts and pages.
+    // The server's page is the table's only page: the server sorts and pages.
     state: {
       pagination: { pageIndex: 0, pageSize: Math.max(orders.length, 1) },
       sorting,
@@ -311,7 +318,7 @@ export function OrdersDataGrid({
     link.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`
     link.click()
     URL.revokeObjectURL(url)
-    toast.success('CSV exported', { description: `${orders.length} loaded orders` })
+    toast.success('CSV exported', { description: `${orders.length} orders on this page` })
   }
 
   const filtered =
@@ -368,14 +375,22 @@ export function OrdersDataGrid({
           </FramePanel>
           <FrameFooter className="flex-row items-center justify-between gap-3">
             <span className="text-xs text-muted-foreground tabular-nums">
-              Showing {orders.length} of {total}
+              {orders.length > 0
+                ? `${page * pageSize + 1}–${page * pageSize + orders.length} of ${total}`
+                : `0 of ${total}`}
             </span>
-            {hasMore && (
-              <Button variant="outline" size="sm" onClick={onLoadMore} disabled={isLoadingMore}>
-                {isLoadingMore && <Spinner data-icon="inline-start" />}
-                Load more
+            <div className="flex items-center gap-2">
+              {isFetching && <Spinner aria-label="Loading" />}
+              <span className="text-xs text-muted-foreground tabular-nums">
+                Page {page + 1} of {Math.max(1, Math.ceil(total / pageSize))}
+              </span>
+              <Button variant="outline" size="sm" onClick={onPrevious} disabled={!onPrevious || isFetching}>
+                Previous
               </Button>
-            )}
+              <Button variant="outline" size="sm" onClick={onNext} disabled={!onNext || isFetching}>
+                Next
+              </Button>
+            </div>
           </FrameFooter>
         </Frame>
       </ReuiDataGrid>
