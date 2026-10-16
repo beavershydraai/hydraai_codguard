@@ -1,4 +1,5 @@
 import dataclasses
+import io
 import json
 import pickle
 from datetime import timedelta
@@ -235,6 +236,23 @@ def test_each_country_is_scored_by_its_own_model(trained, tmp_path, monkeypatch)
     assert fields["scoring"]["failed_delivery_cost_vnd"] == 60_000
     assert engine.score(sg, []) is None  # no SG model yet: the order waits unscored
     engine._cache.clear()
+
+
+def test_monitor_handles_a_country_with_no_scored_order(trained, tmp_path, monkeypatch):
+    """The 16 Oct run failed with KeyError 'placed_at': a country's orders were all unscored."""
+    docs, model, _, table = trained
+    monkeypatch.setenv("MODEL_DIR", str(tmp_path))
+    artifacts.write("latest/model1.pkl", pickle.dumps(model), "VN")
+    artifacts.write("latest/metrics.json", json.dumps({"validation_pr_auc": 0.3}).encode(), "VN")
+    buffer = io.BytesIO()
+    table[model["cols"]].to_parquet(buffer)
+    artifacts.write("latest/features.parquet", buffer.getvalue(), "VN")
+    unscored = [d for d in docs if not d.get("scoring")]
+    monitor.monitor_country(unscored, "VN")
+    summary = json.loads(artifacts.read("latest/monitor.json", "VN"))
+    assert summary["recent_orders"] == 0 and summary["retrain"] == "not needed"
+    # The test model learned after all these orders: none has a result since.
+    assert summary["new_outcomes"] == 0 and "checked_at" in summary
 
 
 # --- E2.5: expected loss on what is still owed, and location is never the only reason --------

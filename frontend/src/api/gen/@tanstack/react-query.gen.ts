@@ -15,6 +15,7 @@ import {
   getConfirmation,
   getDashboardSummary,
   getMe,
+  getModelHealth,
   getOrder,
   getPolicy,
   getShop,
@@ -34,6 +35,7 @@ import {
   respondConfirmation,
   runSpamSimulation,
   startCall,
+  updateModels,
   updateOrder,
   updatePolicy,
   updateShop,
@@ -57,6 +59,9 @@ import type {
   GetMeData,
   GetMeError,
   GetMeResponse,
+  GetModelHealthData,
+  GetModelHealthError,
+  GetModelHealthResponse,
   GetOrderData,
   GetOrderError,
   GetOrderResponse,
@@ -111,6 +116,9 @@ import type {
   StartCallData,
   StartCallError,
   StartCallResponse,
+  UpdateModelsData,
+  UpdateModelsError,
+  UpdateModelsResponse,
   UpdateOrderData,
   UpdateOrderError,
   UpdateOrderResponse,
@@ -705,6 +713,58 @@ export const getBacktestOptions = (options?: Options<GetBacktestData>) =>
     },
     queryKey: getBacktestQueryKey(options),
   })
+
+export const getModelHealthQueryKey = (options?: Options<GetModelHealthData>) =>
+  createQueryKey('getModelHealth', options)
+
+/**
+ * How each country's risk model is doing, in plain words
+ *
+ * From the daily check (codguard-monitor) and the trained model. `status` is `update_recommended` when the model catches fewer failed deliveries on recent orders, recent orders look different from what it learned, or many orders got a delivery result since.
+ */
+export const getModelHealthOptions = (options?: Options<GetModelHealthData>) =>
+  queryOptions<
+    GetModelHealthResponse,
+    GetModelHealthError,
+    GetModelHealthResponse,
+    ReturnType<typeof getModelHealthQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getModelHealth({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      })
+      return data
+    },
+    queryKey: getModelHealthQueryKey(options),
+  })
+
+/**
+ * Update the risk models (owner only)
+ *
+ * Starts codguard-train: every country's model learns again from all orders with a delivery result, in about two minutes. A new model replaces the current one only if it is at least as good; the current one keeps scoring meanwhile. 409 while an update is running.
+ */
+export const updateModelsMutation = (
+  options?: Partial<Options<UpdateModelsData>>,
+): UseMutationOptions<UpdateModelsResponse, UpdateModelsError, Options<UpdateModelsData>> => {
+  const mutationOptions: UseMutationOptions<
+    UpdateModelsResponse,
+    UpdateModelsError,
+    Options<UpdateModelsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await updateModels({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      })
+      return data
+    },
+  }
+  return mutationOptions
+}
 
 /**
  * Receive an order from an external sales tool

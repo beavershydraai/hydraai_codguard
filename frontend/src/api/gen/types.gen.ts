@@ -1352,6 +1352,65 @@ export type Me = {
 }
 
 /**
+ * ModelHealth
+ *
+ * How a country's risk model is doing, in plain words for the shop owner (app/risk/health.py).
+ * "Update" means the model learns again from all orders with a delivery result.
+ */
+export type ModelHealth = {
+  /**
+   * Country
+   */
+  country: 'VN' | 'SG' | 'PH'
+  /**
+   * Status
+   */
+  status: 'up_to_date' | 'update_recommended' | 'no_model'
+  /**
+   * Reasons
+   *
+   * Why an update is recommended.
+   */
+  reasons?: Array<string>
+  /**
+   * Trained At
+   *
+   * When the model last learned.
+   */
+  trained_at?: string | null
+  /**
+   * Training Orders
+   *
+   * Orders it learned from.
+   */
+  training_orders?: number | null
+  /**
+   * Lift Top20
+   *
+   * Among the 20 % riskiest orders it flags, how many times more failed deliveries than in a random 20 % (on orders it did not learn from).
+   */
+  lift_top20?: number | null
+  /**
+   * Checked At
+   *
+   * Last daily check.
+   */
+  checked_at?: string | null
+  /**
+   * New Outcomes
+   *
+   * Orders with a delivery result since it last learned.
+   */
+  new_outcomes?: number | null
+  /**
+   * Updating
+   *
+   * An update is running.
+   */
+  updating?: boolean
+}
+
+/**
  * OrderCreate
  *
  * New COD order, from the web app, a file import row or the intake API.
@@ -2915,6 +2974,68 @@ export type GetBacktestResponses = {
 }
 
 export type GetBacktestResponse = GetBacktestResponses[keyof GetBacktestResponses]
+
+export type GetModelHealthData = {
+  body?: never
+  path?: never
+  query?: never
+  url: '/api/v1/dashboard/model-health'
+}
+
+export type GetModelHealthErrors = {
+  /**
+   * Missing or invalid credentials.
+   */
+  401: ProblemDetail
+}
+
+export type GetModelHealthError = GetModelHealthErrors[keyof GetModelHealthErrors]
+
+export type GetModelHealthResponses = {
+  /**
+   * Response Get Model Health
+   *
+   * Successful Response
+   */
+  200: Array<ModelHealth>
+}
+
+export type GetModelHealthResponse = GetModelHealthResponses[keyof GetModelHealthResponses]
+
+export type UpdateModelsData = {
+  body?: never
+  path?: never
+  query?: never
+  url: '/api/v1/dashboard/model-health/update'
+}
+
+export type UpdateModelsErrors = {
+  /**
+   * Missing or invalid credentials.
+   */
+  401: ProblemDetail
+  /**
+   * Authenticated but not allowed (e.g. staff changing policy).
+   */
+  403: ProblemDetail
+  /**
+   * Request conflicts with the current state. See `code`.
+   */
+  409: ProblemDetail
+}
+
+export type UpdateModelsError = UpdateModelsErrors[keyof UpdateModelsErrors]
+
+export type UpdateModelsResponses = {
+  /**
+   * Response Update Models
+   *
+   * Successful Response
+   */
+  200: Array<ModelHealth>
+}
+
+export type UpdateModelsResponse = UpdateModelsResponses[keyof UpdateModelsResponses]
 
 export type IntakeOrderData = {
   body: OrderCreate

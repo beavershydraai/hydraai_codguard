@@ -35,7 +35,7 @@ export const NAV_MAIN: NavItem[] = [
   { id: 'overview', label: 'Overview', icon: <HouseIcon />, to: '/', exact: true },
   { id: 'orders', label: 'Orders', icon: <PackageIcon />, to: '/orders' },
   { id: 'review', label: 'Pending review', icon: <ClipboardCheckIcon />, to: '/review' },
-  { id: 'backtest', label: 'Backtest', icon: <ChartLineIcon />, to: '/backtest' },
+  { id: 'backtest', label: 'Risk model', icon: <ChartLineIcon />, to: '/backtest' },
 ]
 
 // ── Tier shortcuts (the block's "Resources" group) ──

@@ -140,3 +140,42 @@ class BacktestResult(ApiModel):
     failed_delivery_cost_vnd: Vnd
     lift: list[LiftSeries]
     comparison: list[PolicyComparison]
+
+
+class ModelHealth(ApiModel):
+    """How a country's risk model is doing, in plain words for the shop owner (app/risk/health.py).
+    "Update" means the model learns again from all orders with a delivery result."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "country": "VN",
+                    "status": "update_recommended",
+                    "reasons": ["1,240 orders got a delivery result since it last learned."],
+                    "trained_at": "2026-10-15T17:34:50Z",
+                    "training_orders": 7677,
+                    "lift_top20": 3.33,
+                    "checked_at": "2026-10-16T19:00:30Z",
+                    "new_outcomes": 1240,
+                    "updating": False,
+                }
+            ]
+        }
+    )
+
+    country: Literal["VN", "SG", "PH"]
+    status: Literal["up_to_date", "update_recommended", "no_model"]
+    reasons: list[str] = Field(default_factory=list, description="Why an update is recommended.")
+    trained_at: datetime | None = Field(default=None, description="When the model last learned.")
+    training_orders: int | None = Field(default=None, description="Orders it learned from.")
+    lift_top20: float | None = Field(
+        default=None,
+        description="Among the 20 % riskiest orders it flags, how many times more failed "
+        "deliveries than in a random 20 % (on orders it did not learn from).",
+    )
+    checked_at: datetime | None = Field(default=None, description="Last daily check.")
+    new_outcomes: int | None = Field(
+        default=None, description="Orders with a delivery result since it last learned."
+    )
+    updating: bool = Field(default=False, description="An update is running.")

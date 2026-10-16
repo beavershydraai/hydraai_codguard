@@ -20,9 +20,9 @@ from app.data.store import OrderStore, get_store
 from app.decision import lifecycle
 from app.decision.inbox import InvalidQuery, order_page
 from app.decision.views import order_detail, order_summary
-from app.risk import artifacts
+from app.risk import artifacts, health
 from app.schemas.calls import Call
-from app.schemas.dashboard import BacktestResult, DashboardSummary
+from app.schemas.dashboard import BacktestResult, DashboardSummary, ModelHealth
 from app.schemas.delivery import DeliveryImportResult, DeliveryOutcomeBatch
 from app.schemas.enums import ContactBlockReason, ErrorCode, OrderStatus, RiskTier, Role
 from app.schemas.orders import (
@@ -505,3 +505,36 @@ def get_backtest(
     if raw is None:  # the country's model has not been trained since the backtest was added
         raise ApiError(404, ErrorCode.NOT_FOUND, "No backtest yet", "Run the codguard-train job.")
     return BacktestResult.model_validate_json(raw)
+
+
+@dashboard_router.get(
+    "/model-health",
+    response_model=list[ModelHealth],
+    responses=problem_responses(401),
+    summary="How each country's risk model is doing, in plain words",
+    description="From the daily check (codguard-monitor) and the trained model. `status` is "
+    "`update_recommended` when the model catches fewer failed deliveries on recent orders, recent "
+    "orders look different from what it learned, or many orders got a delivery result since.",
+)
+def get_model_health(user: CurrentUser) -> list[ModelHealth]:
+    return health.model_health(datetime.now(UTC))
+
+
+@dashboard_router.post(
+    "/model-health/update",
+    response_model=list[ModelHealth],
+    responses=problem_responses(401, 403, 409),
+    summary="Update the risk models (owner only)",
+    description="Starts codguard-train: every country's model learns again from all orders with a "
+    "delivery result, in about two minutes. A new model replaces the current one only if it is at "
+    "least as good; the current one keeps scoring meanwhile. 409 while an update is running.",
+)
+def update_models(user: CurrentUser) -> list[ModelHealth]:
+    if user.role != Role.OWNER:
+        raise ApiError(403, ErrorCode.FORBIDDEN, "Forbidden", "Only the owner updates the model.")
+    try:
+        return health.request_update(datetime.now(UTC))
+    except health.UpdateRunning:
+        raise ApiError(
+            409, ErrorCode.CONFLICT, "Conflict", "An update is already running. Try again later."
+        ) from None
