@@ -4268,7 +4268,7 @@ components:
           failed_delivery_cost_vnd: 60000
           hard_rules: []
           id: scr_01
-          model_version: bqml-2026-10-09
+          model_version: v20261015173450
           probability: 0.41
           reasons:
           - signal_keys:
@@ -4320,7 +4320,7 @@ components:
           failed_delivery_cost_vnd: 60000
           hard_rules: []
           id: scr_01
-          model_version: bqml-2026-10-09
+          model_version: v20261015173450
           probability: 0.41
           reasons:
           - signal_keys:
@@ -5018,7 +5018,7 @@ components:
         failed_delivery_cost_vnd: 60000
         hard_rules: []
         id: scr_01
-        model_version: bqml-2026-10-09
+        model_version: v20261015173450
         probability: 0.41
         reasons:
         - signal_keys:

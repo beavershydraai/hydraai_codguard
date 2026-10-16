@@ -73,7 +73,7 @@ class RiskScore(ApiModel):
                             "signal_keys": ["address_missing_house_number"],
                         },
                     ],
-                    "model_version": "bqml-2026-10-09",
+                    "model_version": "v20261015173450",
                 }
             ]
         }

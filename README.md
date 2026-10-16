@@ -87,19 +87,20 @@ flowchart LR
 
     subgraph GCP [Google Cloud]
         API[COD Guard API<br/>Cloud Run]
-        SCORE[Risk scoring<br/>BigQuery ML]
+        SCORE[Risk scoring<br/>scikit-learn model in the API]
         LLM[Signals & reasons<br/>Gemini]
         DEC[Decision engine<br/>ADK agents]
         VOICE[AI call<br/>Gemini Live API]
         DB[(App data<br/>Firestore)]
-        BQ[(Training & analytics<br/>BigQuery)]
+        TRAIN[Training & monitoring<br/>Cloud Run jobs]
+        GCS[(Models<br/>Cloud Storage)]
     end
 
     API --> LLM --> SCORE --> DEC
     DEC --> VOICE
     DEC --> PAGE[Confirmation page]
     API <--> DB
-    SCORE <--> BQ
+    DB --> TRAIN --> GCS --> SCORE
     WEB[Shop web app<br/>Cloud Run] <--> API
 ```
 
@@ -109,7 +110,7 @@ flowchart LR
 |---|---|
 | AI models | Gemini (signal extraction and reasons), Gemini Live API (voice) |
 | Agent orchestration | Agent Development Kit (ADK) |
-| Risk model | BigQuery ML (boosted trees, with explanations per prediction) |
+| Risk model | scikit-learn gradient boosting (`HistGradientBoostingClassifier`) with isotonic calibration and SHAP explanations per prediction; one model per country, trained by the Cloud Run job `codguard-train`, stored in Cloud Storage |
 | Backend | Python service on Cloud Run |
 | Frontend | React + TypeScript on Vite: shadcn/ui and ReUI, TanStack Router and Query, Zustand, Hey API client; nginx on Cloud Run |
 | Data | Firestore (orders and app state, see [data model](docs/data-model.md)), Cloud Storage (training snapshots, models) |
@@ -127,7 +128,7 @@ COD Guard evaluates each order in three layers:
    - fully prepaid order → skipped;
    - invalid phone number → held for review;
    - phone with a ≥75% return rate over at least 3 past orders → Very High.
-2. **Statistical model** (BigQuery ML) turns signals into a probability of failed delivery.
+2. **Statistical model** (scikit-learn gradient boosting, `backend/app/risk/`) turns signals into a probability of failed delivery.
 3. **Gemini** extracts signals from unstructured text (address, sales conversation) and writes the reasons. Gemini **never** sets the score.
 
 ### Signals
@@ -156,26 +157,6 @@ The buyer is contacted only if `expected_loss` is higher than the cost of the co
 | Medium | Send confirmation link | AI call after 2 hours |
 | High | AI call | Hold for review after the last attempt |
 | Very High | Require deposit | Hold for review if unpaid |
-
-### ~~Example: BigQuery ML~~ → Firestore
-
-Replaced: orders are stored in Firestore, collection `orders`. See [data model](docs/data-model.md).
-
-<pre><del>CREATE OR REPLACE MODEL cod_guard.risk_model
-OPTIONS (
-  model_type = 'BOOSTED_TREE_CLASSIFIER',
-  input_label_cols = ['is_failed'],
-  auto_class_weights = TRUE,
-  enable_global_explain = TRUE
-) AS
-SELECT * EXCEPT(order_id) FROM cod_guard.training_orders;
-
-SELECT *
-FROM ML.EXPLAIN_PREDICT(
-  MODEL cod_guard.risk_model,
-  TABLE cod_guard.new_orders,
-  STRUCT(3 AS top_k_features)
-);</del></pre>
 
 ---
 
@@ -212,7 +193,6 @@ cod-guard/
 │   └── tests/
 ├── docs/               # technical notes (Gemini Live integration)
 ├── frontend/           # Shop web app + buyer confirmation page (Vite + React)
-├── ml/                 # data prep, synthetic data generator, BigQuery ML SQL, backtest
 ├── data/
 │   └── seed/           # pseudonymised demo data
 ├── infra/              # deployment config, Firebase config
@@ -231,7 +211,7 @@ cod-guard/
 
 - Google Cloud project with billing enabled
 - Gemini API access on Google Cloud (Vertex AI / Gemini Enterprise Agent Platform)
-- BigQuery and Firestore enabled
+- Firestore and Cloud Storage enabled
 - `gcloud` CLI and Firebase CLI
 - Python 3.11+ and Node.js 20+ with [pnpm](https://pnpm.io/) (`corepack enable` installs the version pinned in `frontend/package.json`)
 - (Optional) GHN staging account for delivery-status testing
