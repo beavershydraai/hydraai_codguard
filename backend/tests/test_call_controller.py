@@ -20,7 +20,9 @@ from app.telephony.live import LiveAgent, Timing
 from app.telephony.outcome import OutcomeError, fallback_outcome, validate_outcome
 from app.telephony.rtp import RtpEndpoint, build_rtp, parse_rtp
 
-FAST = Timing(no_response_s=0.05, closing_grace_s=0, closing_timeout_s=1, tick_s=0.01)
+FAST = Timing(
+    no_response_s=0.05, nothing_heard_s=0.03, closing_grace_s=0, closing_timeout_s=1, tick_s=0.01
+)
 
 
 def job(language=CallLanguage.VI):
@@ -234,6 +236,10 @@ def heard(text):
     )
 
 
+def interrupted():
+    return types.LiveServerMessage(server_content=types.LiveServerContent(interrupted=True))
+
+
 def turn_complete():
     return types.LiveServerMessage(server_content=types.LiveServerContent(turn_complete=True))
 
@@ -359,6 +365,25 @@ async def test_silence_sends_no_response_once_then_ends():
     report = await asyncio.wait_for(LiveAgent(job(), session, FakeOut(), FAST).run(), 2)
     assert session.events == ["[CALL_CONNECTED]", "[NO_RESPONSE]"]
     assert report.end_reason == "no_response" and not report.buyer_spoke
+
+
+async def test_a_cut_off_with_no_buyer_speech_tells_the_model_to_go_on():
+    session, out = FakeSession([audio(), interrupted()]), FakeOut()
+    report = await asyncio.wait_for(LiveAgent(job(), session, out, FAST).run(), 2)
+    assert out.cleared == 1
+    # The model stays silent in the fake, so the usual no-response steps follow.
+    assert session.events == ["[CALL_CONNECTED]", "[NOTHING_HEARD]", "[NO_RESPONSE]"]
+    assert report.end_reason == "no_response"
+
+
+async def test_a_buyer_who_cuts_in_gets_an_answer_not_a_nudge():
+    session = FakeSession([audio(), interrupted(), heard("Khoan đã")])
+    agent = LiveAgent(job(), session, FakeOut(), FAST)
+    task = asyncio.create_task(agent.run())
+    await asyncio.sleep(0.2)
+    agent.stop("hangup")
+    await asyncio.wait_for(task, 1)
+    assert session.events == ["[CALL_CONNECTED]"]
 
 
 async def test_keys_go_to_the_model_and_count_as_an_answer():

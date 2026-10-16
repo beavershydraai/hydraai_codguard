@@ -173,6 +173,7 @@ The backend renders one JSON object into the instruction for each call. Pseudony
 3. Stream the caller's audio with `send_realtime_input(audio=types.Blob(data=chunk, mime_type="audio/pcm;rate=16000"))` and send the model's audio back to Asterisk. On `server_content.interrupted`, drop the queued audio at once.
 4. Run the timers. These are starting values; tune them in E9.2.
    - No buyer speech for 8 s after the model's turn: send `[NO_RESPONSE]` once. Still nothing 8 s later: end the call.
+   - The model was interrupted and the buyer has said nothing 2.5 s later: send `[NOTHING_HEARD]`. On a phone line, noise or echo can trigger the interruption; without the event the model waits in silence. Seen on a real call: the agent stopped mid-sentence and the line went quiet until the buyer hung up.
    - At 4 minutes, send `[TIME_UP]`. At 5 minutes, hang up.
 5. When `record_call_outcome` arrives, validate it, keep it as the provisional outcome and reply (see the next section). If a `tool_call_cancellation` message lists its id, drop it.
 6. After an `ok` reply, wait for the model's closing turn to finish. The server sends `turn_complete` once it estimates playback has ended. Give the queued audio a moment to play out, then close the session.
@@ -182,6 +183,7 @@ The backend renders one JSON object into the instruction for each call. Pseudony
 |---|---|---|
 | `[CALL_CONNECTED]` | The session is ready and the buyer has picked up | Says the opening |
 | `[NO_RESPONSE]` | No buyer speech for 8 s | Asks once whether the buyer can hear |
+| `[NOTHING_HEARD]` | Interrupted, then no buyer speech for 2.5 s | Says the cut-off sentence again |
 | `[TIME_UP]` | The call reaches 4 minutes | Records an outcome (`UNCLEAR` if undecided) and says goodbye |
 
 Send every event with `send_client_content`, as in step 2.
