@@ -44,6 +44,10 @@ class FakeStore:
         self.docs[doc["order_id"]] = doc
         return None
 
+    def put_many(self, docs):
+        for doc in docs:
+            self.docs[doc["order_id"]] = deepcopy(doc)
+
     def get(self, order_id):
         doc = self.docs.get(order_id)
         return deepcopy(doc) if doc else None

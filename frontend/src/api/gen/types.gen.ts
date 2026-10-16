@@ -105,6 +105,18 @@ export type BodyImportDeliveryOutcomes = {
 }
 
 /**
+ * Body_import_history
+ */
+export type BodyImportHistory = {
+  /**
+   * File
+   *
+   * CSV, UTF-8.
+   */
+  file: Blob | File
+}
+
+/**
  * Body_import_orders
  */
 export type BodyImportOrders = {
@@ -1223,6 +1235,70 @@ export type FieldError = {
  * high_return_phone: phone with a ≥75% return rate over at least 3 orders, Very High
  */
 export type HardRule = 'prepaid_skip' | 'invalid_phone' | 'high_return_phone'
+
+/**
+ * HistoryCountry
+ */
+export type HistoryCountry = {
+  /**
+   * Country
+   */
+  country: string
+  /**
+   * Orders
+   */
+  orders: number
+  /**
+   * Delivered
+   */
+  delivered: number
+  /**
+   * Failed
+   *
+   * Refused or unreachable: what the model learns as failed.
+   */
+  failed: number
+  /**
+   * Cancelled
+   *
+   * Cancelled by the buyer before shipping.
+   */
+  cancelled: number
+}
+
+/**
+ * HistoryImportResult
+ *
+ * What a history upload stored (onboarding).
+ */
+export type HistoryImportResult = {
+  /**
+   * Received
+   *
+   * Rows read.
+   */
+  received: number
+  /**
+   * Imported
+   *
+   * Past orders stored.
+   */
+  imported: number
+  /**
+   * Rejected Count
+   */
+  rejected_count: number
+  /**
+   * Rejected
+   *
+   * The first 100 rejected rows.
+   */
+  rejected: Array<ImportRowError>
+  /**
+   * Countries
+   */
+  countries: Array<HistoryCountry>
+}
 
 /**
  * ImportResult
@@ -2561,6 +2637,43 @@ export type UpdatePolicyResponses = {
 }
 
 export type UpdatePolicyResponse = UpdatePolicyResponses[keyof UpdatePolicyResponses]
+
+export type ImportHistoryData = {
+  body: BodyImportHistory
+  path?: never
+  query?: never
+  url: '/api/v1/shop/history'
+}
+
+export type ImportHistoryErrors = {
+  /**
+   * Malformed request or file.
+   */
+  400: ProblemDetail
+  /**
+   * Missing or invalid credentials.
+   */
+  401: ProblemDetail
+  /**
+   * Authenticated but not allowed (e.g. staff changing policy).
+   */
+  403: ProblemDetail
+  /**
+   * Request body or parameters failed validation. See `errors`.
+   */
+  422: ProblemDetail
+}
+
+export type ImportHistoryError = ImportHistoryErrors[keyof ImportHistoryErrors]
+
+export type ImportHistoryResponses = {
+  /**
+   * Successful Response
+   */
+  200: HistoryImportResult
+}
+
+export type ImportHistoryResponse = ImportHistoryResponses[keyof ImportHistoryResponses]
 
 export type ListPolicyVersionsData = {
   body?: never

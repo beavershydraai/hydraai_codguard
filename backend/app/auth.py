@@ -1,9 +1,13 @@
-"""Shop app sign-in: one admin account from the environment and signed bearer tokens.
+"""Shop app sign-in: an admin account and shop accounts from the environment, and signed
+bearer tokens.
 
-A stand-in for Firebase Auth (E7.1). The account and the signing key come from the environment
+A stand-in for Firebase Auth (E7.1). The accounts and the signing key come from the environment
 (Secret Manager in the cloud), never from code:
 
-- ADMIN_USERNAME, ADMIN_PASSWORD: the only account that can sign in. The username may be an email.
+- ADMIN_USERNAME, ADMIN_PASSWORD: the admin account (the demo shop). The username may be an email.
+- SHOP_ACCOUNTS: more owner accounts, each with its own shop, as a JSON list of
+  {"username", "password_hash", "shop_id", "name"}; `password_hash` is from `hash_password`
+  (PBKDF2-SHA256), never the password. Optional.
 - AUTH_TOKEN_SECRET: HMAC key for the tokens. Rotating it signs everyone out.
 - ADMIN_SHOP_ID: shop the account belongs to (default `shop_demo`, the intake demo shop).
 - ADMIN_EMAIL: email shown for the account (default: the username when it is an email,
@@ -12,8 +16,12 @@ A stand-in for Firebase Auth (E7.1). The account and the signing key come from t
 Sign-in is disabled unless the three required variables are set.
 """
 
+import base64
+import hashlib
 import hmac
+import json
 import os
+import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -76,14 +84,72 @@ def _admin(config: _Config) -> User:
     )
 
 
+_ITERATIONS = 200_000
+
+
+def hash_password(password: str, salt: bytes | None = None) -> str:
+    """`pbkdf2_sha256$<iterations>$<salt>$<hash>` for a SHOP_ACCOUNTS entry."""
+    salt = salt or secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, _ITERATIONS)
+    encode = base64.b64encode
+    return f"pbkdf2_sha256${_ITERATIONS}${encode(salt).decode()}${encode(digest).decode()}"
+
+
+def _password_ok(password: str, stored: str) -> bool:
+    try:
+        scheme, iterations, salt, digest = stored.split("$")
+        if scheme != "pbkdf2_sha256":
+            return False
+        expected = base64.b64decode(digest)
+        actual = hashlib.pbkdf2_hmac(
+            "sha256", password.encode(), base64.b64decode(salt), int(iterations)
+        )
+    except ValueError:
+        return False
+    return hmac.compare_digest(actual, expected)
+
+
+def _accounts() -> list[dict]:
+    """SHOP_ACCOUNTS, or no shop account when it is unset."""
+    raw = os.environ.get("SHOP_ACCOUNTS", "").strip()
+    return json.loads(raw) if raw else []
+
+
+def _owner(account: dict) -> User:
+    return User(
+        user_id=f"usr_{account['shop_id']}",
+        username=account["username"],
+        email=account["username"],
+        display_name=account.get("name") or "Owner",
+        role=Role.OWNER,
+        shop_id=account["shop_id"],
+    )
+
+
+def _user(username: str) -> User | None:
+    """The account with this username, as a user; None when there is none."""
+    config = _config()
+    if hmac.compare_digest(username.encode(), config.username.encode()):
+        return _admin(config)
+    for account in _accounts():
+        if hmac.compare_digest(username.encode(), account["username"].encode()):
+            return _owner(account)
+    return None
+
+
 def authenticate(username: str, password: str) -> User:
     config = _config()
     # Compare both fields in constant time, and always both, so timing reveals neither.
     username_ok = hmac.compare_digest(username.encode(), config.username.encode())
     password_ok = hmac.compare_digest(password.encode(), config.password.encode())
-    if not (username_ok and password_ok):
-        raise AuthError("Wrong username or password.")
-    return _admin(config)
+    if username_ok and password_ok:
+        return _admin(config)
+    for account in _accounts():
+        if hmac.compare_digest(username.encode(), account["username"].encode()):
+            if _password_ok(password, account["password_hash"]):
+                return _owner(account)
+            break
+    raise AuthError("Wrong username or password.")
 
 
 def issue_token(user: User, now: datetime | None = None) -> tuple[str, datetime]:
@@ -116,7 +182,8 @@ def verify_token(token: str) -> User:
         raise AuthError("The access token has expired. Sign in again.") from exc
     except jwt.InvalidTokenError as exc:
         raise AuthError("The access token is not valid.") from exc
-    # Only the configured account can hold a token; a renamed account invalidates old tokens.
-    if claims.get("username") != config.username:
+    # Only a configured account can hold a token; a renamed account invalidates old tokens.
+    user = _user(str(claims.get("username", "")))
+    if user is None:
         raise AuthError("The access token is not valid.")
-    return _admin(config)
+    return user

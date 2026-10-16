@@ -49,6 +49,15 @@ class OrderStore:
         except AlreadyExists:
             return ref.get().to_dict()
 
+    def put_many(self, docs: list[dict]) -> None:
+        """Write finished orders in batches of 500 (a history import). An order with the same ID
+        is replaced: importing the same file again changes nothing."""
+        for start in range(0, len(docs), 500):
+            batch = self.client.batch()
+            for doc in docs[start : start + 500]:
+                batch.set(self.orders.document(doc["order_id"]), doc)
+            batch.commit()
+
     def get(self, order_id: str) -> dict | None:
         snapshot = self.orders.document(order_id).get()
         return snapshot.to_dict() if snapshot.exists else None

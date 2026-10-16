@@ -13,11 +13,11 @@ from app.agents.log import DecisionLog, entry, get_decision_log
 from app.api.errors import ApiError, NotImplementedYet, problem_example, problem_responses
 from app.api.security import CurrentUser, bearer_auth
 from app.calls.service import CallService, get_call_service
-from app.data import branches, order_csv
+from app.data import branches, history, order_csv
 from app.data.orders import to_utc
 from app.data.policies import PolicyStore, VersionTaken, get_policy_store
 from app.data.shops import ShopStore, get_shop_store, shop_view
-from app.data.store import OrderStore, get_store
+from app.data.store import OrderStore, get_store, phone_key
 from app.decision import dashboard, lifecycle
 from app.decision.inbox import InvalidQuery, order_page
 from app.decision.views import order_detail, order_summary
@@ -34,6 +34,8 @@ from app.schemas.enums import (
     Role,
 )
 from app.schemas.orders import (
+    HistoryCountry,
+    HistoryImportResult,
     ImportResult,
     ImportRowError,
     OrderCreate,
@@ -134,6 +136,53 @@ def update_policy(body: PolicyUpdate, user: CurrentUser, policies: Policies) -> 
         raise ApiError(
             409, ErrorCode.CONFLICT, "Conflict", "The policy changed meanwhile. Reload it."
         ) from None
+
+
+@shop_router.post(
+    "/history",
+    response_model=HistoryImportResult,
+    responses=problem_responses(400, 401, 403),
+    summary="Import the shop's past orders with their delivery results (onboarding, owner only)",
+    description="CSV, UTF-8, up to 20,000 rows: the columns of the order import plus "
+    "`branch_id`, `delivery_result` (delivered, refused, unreachable, carrier_issue, shop_issue "
+    "or cancelled) and `outcome_at`; `external_id` is required. Rows are checked one by one and "
+    "stored as finished orders; the next model update learns from them. Importing the same file "
+    "again replaces the same orders.",
+)
+def import_history(
+    file: Annotated[UploadFile, File(description="CSV, UTF-8.")],
+    user: CurrentUser,
+    store: Annotated[OrderStore, Depends(get_store)],
+) -> HistoryImportResult:
+    if user.role != Role.OWNER:
+        raise ApiError(403, ErrorCode.FORBIDDEN, "Forbidden", "Only the owner imports history.")
+    try:
+        docs, rejected, received = history.parse(
+            file.file.read(history.MAX_BYTES + 1), user.shop_id, phone_key(), datetime.now(UTC)
+        )
+    except order_csv.BadFile as error:
+        raise ApiError(400, ErrorCode.VALIDATION_ERROR, "Bad request", str(error)) from error
+    store.put_many(docs)
+    by_country: dict[str, dict] = {}
+    for doc in docs:
+        counts = by_country.setdefault(
+            doc["country"], {"orders": 0, "delivered": 0, "failed": 0, "cancelled": 0}
+        )
+        counts["orders"] += 1
+        result = (doc.get("delivery") or {}).get("result")
+        if doc.get("cancel"):
+            counts["cancelled"] += 1
+        elif result == "delivered":
+            counts["delivered"] += 1
+        elif result in ("refused", "unreachable"):
+            counts["failed"] += 1
+    return HistoryImportResult(
+        received=received,
+        imported=len(docs),
+        rejected_count=len(rejected),
+        rejected=rejected[:100],
+        countries=[HistoryCountry(country=c, **n) for c, n in sorted(by_country.items())],
+    )
 
 
 @shop_router.get(

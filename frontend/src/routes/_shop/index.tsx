@@ -1,10 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useEffect } from 'react'
 
-import { getDashboardSummaryOptions } from '@/api/gen/@tanstack/react-query.gen'
+import {
+  getDashboardSummaryOptions,
+  getShopOptions,
+  listOrdersOptions,
+} from '@/api/gen/@tanstack/react-query.gen'
 import { type Period, PERIODS } from '@/components/blocks/dashboard-1/components/data'
 import { RoiDashboard } from '@/components/blocks/dashboard-1/components/roi-dashboard'
 import { QueryError } from '@/components/query-error'
+import { useOnboardingStore } from '@/stores/onboarding'
 
 type DashboardSearch = { period?: Period; country?: Country }
 type Country = 'VN' | 'SG' | 'PH'
@@ -35,6 +41,14 @@ function DashboardPage() {
     ...getDashboardSummaryOptions({ query: range(Number(period), country) }),
     staleTime: 60_000,
   })
+  // A shop with no order at all has just signed up: set it up first.
+  const shop = useQuery(getShopOptions())
+  const firstOrder = useQuery(listOrdersOptions({ query: { limit: 1 } }))
+  const done = useOnboardingStore((s) => (shop.data ? s.done.includes(shop.data.id) : true))
+  const empty = !done && firstOrder.data?.total === 0
+  useEffect(() => {
+    if (empty) void navigate({ to: '/onboarding' })
+  }, [empty, navigate])
 
   if (error) return <QueryError error={error} />
   return (

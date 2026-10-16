@@ -10,44 +10,23 @@ import argparse
 import collections
 from datetime import UTC, datetime, timedelta
 
-from app.data.orders import order_document
-from app.data.store import order_id_for, phone_key
+from app.data.history import finished_doc
+from app.data.store import phone_key
 from app.demo.world import SHOP_ID, Order, World
 from app.schemas.orders import OrderCreate
-
-STATUS = {
-    "delivered": "delivered",
-    "refused": "delivery_failed",
-    "unreachable": "delivery_failed",
-    "carrier_issue": "delivery_failed",
-    "shop_issue": "delivery_failed",
-    "cancelled": "cancelled",
-}
 
 
 def stored_doc(order: Order, key: bytes) -> dict:
     """The Firestore document of a finished history order."""
     payload = OrderCreate.model_validate(order.payload)
-    doc = order_document(
+    return finished_doc(
         payload,
-        order_id=order_id_for(SHOP_ID, payload.external_id),
         shop_id=SHOP_ID,
-        phone_key=key,
-        now=payload.placed_at.astimezone(UTC),
         branch_id=order.branch_id,
+        outcome=order.outcome,
+        outcome_at=payload.placed_at.astimezone(UTC) + order.outcome_after,
+        key=key,
     )
-    at = doc["placed_at"] + order.outcome_after
-    if order.outcome == "cancelled":
-        doc["cancel"] = {"reason": "cancelled", "at": at, "by": "buyer"}
-    else:
-        doc["delivery"] = {
-            "result": order.outcome,
-            "carrier": "other",
-            "tracking_code": None,
-            "occurred_at": at,
-        }
-    doc["status"], doc["updated_at"] = STATUS[order.outcome], at
-    return doc
 
 
 def history_docs(days: int, end: datetime, seed: int = 7) -> list[dict]:
