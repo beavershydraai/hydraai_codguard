@@ -17,7 +17,7 @@ from app.data.orders import to_utc
 from app.data.policies import PolicyStore, VersionTaken, get_policy_store
 from app.data.shops import ShopStore, get_shop_store, shop_view
 from app.data.store import OrderStore, get_store
-from app.decision import lifecycle
+from app.decision import dashboard, lifecycle
 from app.decision.inbox import InvalidQuery, order_page
 from app.decision.views import order_detail, order_summary
 from app.risk import artifacts, health
@@ -480,13 +480,27 @@ dashboard_router = APIRouter(prefix="/dashboard", tags=["dashboard"], dependenci
     "/summary",
     response_model=DashboardSummary,
     responses=problem_responses(401, 422),
-    summary="ROI dashboard",
+    summary="ROI dashboard of one country",
+    description="Orders of the country's branches placed from `from` to `to` (inclusive, local "
+    "time). The savings are an estimate (app/decision/dashboard.py).",
 )
-async def get_dashboard_summary(
+def get_dashboard_summary(
+    user: CurrentUser,
+    store: Annotated[OrderStore, Depends(get_store)],
+    shops: Shops,
     period_from: Annotated[date, Query(alias="from")],
     period_to: Annotated[date, Query(alias="to")],
+    country: Annotated[Literal["VN", "SG", "PH"], Query()] = "VN",
 ) -> DashboardSummary:
-    raise NotImplementedYet("get_dashboard_summary")
+    if period_to < period_from:
+        raise ApiError(
+            422, ErrorCode.VALIDATION_ERROR, "Validation error", "`to` is before `from`."
+        )
+    docs = store.select(
+        user.shop_id, dashboard.filters(country, period_from, period_to), dashboard.FIELDS
+    )
+    settings = shops.settings(user.shop_id)[country]
+    return dashboard.summarize(docs, settings, country, period_from, period_to)
 
 
 @dashboard_router.get(

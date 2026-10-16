@@ -11,7 +11,6 @@ import type {
   BuyerResponseResult,
   Call,
   CallOutcome,
-  DashboardSummary,
   DecisionAction,
   DeliveryImportResult,
   ImportResult,
@@ -34,7 +33,6 @@ import type {
 import { BUYER_ACTION_LABELS, CALL_OUTCOME_LABELS, DECISION_ACTION_LABELS } from '@/lib/labels'
 
 import {
-  ALL_ACTIONS,
   decisionMessage,
   FAILED_DELIVERY_COST,
   maskPhone,
@@ -698,43 +696,6 @@ export class MockDb {
   }
 
   // ── Dashboard ──
-
-  dashboard(from: string, to: string): DashboardSummary {
-    const start = Date.parse(from)
-    const end = Date.parse(to) + 86_400_000 - 1
-    const inRange = [...this.orders.values()].filter((o) => {
-      const t = Date.parse(o.placed_at)
-      return t >= start && t <= end
-    })
-    const counts = new Map<DecisionAction, number>()
-    for (const o of inRange)
-      if (o.decision) counts.set(o.decision.action, (counts.get(o.decision.action) ?? 0) + 1)
-    const cancelled = inRange.filter((o) => o.status === 'cancelled').length
-    const delivered = inRange.filter((o) => o.status === 'delivered').length
-    const failed = inRange.filter((o) => o.status === 'delivery_failed').length
-    const good = inRange.filter(
-      (o) =>
-        o.status === 'delivered' ||
-        o.timeline?.some((e) => /^(Call outcome: Confirmed|Buyer chose: Confirm)\./.test(e.message_vi)),
-    )
-    const goodContacted = good.filter((o) => (o.contacts?.length ?? 0) > 0)
-    const cost = this.vnSettings.failed_delivery_cost_vnd ?? FAILED_DELIVERY_COST
-    return {
-      period_from: from,
-      period_to: to,
-      orders_screened: inRange.filter((o) => o.current_score).length,
-      actions: ALL_ACTIONS.map((action) => ({ action, count: counts.get(action) ?? 0 })).filter(
-        (a) => a.count > 0,
-      ),
-      cancelled_before_ship: cancelled,
-      delivered,
-      delivery_failed: failed,
-      estimated_savings_vnd:
-        cancelled * cost +
-        Math.round(inRange.filter((o) => o.tier === 'very_high' || o.tier === 'high').length * cost * 0.35),
-      good_orders_contacted_rate: good.length ? Number((goodContacted.length / good.length).toFixed(3)) : 0,
-    }
-  }
 
   backtest(): BacktestResult {
     const curve = (power: number) =>

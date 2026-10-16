@@ -118,10 +118,6 @@ on('POST', '/api/v1/delivery-outcomes/import', async ({ request }) => {
   return mockDb.importDelivery(await file.text())
 })
 
-on('GET', '/api/v1/dashboard/summary', ({ url }) => {
-  const today = new Date().toISOString().slice(0, 10)
-  return mockDb.dashboard(url.searchParams.get('from') ?? today, url.searchParams.get('to') ?? today)
-})
 on('GET', '/api/v1/dashboard/backtest', () => mockDb.backtest())
 const MODEL_HEALTH = (['VN', 'SG', 'PH'] as const).map((country) => ({
   country,

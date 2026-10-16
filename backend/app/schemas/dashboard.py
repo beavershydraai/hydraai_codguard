@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import ConfigDict, Field
 
-from app.schemas.common import ApiModel, Currency, Vnd
+from app.schemas.common import ApiModel, Country, Currency, Vnd
 from app.schemas.enums import DecisionAction
 
 
@@ -21,6 +21,8 @@ class DashboardSummary(ApiModel):
                 {
                     "period_from": "2026-10-01",
                     "period_to": "2026-10-09",
+                    "country": "VN",
+                    "currency": "VND",
                     "orders_screened": 2700,
                     "actions": [
                         {"action": "ship_now", "count": 2150},
@@ -41,7 +43,9 @@ class DashboardSummary(ApiModel):
 
     period_from: date
     period_to: date
-    orders_screened: int = Field(ge=0)
+    country: Country = Field(description="Orders of this country's branches.")
+    currency: Currency = Field(description="Currency of the amounts (minor unit).")
+    orders_screened: int = Field(ge=0, description="Orders the decision engine decided.")
     actions: list[ActionCount]
     cancelled_before_ship: int = Field(ge=0)
     delivered: int = Field(ge=0)
@@ -50,7 +54,9 @@ class DashboardSummary(ApiModel):
         description="Estimate (UI label 'estimated'). May be negative."
     )
     good_orders_contacted_rate: float = Field(
-        ge=0, le=1, description="Share of orders that were delivered fine but still contacted."
+        ge=0,
+        le=1,
+        description="Among screened orders that were delivered fine, the share still contacted.",
     )
 
 

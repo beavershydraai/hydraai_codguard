@@ -503,7 +503,9 @@ export const importDeliveryOutcomes = <ThrowOnError extends boolean = false>(
   })
 
 /**
- * ROI dashboard
+ * ROI dashboard of one country
+ *
+ * Orders of the country's branches placed from `from` to `to` (inclusive, local time). The savings are an estimate (app/decision/dashboard.py).
  */
 export const getDashboardSummary = <ThrowOnError extends boolean = false>(
   options: Options<GetDashboardSummaryData, ThrowOnError>,

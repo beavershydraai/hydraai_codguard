@@ -27,7 +27,7 @@ curl -fsS http://127.0.0.1:8080/health | grep -q '"ok"' || fail "/health did not
 curl -fsS http://127.0.0.1:8080/openapi.json \
   | python3 -c 'import json, sys; assert json.load(sys.stdin)["info"]["title"] == "COD Guard API"' \
   || fail "/openapi.json is missing or wrong"
-code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8080/api/v1/dashboard/summary?from=2026-10-01&to=2026-10-15")
+code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8080/api/v1/public/confirmations/abcdefghijklmnop1234")
 [ "$code" = "501" ] || fail "Expected 501 from a contract stub, got $code"
 uid=$(docker exec api id -u)
 [ "$uid" != "0" ] || fail "Container runs as root"

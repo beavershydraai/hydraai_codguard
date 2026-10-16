@@ -23,7 +23,7 @@ import { Item, ItemMedia } from '@/components/ui/item'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { DECISION_ACTION_LABELS, formatPercent, formatVnd } from '@/lib/labels'
+import { COUNTRY_LABELS, DECISION_ACTION_LABELS, formatMoney, formatPercent } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 import { useOnboardingStore } from '@/stores/onboarding'
 
@@ -48,11 +48,15 @@ export function RoiDashboard({
   isLoading,
   period,
   onPeriodChange,
+  country,
+  onCountryChange,
 }: {
   summary: DashboardSummary | undefined
   isLoading: boolean
   period: Period
   onPeriodChange: (period: Period) => void
+  country: string
+  onCountryChange: (country: string) => void
 }) {
   const empty = !isLoading && summary && summary.orders_screened === 0
 
@@ -64,10 +68,19 @@ export function RoiDashboard({
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              How COD Guard has helped your shop over the last{' '}
+              How COD Guard has helped your shop in {COUNTRY_LABELS[country] ?? country} over the last{' '}
               {PERIODS.find((p) => p.value === period)!.label}.
             </p>
           </div>
+          <Tabs value={country} onValueChange={onCountryChange}>
+            <TabsList>
+              {Object.entries(COUNTRY_LABELS).map(([code, label]) => (
+                <TabsTrigger key={code} value={code}>
+                  {label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
           <Tabs value={period} onValueChange={(value) => onPeriodChange(value as Period)}>
             <TabsList>
               {PERIODS.map((p) => (
@@ -139,10 +152,10 @@ function KpiCards({ summary, isLoading }: { summary?: DashboardSummary; isLoadin
           title: 'Savings',
           icon: PiggyBankIcon,
           iconBg: 'bg-emerald-500',
-          value: formatVnd(summary.estimated_savings_vnd),
+          value: formatMoney(summary.estimated_savings_vnd, summary.currency),
           note: 'Compared with not using COD Guard',
           estimated: true,
-          help: 'Failed-delivery costs avoided minus contact costs, using the failed delivery cost in Settings.',
+          help: "For each contacted order: the share of failed deliveries its action is expected to prevent times the order's expected loss, minus the contact cost in Settings.",
         },
         {
           title: 'Good orders contacted',
