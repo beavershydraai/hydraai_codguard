@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -12,7 +12,7 @@ import { MessagePreviewDialog } from '@/components/orders/message-preview-dialog
 import { OverrideDialog } from '@/components/orders/override-dialog'
 import { QueryError } from '@/components/query-error'
 import { Skeleton } from '@/components/ui/skeleton'
-import { problemMessage } from '@/lib/api'
+import { invalidate, problemMessage } from '@/lib/api'
 
 export const Route = createFileRoute('/_shop/orders/$orderId')({
   staticData: { crumb: 'Order details' },
@@ -23,16 +23,29 @@ export const Route = createFileRoute('/_shop/orders/$orderId')({
   component: OrderDetailPage,
 })
 
+// A call in one of these states still changes the order: its progress and result land in the
+// contact history, the timeline and the status, so the page polls until the call ends.
+const ACTIVE_CALL = new Set<Call['status']>(['queued', 'dialing', 'in_progress'])
+
 function OrderDetailPage() {
   const { orderId } = Route.useParams()
-  const { data: order, error, isPending } = useQuery(getOrderOptions({ path: { order_id: orderId } }))
+  const queryClient = useQueryClient()
+  const orderQuery = useQuery({
+    ...getOrderOptions({ path: { order_id: orderId } }),
+    refetchInterval: (query) =>
+      query.state.data?.calls?.some((c) => ACTIVE_CALL.has(c.status)) ? 3_000 : false,
+  })
+  const { data: order, error, isPending } = orderQuery
   const { data: shop } = useQuery(getShopOptions())
   const [panel, setPanel] = useState<'edit' | 'override' | null>(null)
   const [call, setCall] = useState<Call | null>(null)
   const [message, setMessage] = useState<ContactAttempt | null>(null)
   const startCall = useMutation({
     ...startCallMutation(),
-    onSuccess: setCall,
+    onSuccess: (started) => {
+      setCall(started)
+      void invalidate(queryClient, 'getOrder', 'listOrders')
+    },
     onError: (err) => toast.error('Could not start the call', { description: problemMessage(err) }),
   })
 

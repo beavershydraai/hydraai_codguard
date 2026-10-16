@@ -67,6 +67,7 @@ class FakePublisher:
 def calls(pipe, monkeypatch):  # noqa: F811
     monkeypatch.setenv("CALL_TARGET_OVERRIDE", OVERRIDE)
     monkeypatch.delenv("CALL_DIAL_BUYERS", raising=False)
+    monkeypatch.delenv("CALL_ALLOWED_PHONES", raising=False)
     monkeypatch.setattr(engine, "score", scorer("high", "call"))
     return CallService(
         orders=pipe.store, calls=FakeCallStore(), log=pipe.log, publisher=FakePublisher()
@@ -164,6 +165,28 @@ def test_without_the_override_the_buyers_phone_is_dialled_only_when_allowed(call
     assert target.kind == CallTargetKind.PSTN and target.address == "+84000000001"
     with pytest.raises(jobs.NoTarget, match="no valid phone"):
         jobs.target_for(order(calls) | {"buyer_phone": "12345", "buyer_phone_hash": None})
+
+
+def test_an_allowed_phone_is_dialled_and_any_other_rings_the_override(calls, monkeypatch):
+    # Any common form; the order's phone (+84000000001) is stored as E.164 at intake.
+    monkeypatch.setenv("CALL_ALLOWED_PHONES", " 0000 000 002, +84 000 000 001 ,+65 0000 0003,")
+    assert jobs.allowed_phones() == {"+84000000001", "+84000000002", "+6500000003"}
+    target = jobs.target_for(order(calls))
+    assert target.kind == CallTargetKind.PSTN and target.address == "+84000000001"
+    other = order(calls) | {"buyer_phone": "+84000000009"}
+    assert jobs.target_for(other).address == "6001"
+    invalid = order(calls) | {"buyer_phone_hash": None}  # failed validation at intake
+    assert jobs.target_for(invalid).address == "6001"
+
+
+def test_an_allowed_phone_skips_the_phone_rules(calls, monkeypatch):
+    monkeypatch.delenv("CALL_TARGET_OVERRIDE")
+    monkeypatch.setenv("CALL_ALLOWED_PHONES", "+84000000001")
+    late = NOW.replace(hour=23)
+    call = calls.start_for_shop("ord_test", "shop_a", "admin@gmail.com", late)
+    assert call.status.value == "queued"
+    (job,) = calls.publisher.jobs
+    assert job.target.kind == CallTargetKind.PSTN and job.target.address == "+84000000001"
 
 
 def test_without_a_target_nothing_is_published_and_the_order_says_why(calls, monkeypatch):
