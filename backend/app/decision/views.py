@@ -36,7 +36,9 @@ def _risk_score(order_id: str, raw: dict, fail_cost: int) -> RiskScore:
 
 
 def _fail_cost(doc: dict) -> int:
-    return branches.country_of(doc).costs["failed_delivery"]
+    """The cost the latest score used: the shop's own (E7.1) or its country's default."""
+    stored = (doc.get("scoring") or {}).get("failed_delivery_cost_vnd")
+    return stored or branches.country_of(doc).costs["failed_delivery"]
 
 
 def _current_score(doc: dict) -> RiskScore | None:

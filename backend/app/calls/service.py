@@ -5,11 +5,11 @@
   shop app's call endpoints answer 501 and the pipeline keeps its simulated ("mock") call.
 - CALL_ALLOWED_PHONES, CALL_TARGET_OVERRIDE, CALL_DIAL_BUYERS, CALL_ENV, CALL_AGENT,
   CALL_LANGUAGE: see app/calls/jobs.py.
-- CONTACT_HOURS: `08:00-21:00` by default, Vietnam time.
 
 Contact protection (AGENTS.md) checked here: a confirmed order and an order whose two attempts
 are used are never called; a phone gets at most one AI call per 24 hours (retries for the same
-order excepted), none for 30 days after "I didn't order this", and only within contact hours.
+order excepted), none for 30 days after "I didn't order this", and only within the shop's
+contact hours for the order's country (its local time; default 08:00-21:00).
 The phone rules protect a real buyer, so they are skipped for a test target: the team's phones on
 CALL_ALLOWED_PHONES, and CALL_TARGET_OVERRIDE, which takes every other call. Batching orders
 to the same phone into one call is not done yet.
@@ -19,7 +19,7 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 from functools import lru_cache
 from typing import Protocol
 
@@ -30,6 +30,7 @@ from app.calls.pubsub import PubSubPublisher
 from app.calls.store import CallNotFound, CallStore, get_call_store
 from app.data import branches
 from app.data.policies import PolicyStore, get_policy_store
+from app.data.shops import ShopStore, get_shop_store, settings_for
 from app.data.store import OrderStore, get_store
 from app.decision import lifecycle
 from app.decision.policy import MAX_CALL_ATTEMPTS
@@ -98,11 +99,6 @@ def call_view(doc: dict) -> Call:
     )
 
 
-def _contact_hours() -> tuple[time, time]:
-    start, _, end = os.environ.get("CONTACT_HOURS", "08:00-21:00").partition("-")
-    return time.fromisoformat(start), time.fromisoformat(end)
-
-
 def _at(value) -> datetime | None:
     """Stored times come back from Firestore as datetimes; tolerate ISO strings too."""
     if value is None or isinstance(value, datetime):
@@ -147,6 +143,10 @@ class CallService:
     log: DecisionLog
     publisher: Publisher
     policies: PolicyStore | None = None  # None: the default policy
+    shops: ShopStore | None = None  # None: the country defaults of config/branches.yaml
+
+    def settings(self, shop_id: str) -> dict | None:
+        return self.shops.settings(shop_id) if self.shops else None
 
     def policy(self, shop_id: str) -> Policy | None:
         return self.policies.current(shop_id) if self.policies else None
@@ -174,11 +174,8 @@ class CallService:
         attempt = self._claim(doc, now, actor)
         if attempt is None:
             raise _blocked([ContactBlockReason.ATTEMPTS_EXHAUSTED])
-        lifecycle.accept_suggested_call(
-            self.orders, order_id, actor, now, policy=self.policy(shop_id)
-        )
         try:
-            return self._place(doc, attempt, now, actor)
+            call = self._place(doc, attempt, now, actor)
         except jobs.NoTarget as reason:
             raise ApiError(
                 409,
@@ -187,6 +184,16 @@ class CallService:
                 f"The call was not placed: {reason}.",
                 block_reasons=[],
             ) from None
+        if call.status != CallStatus.FAILED:  # a call that never started confirms nothing
+            lifecycle.accept_suggested_call(
+                self.orders,
+                order_id,
+                actor,
+                now,
+                settings=self.settings(shop_id),
+                policy=self.policy(shop_id),
+            )
+        return call
 
     def start_for_pipeline(self, order_id: str, attempt: int, now: datetime) -> dict:
         """The pipeline's `call_buyer` node claimed attempt `attempt`; place it for real. A phone
@@ -214,8 +221,9 @@ class CallService:
         if jobs.skips_phone_rules(doc):
             return []
         blocks = []
-        start, end = _contact_hours()
-        if not start <= now.astimezone(branches.country_of(doc).tz).time() < end:
+        hours = settings_for(doc, self.settings(doc["shop_id"])).contact_hours
+        local = now.astimezone(branches.country_of(doc).tz).strftime("%H:%M")
+        if not hours.start <= local < hours.end:
             blocks.append(ContactBlockReason.OUTSIDE_CONTACT_HOURS)
         phone_hash = doc.get("buyer_phone_hash")
         if phone_hash:
@@ -249,7 +257,9 @@ class CallService:
 
     def _place(self, doc: dict, attempt: int, now: datetime, actor: str) -> Call:
         call_id = call_id_for(doc["order_id"], attempt)
-        job = jobs.build_job(doc, call_id, attempt, now)  # NoTarget: the caller says why
+        name = self.shops.name(doc["shop_id"]) if self.shops else None
+        # NoTarget: the caller says why
+        job = jobs.build_job(doc, call_id, attempt, now, shop_name=name)
         stored = {
             "call_id": call_id,
             "shop_id": doc["shop_id"],
@@ -387,7 +397,11 @@ class CallService:
         from app.agents.runner import run_contact_event
 
         pipeline = Pipeline(
-            store=self.orders, log=self.log, calls=self, policy=self.policy(shop_id)
+            store=self.orders,
+            log=self.log,
+            calls=self,
+            settings=self.settings(shop_id),
+            policy=self.policy(shop_id),
         )
         asyncio.run(run_contact_event(event, shop_id, pipeline=pipeline))
 
@@ -478,4 +492,5 @@ def get_call_service() -> CallService | None:
         log=get_decision_log(),
         publisher=_publisher(topic),
         policies=get_policy_store(),
+        shops=get_shop_store(),
     )

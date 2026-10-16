@@ -1,29 +1,44 @@
-import type { Shop } from '@/api/gen'
+import type { CountrySettings, CountrySettingsUpdate, Shop } from '@/api/gen'
+import { fromMinor, toMinor } from '@/lib/labels'
 
-export type OnboardingValues = {
-  name: string
-  shipping: string
-  handling: string
+/** One country's costs as the owner types them (in the currency's main unit) and its hours. */
+export type CountryValues = {
+  country: CountrySettings['country']
+  currency: CountrySettings['currency']
+  failed: string
   callCost: string
   start: string
   end: string
 }
 
-export const money = (value: string) => Math.max(0, Math.round(Number(value.replace(/\D/g, '')) || 0))
-
-export function failedDeliveryCost(values: OnboardingValues) {
-  // A refused parcel pays shipping both ways plus handling.
-  return money(values.shipping) * 2 + money(values.handling)
+export type OnboardingValues = {
+  name: string
+  countries: CountryValues[]
 }
 
 export function initialOnboardingValues(shop: Shop): OnboardingValues {
-  const failed = shop.settings.failed_delivery_cost_vnd ?? 60_000
   return {
     name: shop.name,
-    shipping: String(Math.round((failed * 0.4) / 1000) * 1000),
-    handling: String(failed - Math.round((failed * 0.4) / 1000) * 1000 * 2),
-    callCost: String(shop.settings.ai_call_cost_vnd ?? 1_500),
-    start: shop.settings.contact_hours?.start ?? '08:00',
-    end: shop.settings.contact_hours?.end ?? '21:00',
+    countries: shop.countries.map((c) => ({
+      country: c.country,
+      currency: c.currency,
+      failed: fromMinor(c.failed_delivery_cost_vnd ?? 0, c.currency),
+      callCost: fromMinor(c.ai_call_cost_vnd ?? 0, c.currency),
+      start: c.contact_hours?.start ?? '08:00',
+      end: c.contact_hours?.end ?? '21:00',
+    })),
   }
 }
+
+/** The `countries` of the PATCH /shop body, amounts back in minor units. */
+export function countryUpdates(values: OnboardingValues): CountrySettingsUpdate[] {
+  return values.countries.map((c) => ({
+    country: c.country,
+    failed_delivery_cost_vnd: toMinor(c.failed, c.currency),
+    ai_call_cost_vnd: toMinor(c.callCost, c.currency),
+    contact_hours: { start: c.start, end: c.end },
+  }))
+}
+
+export const hoursValid = (c: Pick<CountryValues, 'start' | 'end'>) =>
+  c.start >= '08:00' && c.end <= '21:00' && c.start < c.end

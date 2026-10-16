@@ -408,6 +408,12 @@ function DecisionPanel({ order }: { order: OrderDetail }) {
           estimated
         />
       </dl>
+      {decision.suggested_action === 'ai_call' && (
+        <p className="rounded-lg bg-primary/5 p-3 text-sm">
+          <span className="font-medium">AI call suggested.</span> The shop's call automation leaves this call
+          to you: press AI confirmation call to place it, or choose another action.
+        </p>
+      )}
       {(decision.block_reasons?.length ?? 0) > 0 && (
         <div className="flex flex-col gap-1.5">
           <h3 className="text-sm font-medium">Not contacted because</h3>

@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import ConfigDict, Field, model_validator
 
-from app.schemas.common import ApiModel, Currency, Vnd
+from app.schemas.common import ApiModel, Country, Currency, Vnd
 from app.schemas.enums import (
     CallAutomationMode,
     DecisionAction,
@@ -40,14 +40,22 @@ class Me(ApiModel):
 
 
 class ContactHours(ApiModel):
-    """Window when the buyer may be contacted, Vietnam time (Asia/Ho_Chi_Minh)."""
+    """Window when the buyer may be contacted, in the local time of the order's country. A shop
+    can narrow the default 08:00-21:00 but not widen it (contact protection)."""
 
     start: str = Field(default="08:00", pattern=_HHMM)
-    end: str = Field(default="21:00", pattern=_HHMM)
+    end: str = Field(default="21:00", pattern=_HHMM, description="Exclusive.")
+
+    @model_validator(mode="after")
+    def _inside_protection(self):
+        if not "08:00" <= self.start < self.end <= "21:00":
+            raise ValueError("contact hours must lie inside 08:00-21:00, start before end")
+        return self
 
 
 class ShopSettings(ApiModel):
-    """Costs used for expected-loss decisions, and contact rules the shop can tune."""
+    """Costs used for expected-loss decisions, and contact rules the shop can tune. Amounts are
+    in the minor unit of the country's currency."""
 
     failed_delivery_cost_vnd: Vnd = Field(
         default=60000, description="Cost of one failed delivery: two-way shipping plus handling."
@@ -60,6 +68,36 @@ class ShopSettings(ApiModel):
     contact_hours: ContactHours = Field(default_factory=ContactHours)
 
 
+class CountrySettings(ShopSettings):
+    """The shop's settings in one country where it has branches: costs in that country's
+    currency, contact hours in its local time."""
+
+    country: Country
+    currency: Currency
+
+
+_COUNTRY_EXAMPLES = [
+    {
+        "country": "VN",
+        "currency": "VND",
+        "failed_delivery_cost_vnd": 60000,
+        "ai_call_cost_vnd": 1500,
+        "confirmation_link_cost_vnd": 300,
+        "deposit_request_cost_vnd": 5000,
+        "contact_hours": {"start": "08:00", "end": "21:00"},
+    },
+    {
+        "country": "SG",
+        "currency": "SGD",
+        "failed_delivery_cost_vnd": 1200,
+        "ai_call_cost_vnd": 30,
+        "confirmation_link_cost_vnd": 2,
+        "deposit_request_cost_vnd": 200,
+        "contact_hours": {"start": "09:00", "end": "20:00"},
+    },
+]
+
+
 class Shop(ApiModel):
     model_config = ConfigDict(
         json_schema_extra={
@@ -68,13 +106,7 @@ class Shop(ApiModel):
                     "id": "shp_01",
                     "name": "Sample Fashion Shop",
                     "created_at": "2026-10-09T09:00:00+07:00",
-                    "settings": {
-                        "failed_delivery_cost_vnd": 60000,
-                        "ai_call_cost_vnd": 1500,
-                        "confirmation_link_cost_vnd": 300,
-                        "deposit_request_cost_vnd": 5000,
-                        "contact_hours": {"start": "08:00", "end": "21:00"},
-                    },
+                    "countries": _COUNTRY_EXAMPLES,
                     "intake_api_key_last4": "a1b2",
                 }
             ]
@@ -84,22 +116,35 @@ class Shop(ApiModel):
     id: str
     name: str
     created_at: datetime
-    settings: ShopSettings
+    countries: list[CountrySettings] = Field(
+        description="One entry per country where the shop has branches (config/branches.yaml)."
+    )
     intake_api_key_last4: str | None = Field(
         default=None, description="Last 4 characters of the intake API key."
     )
 
 
 class ShopUpdate(ApiModel):
-    """Owner only. Fields left out are unchanged."""
+    """Owner only. Fields left out are unchanged, and so are countries left out."""
 
     model_config = ConfigDict(
         extra="forbid",
-        json_schema_extra={"examples": [{"settings": {"failed_delivery_cost_vnd": 65000}}]},
+        json_schema_extra={
+            "examples": [
+                {"countries": [{"country": "VN", "failed_delivery_cost_vnd": 65000}]},
+            ]
+        },
     )
 
     name: str | None = Field(default=None, min_length=1, max_length=100)
-    settings: "ShopSettingsUpdate | None" = None
+    countries: "list[CountrySettingsUpdate] | None" = None
+
+    @model_validator(mode="after")
+    def _one_entry_per_country(self):
+        codes = [c.country for c in self.countries or []]
+        if len(codes) != len(set(codes)):
+            raise ValueError("countries lists a country twice")
+        return self
 
 
 class ShopSettingsUpdate(ApiModel):
@@ -108,6 +153,10 @@ class ShopSettingsUpdate(ApiModel):
     confirmation_link_cost_vnd: Vnd | None = None
     deposit_request_cost_vnd: Vnd | None = None
     contact_hours: ContactHours | None = None
+
+
+class CountrySettingsUpdate(ShopSettingsUpdate):
+    country: Country
 
 
 class TierPolicy(ApiModel):
@@ -272,7 +321,8 @@ class Policy(ApiModel):
 
 
 class PolicyUpdate(ApiModel):
-    """Owner only. Must list all four tiers; `automation` left out means the defaults."""
+    """Owner only. Must list all four tiers; `automation` left out keeps the call automation in
+    force."""
 
     model_config = ConfigDict(
         extra="forbid",
@@ -287,7 +337,7 @@ class PolicyUpdate(ApiModel):
     )
 
     tiers: list[TierPolicy] = Field(min_length=4, max_length=4)
-    automation: CallAutomation = Field(default_factory=CallAutomation)
+    automation: CallAutomation | None = None
 
 
 ShopUpdate.model_rebuild()

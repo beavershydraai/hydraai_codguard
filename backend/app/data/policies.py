@@ -42,13 +42,14 @@ class PolicyStore:
     def save(self, shop_id: str, update: PolicyUpdate, by: str, now: datetime) -> Policy:
         """Store the change as the next version. Raises ValueError for a policy the engine
         rejects, VersionTaken when another change took the number."""
+        current = self.current(shop_id)
         policy = check(
             Policy(
-                version=self.current(shop_id).version + 1,
+                version=current.version + 1,
                 effective_from=now,
                 updated_by=by,
                 tiers=update.tiers,
-                automation=update.automation,
+                automation=update.automation or current.automation,
             )
         )
         self._create(shop_id, policy)

@@ -4,7 +4,7 @@ import { ShieldCheckIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { getPolicyOptions, getShopOptions, updateShopMutation } from '@/api/gen/@tanstack/react-query.gen'
-import { failedDeliveryCost, money } from '@/components/blocks/wizard-1/components/data'
+import { countryUpdates } from '@/components/blocks/wizard-1/components/data'
 import { OnboardingWizard } from '@/components/blocks/wizard-1/components/onboarding-wizard'
 import { QueryError } from '@/components/query-error'
 import { Button } from '@/components/ui/button'
@@ -65,14 +65,7 @@ function OnboardingPage() {
           submitting={save.isPending}
           onComplete={(values) =>
             save.mutate({
-              body: {
-                name: values.name.trim(),
-                settings: {
-                  failed_delivery_cost_vnd: failedDeliveryCost(values),
-                  ai_call_cost_vnd: money(values.callCost),
-                  contact_hours: { start: values.start, end: values.end },
-                },
-              },
+              body: { name: values.name.trim(), countries: countryUpdates(values) },
             })
           }
         />

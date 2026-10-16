@@ -91,9 +91,16 @@ export function createReviewColumns({
       accessorFn: (o) => o.current_action ?? '',
       header: ({ column }) => <DataGridColumnHeader column={column} title="Current step" />,
       cell: ({ row }) => (
-        <span className="text-sm">
-          {row.original.current_action ? DECISION_ACTION_LABELS[row.original.current_action] : '—'}
-        </span>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-sm">
+            {row.original.current_action ? DECISION_ACTION_LABELS[row.original.current_action] : '—'}
+          </span>
+          {row.original.suggested_action && (
+            <span className="text-xs font-medium text-primary">
+              Suggested: {DECISION_ACTION_LABELS[row.original.suggested_action]}
+            </span>
+          )}
+        </div>
       ),
       size: 150,
     },

@@ -12,9 +12,10 @@ from app.agents.log import DecisionLog, entry, get_decision_log
 from app.api.errors import ApiError, NotImplementedYet, problem_example, problem_responses
 from app.api.security import CurrentUser, bearer_auth
 from app.calls.service import CallService, get_call_service
-from app.data import order_csv
+from app.data import branches, order_csv
 from app.data.orders import to_utc
 from app.data.policies import PolicyStore, VersionTaken, get_policy_store
+from app.data.shops import ShopStore, get_shop_store, shop_view
 from app.data.store import OrderStore, get_store
 from app.decision import lifecycle
 from app.decision.inbox import InvalidCursor, order_page
@@ -57,27 +58,41 @@ async def get_me(user: CurrentUser) -> Me:
     )
 
 
+Shops = Annotated[ShopStore, Depends(get_shop_store)]
+Policies = Annotated[PolicyStore, Depends(get_policy_store)]
+
+
 @shop_router.get(
     "",
     response_model=Shop,
     responses=problem_responses(401),
-    summary="Current user's shop and settings",
+    summary="Current user's shop and its settings per country",
+    description="The shop exists from its first sign-in, with the defaults of each country "
+    "where it has branches, so it works before the owner changes anything (onboarding, E7.1).",
 )
-async def get_shop() -> Shop:
-    raise NotImplementedYet("get_shop")
+def get_shop(user: CurrentUser, shops: Shops) -> Shop:
+    return shop_view(user.shop_id, shops.get(user.shop_id, datetime.now(UTC)))
 
 
 @shop_router.patch(
     "",
     response_model=Shop,
     responses=problem_responses(401, 403, 422),
-    summary="Update shop name or settings (owner only)",
+    summary="Update the shop name or its settings per country (owner only)",
+    description="Costs and contact hours apply to decisions and calls made after the change.",
 )
-async def update_shop(body: ShopUpdate) -> Shop:
-    raise NotImplementedYet("update_shop")
-
-
-Policies = Annotated[PolicyStore, Depends(get_policy_store)]
+def update_shop(body: ShopUpdate, user: CurrentUser, shops: Shops) -> Shop:
+    if user.role != Role.OWNER:
+        raise ApiError(403, ErrorCode.FORBIDDEN, "Forbidden", "Only the owner changes settings.")
+    unknown = {c.country for c in body.countries or []} - set(branches.countries())
+    if unknown:
+        raise ApiError(
+            422,
+            ErrorCode.VALIDATION_ERROR,
+            "Validation error",
+            f"The shop has no branch in {', '.join(sorted(unknown))}.",
+        )
+    return shop_view(user.shop_id, shops.update(user.shop_id, body, datetime.now(UTC)))
 
 
 @shop_router.get(
@@ -204,10 +219,15 @@ def create_order(
     decision_log: Annotated[DecisionLog, Depends(get_decision_log)],
     calls: Annotated[CallService | None, Depends(get_call_service)],
     policies: Policies,
+    shops: Shops,
 ) -> OrderSummary:
     # Sync, like the intake route: the pipeline's nodes make blocking Firestore calls.
     pipeline = Pipeline(
-        store=store, log=decision_log, calls=calls, policy=policies.current(user.shop_id)
+        store=store,
+        log=decision_log,
+        calls=calls,
+        settings=shops.settings(user.shop_id),
+        policy=policies.current(user.shop_id),
     )
     doc, duplicate = receive(
         body,
@@ -242,6 +262,7 @@ def import_orders(
     store: Annotated[OrderStore, Depends(get_store)],
     decision_log: Annotated[DecisionLog, Depends(get_decision_log)],
     policies: Policies,
+    shops: Shops,
 ) -> ImportResult:
     now = datetime.now(UTC)
     try:
@@ -263,7 +284,11 @@ def import_orders(
     # A file is a batch: its orders skip the Gemini assessment, which keeps the daily quota, and
     # their AI calls stay simulated, so one upload cannot queue hundreds of real calls.
     pipeline = Pipeline(
-        store=store, log=decision_log, assess=False, policy=policies.current(user.shop_id)
+        store=store,
+        log=decision_log,
+        assess=False,
+        settings=shops.settings(user.shop_id),
+        policy=policies.current(user.shop_id),
     )
 
     def duplicate(order: OrderCreate) -> bool:
@@ -319,6 +344,7 @@ def update_order(
     user: CurrentUser,
     store: Annotated[OrderStore, Depends(get_store)],
     policies: Policies,
+    shops: Shops,
 ) -> OrderDetail:
     doc = lifecycle.edit_order(
         store,
@@ -327,6 +353,7 @@ def update_order(
         body,
         datetime.now(UTC),
         actor=user.email,
+        settings=shops.settings(user.shop_id),
         policy=policies.current(user.shop_id),
     )
     return order_detail(doc)
