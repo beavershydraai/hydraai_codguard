@@ -92,7 +92,8 @@ class ReviewReason(StrEnum):
     invalid_phone: hard rule, the buyer cannot be contacted · no_answer_link: no answer to the
     confirmation link · no_answer_call: no answer to the AI calls · deposit_unpaid: the deposit
     was not paid in time · call_unclear: the buyer spoke on the AI call but did not confirm, change
-    or cancel · wrong_person: the AI call reached someone else · attempts_used: every AI call
+    or cancel · items_changed: the buyer asked on the call to change items, the shop checks stock
+    first · wrong_person: the AI call reached someone else · attempts_used: every AI call
     attempt is used · staff: a person held the order · other: held by the policy, or a step failed
     """
 
@@ -102,6 +103,7 @@ class ReviewReason(StrEnum):
     NO_ANSWER_CALL = "no_answer_call"
     DEPOSIT_UNPAID = "deposit_unpaid"
     CALL_UNCLEAR = "call_unclear"
+    ITEMS_CHANGED = "items_changed"
     WRONG_PERSON = "wrong_person"
     ATTEMPTS_USED = "attempts_used"
     STAFF = "staff"

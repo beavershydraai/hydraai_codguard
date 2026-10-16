@@ -398,6 +398,18 @@ export type CallChange = {
    */
   item_name?: string | null
   /**
+   * Item Variant
+   *
+   * Which item, when the order has the same item in several variants: its current variant (size, colour).
+   */
+  item_variant?: string | null
+  /**
+   * Quantity
+   *
+   * For item_quantity: the new quantity.
+   */
+  quantity?: number | null
+  /**
    * New Value
    */
   new_value: string
@@ -2078,7 +2090,8 @@ export type Reason = {
  * invalid_phone: hard rule, the buyer cannot be contacted · no_answer_link: no answer to the
  * confirmation link · no_answer_call: no answer to the AI calls · deposit_unpaid: the deposit
  * was not paid in time · call_unclear: the buyer spoke on the AI call but did not confirm, change
- * or cancel · wrong_person: the AI call reached someone else · attempts_used: every AI call
+ * or cancel · items_changed: the buyer asked on the call to change items, the shop checks stock
+ * first · wrong_person: the AI call reached someone else · attempts_used: every AI call
  * attempt is used · staff: a person held the order · other: held by the policy, or a step failed
  */
 export type ReviewReason =
@@ -2088,6 +2101,7 @@ export type ReviewReason =
   | 'no_answer_call'
   | 'deposit_unpaid'
   | 'call_unclear'
+  | 'items_changed'
   | 'wrong_person'
   | 'attempts_used'
   | 'staff'

@@ -130,6 +130,7 @@ def test_valid_outcome_maps_refs_to_order_ids():
                     "order_ref": "4721",
                     "field": "item_quantity",
                     "item_name": "Áo khoác gió",
+                    "quantity": 2,
                     "new_value": "2",
                 },
             ],
@@ -138,6 +139,7 @@ def test_valid_outcome_maps_refs_to_order_ids():
     )
     assert decision.outcome == CallOutcome.EDITED
     assert [c.order_id for c in decision.changes] == ["ord_01", "ord_01"]
+    assert decision.changes[1].quantity == 2
 
 
 @pytest.mark.parametrize(
@@ -177,6 +179,21 @@ def test_valid_outcome_maps_refs_to_order_ids():
                 ],
             },
             "item_name must name an item",
+        ),
+        (
+            {
+                "outcome": "EDITED",
+                "summary": "x",
+                "changes": [
+                    {
+                        "order_ref": "4721",
+                        "field": "item_quantity",
+                        "item_name": "Áo khoác gió",
+                        "new_value": "5 (size S)",
+                    }
+                ],
+            },
+            "quantity must be the new quantity as a whole number",
         ),
     ],
 )

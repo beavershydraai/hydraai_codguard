@@ -130,6 +130,7 @@ export const REVIEW_REASON_LABELS: Record<ReviewReason, string> = {
   no_answer_call: 'No answer to the AI calls',
   deposit_unpaid: 'Deposit not paid in time',
   call_unclear: 'AI call ended before the buyer confirmed',
+  items_changed: 'Buyer asked to change items: check stock, then edit the order',
   wrong_person: 'AI call reached the wrong person',
   attempts_used: 'All AI call attempts used',
   staff: 'Held by staff',

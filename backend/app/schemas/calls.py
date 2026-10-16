@@ -14,6 +14,14 @@ class CallChange(ApiModel):
     order_id: str
     field: CallChangeField
     item_name: str | None = Field(default=None, description="Required for item_* fields.")
+    item_variant: str | None = Field(
+        default=None,
+        description="Which item, when the order has the same item in several variants: its "
+        "current variant (size, colour).",
+    )
+    quantity: int | None = Field(
+        default=None, ge=0, description="For item_quantity: the new quantity."
+    )
     new_value: str = Field(examples=["Số 15 ngõ 34, phường Láng, Hà Nội"])
 
 
