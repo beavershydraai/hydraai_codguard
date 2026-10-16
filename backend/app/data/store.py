@@ -143,6 +143,18 @@ class OrderStore:
         query = self._filtered(shop_id, filters).select(list(fields))
         return [d.to_dict() for d in query.stream()]
 
+    def due(self, statuses: tuple[str, ...], now: datetime, limit: int) -> list[dict]:
+        """Orders of any shop in `statuses` whose no-response timer is due, oldest first, as
+        `order_id` and `shop_id` (composite index: status, decision.next_action_at)."""
+        query = (
+            self.orders.where(filter=FieldFilter("status", "in", list(statuses)))
+            .where(filter=FieldFilter("decision.next_action_at", "<=", now))
+            .order_by("decision.next_action_at")
+            .select(["order_id", "shop_id"])
+            .limit(limit)
+        )
+        return [d.to_dict() for d in query.stream()]
+
     def last_change(self, shop_id: str) -> datetime | None:
         """When one of the shop's orders last changed (one document read)."""
         query = (

@@ -85,7 +85,7 @@ export const BLOCK_REASON_LABELS: Record<ContactBlockReason, string> = {
   already_confirmed: 'Order already confirmed',
   batched: 'Batched with another order to the same phone within 15 minutes',
   attempts_exhausted: 'Both call attempts used',
-  manual_approval: 'The shop confirms every AI call',
+  manual_approval: 'Automation is off: the shop accepts each contact',
   below_auto_call_tier: 'Risk tier below the one the shop auto-calls from',
   cod_out_of_range: 'Amount outside the auto-call range',
   channel_not_automated: 'No automatic calls for this sales channel',
@@ -93,8 +93,8 @@ export const BLOCK_REASON_LABELS: Record<ContactBlockReason, string> = {
 }
 
 export const CALL_AUTOMATION_MODE_LABELS: Record<CallAutomationMode, string> = {
-  auto: 'Call automatically',
-  suggest: 'Suggest, I confirm each call',
+  auto: 'On: contact buyers automatically',
+  suggest: 'Off: suggest, I accept each contact',
 }
 
 export const WEEKDAY_LABELS: Record<Weekday, string> = {

@@ -1,10 +1,10 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { overrideOrder } from '@/api/gen'
-import { listOrdersOptions } from '@/api/gen/@tanstack/react-query.gen'
+import { acceptSuggestionMutation, listOrdersOptions } from '@/api/gen/@tanstack/react-query.gen'
 import { REVIEW_DECISIONS } from '@/components/blocks/solution-agents-5/components/review-columns'
 import {
   ReviewInbox,
@@ -31,6 +31,16 @@ function ReviewPage() {
     refetchInterval: 30_000,
   })
   const [decisions, setDecisions] = useState<SessionDecision[]>([])
+  const accept = useMutation({
+    ...acceptSuggestionMutation(),
+    onSuccess: (order) => {
+      toast.success(`Accepted for ${order.external_id ?? order.id}`, {
+        description: 'The buyer is contacted now.',
+      })
+      void invalidate(queryClient, 'listOrders', 'getOrder')
+    },
+    onError: (err) => toast.error('Could not accept the suggestion', { description: problemMessage(err) }),
+  })
 
   if (error) return <QueryError error={error} />
 
@@ -40,6 +50,7 @@ function ReviewPage() {
       isLoading={isPending}
       decisions={decisions}
       onRefresh={() => void refetch()}
+      onAccept={(order) => accept.mutate({ path: { order_id: order.id } })}
       onDecide={async (orders, action, reason) => {
         const results = await Promise.allSettled(
           orders.map((order) =>

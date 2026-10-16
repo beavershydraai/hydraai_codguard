@@ -110,7 +110,7 @@ export function ShopSettingsView({
         <TabsList>
           <TabsTrigger value="shop">Shop &amp; costs</TabsTrigger>
           <TabsTrigger value="policy">Policy by risk tier</TabsTrigger>
-          <TabsTrigger value="automation">Call automation</TabsTrigger>
+          <TabsTrigger value="automation">Automation</TabsTrigger>
           <TabsTrigger value="history">Change history</TabsTrigger>
         </TabsList>
         <TabsContent value="shop">
@@ -123,7 +123,7 @@ export function ShopSettingsView({
           <AutomationForm policy={policy} canEdit={canEdit} />
         </TabsContent>
         <TabsContent value="history">
-          <PolicyHistory versions={versions} />
+          <PolicyHistory versions={versions} canEdit={canEdit} />
         </TabsContent>
       </Tabs>
     </div>
@@ -526,7 +526,7 @@ function ActionSelect({
 // ── Call automation ──
 
 const DEFAULT_AUTOMATION: Required<CallAutomation> = {
-  mode: 'auto',
+  mode: 'suggest',
   min_tier: null,
   cod_ranges: [],
   channels: null,
@@ -599,38 +599,30 @@ function AutomationForm({ policy, canEdit }: { policy: Policy; canEdit: boolean 
       <Frame className="w-full">
         <FrameHeader className="px-2! py-2.5!">
           <FrameTitle className="flex flex-wrap items-center gap-2">
-            Call automation
+            Automation
+            <Badge variant={auto.mode === 'auto' ? 'success-light' : 'secondary'} size="sm">
+              {auto.mode === 'auto' ? 'On' : 'Off'}
+            </Badge>
             <Badge variant="outline" size="sm">
               Version {policy.version}
             </Badge>
           </FrameTitle>
           <FrameDescription>
-            The engine still scores every order and picks the action. An AI call outside these rules is not
-            placed: the order waits in Review with the call suggested, and you confirm it with AI confirmation
-            call on the order page. Contact hours and the one-call-per-phone-per-day limit always apply.
+            The engine scores every order and picks the action either way. While automation is off, every
+            contact it picks (confirmation link, AI call, deposit request) waits in Review as a suggestion
+            until you accept it. Switched on, it contacts buyers by itself; an AI call outside the rules below
+            is still only suggested. Contact hours and the one-call-per-phone-per-day limit always apply.
           </FrameDescription>
         </FrameHeader>
         <FramePanel className="p-0">
           <fieldset disabled={!canEdit}>
             <FieldGroup className="gap-0">
-              <SettingField title="Who starts AI calls" description="Suggest: every call waits for you.">
-                <Select
-                  value={auto.mode}
-                  onValueChange={(mode) => update({ mode: mode as CallAutomationMode })}
-                >
-                  <SelectTrigger className="w-full" aria-label="Who starts AI calls">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {(Object.keys(CALL_AUTOMATION_MODE_LABELS) as CallAutomationMode[]).map((mode) => (
-                        <SelectItem key={mode} value={mode}>
-                          {CALL_AUTOMATION_MODE_LABELS[mode]}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
+              <SettingField title="Automation" description={CALL_AUTOMATION_MODE_LABELS[auto.mode]}>
+                <Switch
+                  checked={auto.mode === 'auto'}
+                  onCheckedChange={(on) => update({ mode: (on ? 'auto' : 'suggest') as CallAutomationMode })}
+                  aria-label="Automation"
+                />
               </SettingField>
               <SettingField
                 title="Call automatically from"
@@ -827,13 +819,26 @@ function AutomationForm({ policy, canEdit }: { policy: Policy; canEdit: boolean 
 
 // ── History ──
 
-function PolicyHistory({ versions }: { versions: Policy[] }) {
+function PolicyHistory({ versions, canEdit }: { versions: Policy[]; canEdit: boolean }) {
+  const queryClient = useQueryClient()
+  const restore = useMutation({
+    ...updatePolicyMutation(),
+    onSuccess: (next, { body }) => {
+      const from = versions.find((v) => v.tiers === body.tiers)?.version
+      toast.success(`Version ${from} restored as version ${next.version}`, {
+        description: 'It applies to decisions made from now on.',
+      })
+      void invalidate(queryClient, 'getPolicy', 'listPolicyVersions')
+    },
+    onError: (error) => toast.error('Could not restore', { description: problemMessage(error) }),
+  })
   return (
     <Frame className="w-full">
       <FrameHeader className="px-2! py-2.5!">
         <FrameTitle>Policy change history</FrameTitle>
         <FrameDescription>
-          Who changed what, and when. Each decision records the policy version it used.
+          Who changed what, and when. Each decision records the policy version it used. Versions are never
+          edited or deleted; restoring one saves it again as a new version.
         </FrameDescription>
       </FrameHeader>
       <FramePanel>
@@ -868,7 +873,12 @@ function PolicyHistory({ versions }: { versions: Policy[] }) {
                     {formatDateTime(version.effective_from)} ·{' '}
                     {version.updated_by === 'system' ? 'System default' : version.updated_by}
                   </p>
-                  {automationChanged && <p className="mt-1.5 text-xs">Call automation changed</p>}
+                  {automationChanged && (
+                    <p className="mt-1.5 text-xs">
+                      Automation {version.automation?.mode === 'auto' ? 'on' : 'off'}
+                      {previous?.automation?.mode === version.automation?.mode && ', rules changed'}
+                    </p>
+                  )}
                   {changes.length > 0 && (
                     <ul className="mt-1.5 flex flex-col gap-1 text-xs">
                       {changes.map((t) => (
@@ -879,6 +889,19 @@ function PolicyHistory({ versions }: { versions: Policy[] }) {
                         </li>
                       ))}
                     </ul>
+                  )}
+                  {canEdit && index > 0 && (
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      className="mt-2"
+                      disabled={restore.isPending}
+                      onClick={() =>
+                        restore.mutate({ body: { tiers: version.tiers, automation: version.automation } })
+                      }
+                    >
+                      Restore this version
+                    </Button>
                   )}
                 </TimelineContent>
               </TimelineItem>

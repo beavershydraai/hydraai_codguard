@@ -9,6 +9,7 @@ import {
 
 import { client } from '../client.gen'
 import {
+  acceptSuggestion,
   createOrder,
   getBacktest,
   getCall,
@@ -34,6 +35,7 @@ import {
   resetDemo,
   respondConfirmation,
   runSpamSimulation,
+  runTimers,
   startCall,
   updateModels,
   updateOrder,
@@ -41,6 +43,9 @@ import {
   updateShop,
 } from '../sdk.gen'
 import type {
+  AcceptSuggestionData,
+  AcceptSuggestionError,
+  AcceptSuggestionResponse,
   CreateOrderData,
   CreateOrderError,
   CreateOrderResponse,
@@ -113,6 +118,9 @@ import type {
   RunSpamSimulationData,
   RunSpamSimulationError,
   RunSpamSimulationResponse,
+  RunTimersData,
+  RunTimersError,
+  RunTimersResponse,
   StartCallData,
   StartCallError,
   StartCallResponse,
@@ -569,6 +577,31 @@ export const overrideOrderMutation = (
 }
 
 /**
+ * Accept the contact the engine suggested
+ *
+ * For an order waiting in review with `suggested_action` (automation off, or an AI call outside the automation rules): sends the link or the deposit request, or places the AI call, then the order waits for the buyer with the usual no-response timer. 409 when there is nothing to accept, or contact protection blocks the call.
+ */
+export const acceptSuggestionMutation = (
+  options?: Partial<Options<AcceptSuggestionData>>,
+): UseMutationOptions<AcceptSuggestionResponse, AcceptSuggestionError, Options<AcceptSuggestionData>> => {
+  const mutationOptions: UseMutationOptions<
+    AcceptSuggestionResponse,
+    AcceptSuggestionError,
+    Options<AcceptSuggestionData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await acceptSuggestion({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      })
+      return data
+    },
+  }
+  return mutationOptions
+}
+
+/**
  * Start an AI confirmation call now
  *
  * Contact protection still applies: 409 `contact_blocked` with `block_reasons` when the call is not allowed.
@@ -929,6 +962,27 @@ export const recordCallResultMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await recordCallResult({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      })
+      return data
+    },
+  }
+  return mutationOptions
+}
+
+/**
+ * Fire the no-response timers that are due
+ *
+ * Called by Cloud Scheduler (`codguard-timers`) every 5 minutes with a Google ID token of `codguard-runtime`. Each order whose `decision.next_action_at` has passed runs the pipeline's `no_response` event: the next AI call, the call after a link, or review.
+ */
+export const runTimersMutation = (
+  options?: Partial<Options<RunTimersData>>,
+): UseMutationOptions<RunTimersResponse, RunTimersError, Options<RunTimersData>> => {
+  const mutationOptions: UseMutationOptions<RunTimersResponse, RunTimersError, Options<RunTimersData>> = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await runTimers({
         ...options,
         ...fnOptions,
         throwOnError: true,

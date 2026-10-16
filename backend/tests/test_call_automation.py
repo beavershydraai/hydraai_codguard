@@ -44,6 +44,8 @@ def scored(branch_id=None, risk_score=60, **changes) -> dict:
 
 
 def automated(**fields) -> Policy:
+    """Automation switched on (`auto`) with these rules, unless `mode` says otherwise."""
+    fields.setdefault("mode", "auto")
     return policy.default_policy().model_copy(update={"automation": CallAutomation(**fields)})
 
 
@@ -54,10 +56,38 @@ def decide(p: Policy, doc: dict, tier=RiskTier.HIGH, loss=36_000):
 # --- which calls the agent places by itself ------------------------------------------------
 
 
-def test_the_default_automation_places_every_call_the_engine_picks():
-    d = decide(policy.default_policy(), scored())
+@pytest.mark.default_automation
+@pytest.mark.parametrize(
+    "tier,action",
+    [
+        (RiskTier.MEDIUM, A.SEND_CONFIRMATION_LINK),
+        (RiskTier.HIGH, A.AI_CALL),
+        (RiskTier.VERY_HIGH, A.REQUIRE_DEPOSIT),
+    ],
+)
+def test_by_default_every_contact_waits_for_the_shop(tier, action):
+    d = decide(policy.default_policy(), scored(), tier=tier)
+    assert d.action == A.HOLD_FOR_REVIEW and d.suggested_action == action
+    assert d.block_reasons == [B.MANUAL_APPROVAL] and d.next_action is None
+
+
+@pytest.mark.default_automation
+def test_by_default_a_low_risk_order_still_ships():
+    d = decide(policy.default_policy(), scored(), tier=RiskTier.LOW, loss=0)
+    assert d.action == A.SHIP_NOW and d.suggested_action is None
+
+
+def test_automation_on_places_every_call_the_engine_picks():
+    d = decide(automated(), scored())
     assert d.action == A.AI_CALL and d.block_reasons == [] and d.suggested_action is None
     assert d.next_action == A.AI_CALL and d.next_action_at == at(30)
+
+
+def test_automation_on_sends_links_and_deposit_requests():
+    assert decide(automated(min_tier="very_high"), scored(), tier=RiskTier.MEDIUM).action == (
+        A.SEND_CONFIRMATION_LINK
+    )
+    assert decide(automated(), scored(), tier=RiskTier.VERY_HIGH).action == A.REQUIRE_DEPOSIT
 
 
 def test_suggest_mode_leaves_every_call_to_the_shop():
@@ -214,11 +244,13 @@ def body(**automation) -> dict:
     return {"tiers": tiers, "automation": automation}
 
 
+@pytest.mark.default_automation
 def test_a_shop_starts_with_the_default_policy(owner):
     got = owner.get("/api/v1/shop/policy")
     assert got.status_code == 200, got.text
     assert got.json()["version"] == 1
     assert got.json()["automation"] == CallAutomation().model_dump(mode="json")
+    assert got.json()["automation"]["mode"] == "suggest"  # automation is off until switched on
 
 
 def test_the_owner_saves_a_new_version(owner, policy_versions):
@@ -278,5 +310,5 @@ async def test_the_shop_confirms_a_suggested_call(pipe, calls):  # noqa: F811
     assert doc["decision"]["action"] == A.AI_CALL and doc["decision"]["decided_by"] == "staff"
     confirmed = next(e for e in doc["timeline"] if e["type"] == "override")
     assert confirmed["actor"] == "admin@gmail.com"
-    assert confirmed["message_vi"] == "Shop confirmed the suggested AI call."
+    assert confirmed["message_vi"] == "Shop accepted the suggested AI call."
     assert doc["decision"]["next_action_at"] == NOW + timedelta(minutes=30)

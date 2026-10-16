@@ -4,15 +4,22 @@ See docs/call-controller.md. The CallJob that starts a call is a Pub/Sub message
 here as the `call-job` webhook so that it is part of the contract.
 """
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Security
 
+from app.agents.log import DecisionLog, get_decision_log
 from app.api.errors import NotImplementedYet, problem_example, problem_responses
 from app.api.security import controller_identity
 from app.calls.service import CallService, get_call_service
+from app.data.policies import PolicyStore, get_policy_store
+from app.data.shops import ShopStore, get_shop_store
+from app.data.store import OrderStore, get_store
+from app.decision import timers
 from app.schemas.calls import Call
 from app.schemas.enums import ErrorCode
+from app.schemas.orders import TimersRun
 from app.schemas.telephony import CallJob, CallResult, CallStatusUpdate
 
 CallId = Annotated[str, Path(description="Call ID from the CallJob.", examples=["call_01"])]
@@ -64,6 +71,27 @@ def record_call_result(call_id: CallId, body: CallResult, calls: Calls) -> Call:
     if calls is None:
         raise NotImplementedYet("record_call_result")
     return calls.record_result(call_id, body)
+
+
+@internal_router.post(
+    "/timers/run",
+    response_model=TimersRun,
+    responses=problem_responses(401, examples={401: _AUTH}),
+    summary="Fire the no-response timers that are due",
+    description="Called by Cloud Scheduler (`codguard-timers`) every 5 minutes with a Google ID "
+    "token of `codguard-runtime`. Each order whose `decision.next_action_at` has passed runs the "
+    "pipeline's `no_response` event: the next AI call, the call after a link, or review.",
+)
+def run_timers(
+    store: Annotated[OrderStore, Depends(get_store)],
+    log: Annotated[DecisionLog, Depends(get_decision_log)],
+    shops: Annotated[ShopStore, Depends(get_shop_store)],
+    policies: Annotated[PolicyStore, Depends(get_policy_store)],
+    calls: Calls,
+) -> TimersRun:
+    # Sync for the same reason as the intake route: the pipeline's nodes block on Firestore.
+    now = datetime.now(UTC)
+    return TimersRun(handled=timers.run_due(store, log, shops, policies, now, calls=calls))
 
 
 call_job_webhooks = APIRouter()

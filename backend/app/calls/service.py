@@ -196,9 +196,10 @@ class CallService:
                 block_reasons=[],
             ) from None
         if call.status != CallStatus.FAILED:  # a call that never started confirms nothing
-            lifecycle.accept_suggested_call(
+            lifecycle.accept_suggestion(
                 self.orders,
                 order_id,
+                DecisionAction.AI_CALL,
                 actor,
                 now,
                 settings=self.settings(shop_id),

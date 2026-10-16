@@ -277,6 +277,14 @@ class OrderDetail(OrderSummary):
     )
 
 
+class TimersRun(ApiModel):
+    """What one run of the no-response timers did (app/decision/timers.py)."""
+
+    model_config = ConfigDict(json_schema_extra={"examples": [{"handled": 3}]})
+
+    handled: int = Field(ge=0, description="Orders whose timer was due and ran.")
+
+
 class OrdersChange(ApiModel):
     """When the shop's orders last changed: the inbox polls it and reloads only on a change."""
 

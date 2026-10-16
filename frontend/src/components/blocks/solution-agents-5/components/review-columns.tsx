@@ -28,8 +28,11 @@ export const WAIT_WARNING_MS = 2 * 3_600_000
 
 export function createReviewColumns({
   onDecide,
+  onAccept,
 }: {
   onDecide: (order: OrderSummary, action: ReviewDecision) => void
+  /** Accepts the contact the engine suggested (automation off). */
+  onAccept: (order: OrderSummary) => void
 }): ColumnDef<DataGridFeatures, OrderSummary>[] {
   return [
     {
@@ -96,13 +99,18 @@ export function createReviewColumns({
             {row.original.current_action ? DECISION_ACTION_LABELS[row.original.current_action] : '—'}
           </span>
           {row.original.suggested_action && (
-            <span className="text-xs font-medium text-primary">
-              Suggested: {DECISION_ACTION_LABELS[row.original.suggested_action]}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-primary">
+                Suggested: {DECISION_ACTION_LABELS[row.original.suggested_action]}
+              </span>
+              <Button size="xs" variant="outline" onClick={() => onAccept(row.original)}>
+                Accept
+              </Button>
+            </div>
           )}
         </div>
       ),
-      size: 150,
+      size: 190,
     },
     {
       id: 'updated_at',

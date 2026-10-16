@@ -92,6 +92,16 @@ class FakeStore:
     def select(self, shop_id, filters, fields):
         return [project(d, fields) for d in self._filtered(shop_id, filters)]
 
+    def due(self, statuses, now, limit):
+        rows = [
+            d
+            for d in self.docs.values()
+            if d["status"] in statuses
+            and ((d.get("decision") or {}).get("next_action_at") or now + now.resolution) <= now
+        ]
+        rows.sort(key=lambda d: d["decision"]["next_action_at"])
+        return [project(d, ("order_id", "shop_id")) for d in rows[:limit]]
+
     def last_change(self, shop_id):
         times = [d["updated_at"] for d in self.docs.values() if d["shop_id"] == shop_id]
         return max(times, default=None)

@@ -304,12 +304,16 @@ export type CallAgent = 'script' | 'gemini_live'
 /**
  * CallAutomation
  *
- * When the agent places an AI call by itself. The engine still scores every order and picks
- * the action; an AI call outside these rules is not placed but suggested: the order waits in
- * review with `suggested_action: ai_call` until the shop confirms the call
- * (`POST /orders/{id}/calls`) or chooses something else. The defaults are the tier policy as it
- * was: every call the engine picks is placed. Contact protection (contact hours, one call per
- * phone per day, blocked phones) applies to every call on top of these rules.
+ * What the agent does by itself. The engine still scores every order and picks the action.
+ *
+ * - `suggest` (default): every contact it picks (confirmation link, AI call, deposit request) is
+ * only suggested: the order waits in review with `suggested_action` until the shop accepts it
+ * (`POST /orders/{id}/suggestion/accept`) or chooses something else.
+ * - `auto`: the shop switched automation on. Links and deposit requests go out by themselves;
+ * an AI call does when the order is inside the rules below, otherwise it is suggested.
+ *
+ * Contact protection (contact hours, one call per phone per day, blocked phones) applies to
+ * every call on top of these rules.
  */
 export type CallAutomation = {
   mode?: CallAutomationMode
@@ -350,10 +354,11 @@ export type CallAutomation = {
 /**
  * CallAutomationMode
  *
- * Who starts an AI call the engine chooses.
+ * Who starts a contact (link, AI call, deposit request) the engine chooses.
  *
- * auto: the agent calls by itself when the order is inside the shop's automation rules ·
- * suggest: the agent only suggests the call; the shop confirms it
+ * suggest: the agent only suggests it; the shop accepts it (default) ·
+ * auto: automation is on: the agent contacts the buyer by itself, AI calls only inside the
+ * shop's automation rules
  */
 export type CallAutomationMode = 'auto' | 'suggest'
 
@@ -2249,6 +2254,20 @@ export type TierPolicy = {
 }
 
 /**
+ * TimersRun
+ *
+ * What one run of the no-response timers did (app/decision/timers.py).
+ */
+export type TimersRun = {
+  /**
+   * Handled
+   *
+   * Orders whose timer was due and ran.
+   */
+  handled: number
+}
+
+/**
  * TranscriptTurn
  */
 export type TranscriptTurn = {
@@ -2764,6 +2783,50 @@ export type OverrideOrderResponses = {
 }
 
 export type OverrideOrderResponse = OverrideOrderResponses[keyof OverrideOrderResponses]
+
+export type AcceptSuggestionData = {
+  body?: never
+  path: {
+    /**
+     * Order Id
+     *
+     * Order ID.
+     */
+    order_id: string
+  }
+  query?: never
+  url: '/api/v1/orders/{order_id}/suggestion/accept'
+}
+
+export type AcceptSuggestionErrors = {
+  /**
+   * Missing or invalid credentials.
+   */
+  401: ProblemDetail
+  /**
+   * Resource not found.
+   */
+  404: ProblemDetail
+  /**
+   * Request conflicts with the current state. See `code`.
+   */
+  409: ProblemDetail
+  /**
+   * Request body or parameters failed validation. See `errors`.
+   */
+  422: ProblemDetail
+}
+
+export type AcceptSuggestionError = AcceptSuggestionErrors[keyof AcceptSuggestionErrors]
+
+export type AcceptSuggestionResponses = {
+  /**
+   * Successful Response
+   */
+  200: OrderDetail
+}
+
+export type AcceptSuggestionResponse = AcceptSuggestionResponses[keyof AcceptSuggestionResponses]
 
 export type StartCallData = {
   body?: never
@@ -3321,6 +3384,31 @@ export type RecordCallResultResponses = {
 }
 
 export type RecordCallResultResponse = RecordCallResultResponses[keyof RecordCallResultResponses]
+
+export type RunTimersData = {
+  body?: never
+  path?: never
+  query?: never
+  url: '/api/v1/internal/timers/run'
+}
+
+export type RunTimersErrors = {
+  /**
+   * Missing or invalid credentials.
+   */
+  401: ProblemDetail
+}
+
+export type RunTimersError = RunTimersErrors[keyof RunTimersErrors]
+
+export type RunTimersResponses = {
+  /**
+   * Successful Response
+   */
+  200: TimersRun
+}
+
+export type RunTimersResponse = RunTimersResponses[keyof RunTimersResponses]
 
 export type CallJobWebhookPayload = CallJob
 

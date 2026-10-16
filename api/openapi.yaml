@@ -844,6 +844,81 @@ paths:
                   type: string_pattern_mismatch
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
+  /api/v1/orders/{order_id}/suggestion/accept:
+    post:
+      tags:
+      - orders
+      summary: Accept the contact the engine suggested
+      description: 'For an order waiting in review with `suggested_action` (automation off, or an AI call
+        outside the automation rules): sends the link or the deposit request, or places the AI call, then
+        the order waits for the buyer with the usual no-response timer. 409 when there is nothing to accept,
+        or contact protection blocks the call.'
+      operationId: accept_suggestion
+      security:
+      - bearerAuth: []
+      parameters:
+      - name: order_id
+        in: path
+        required: true
+        schema:
+          type: string
+          description: Order ID.
+          examples:
+          - ord_01
+          title: Order Id
+        description: Order ID.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired access token.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: Resource not found.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Not found
+                status: 404
+                code: not_found
+                detail: Order ord_99 not found.
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '409':
+          description: Request conflicts with the current state. See `code`.
+          content:
+            application/problem+json:
+              example:
+                type: about:blank
+                title: Contact blocked
+                status: 409
+                code: contact_blocked
+                detail: This phone already had an AI call in the last 24 hours.
+                block_reasons:
+                - daily_call_limit
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example: *id001
   /api/v1/orders/{order_id}/calls:
     post:
       tags:
@@ -1781,6 +1856,36 @@ paths:
                   type: string_pattern_mismatch
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
+  /api/v1/internal/timers/run:
+    post:
+      tags:
+      - internal
+      summary: Fire the no-response timers that are due
+      description: 'Called by Cloud Scheduler (`codguard-timers`) every 5 minutes with a Google ID token
+        of `codguard-runtime`. Each order whose `decision.next_action_at` has passed runs the pipeline''s
+        `no_response` event: the next AI call, the call after a link, or review.'
+      operationId: run_timers
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimersRun'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or invalid Google ID token, or not a controller service account.
+      security:
+      - googleIdToken: []
 webhooks:
   call-job:
     post:
@@ -2235,7 +2340,7 @@ components:
       properties:
         mode:
           $ref: '#/components/schemas/CallAutomationMode'
-          default: auto
+          default: suggest
         min_tier:
           anyOf:
           - $ref: '#/components/schemas/RiskTier'
@@ -2279,12 +2384,16 @@ components:
       type: object
       title: CallAutomation
       description: |-
-        When the agent places an AI call by itself. The engine still scores every order and picks
-        the action; an AI call outside these rules is not placed but suggested: the order waits in
-        review with `suggested_action: ai_call` until the shop confirms the call
-        (`POST /orders/{id}/calls`) or chooses something else. The defaults are the tier policy as it
-        was: every call the engine picks is placed. Contact protection (contact hours, one call per
-        phone per day, blocked phones) applies to every call on top of these rules.
+        What the agent does by itself. The engine still scores every order and picks the action.
+
+        - `suggest` (default): every contact it picks (confirmation link, AI call, deposit request) is
+          only suggested: the order waits in review with `suggested_action` until the shop accepts it
+          (`POST /orders/{id}/suggestion/accept`) or chooses something else.
+        - `auto`: the shop switched automation on. Links and deposit requests go out by themselves;
+          an AI call does when the order is inside the rules below, otherwise it is suggested.
+
+        Contact protection (contact hours, one call per phone per day, blocked phones) applies to
+        every call on top of these rules.
       examples:
       - call_window:
           days:
@@ -2315,10 +2424,11 @@ components:
       - suggest
       title: CallAutomationMode
       description: |-
-        Who starts an AI call the engine chooses.
+        Who starts a contact (link, AI call, deposit request) the engine chooses.
 
-        auto: the agent calls by itself when the order is inside the shop's automation rules ·
-        suggest: the agent only suggests the call; the shop confirms it
+        suggest: the agent only suggests it; the shop accepts it (default) ·
+        auto: automation is on: the agent contacts the buyer by itself, AI calls only inside the
+        shop's automation rules
     CallBuyer:
       properties:
         full_name:
@@ -4633,7 +4743,7 @@ components:
       - automation:
           cod_ranges: []
           max_attempts: 2
-          mode: auto
+          mode: suggest
           retry_after_minutes: 30
         effective_from: '2026-10-09T09:00:00+07:00'
         tiers:
@@ -5156,6 +5266,21 @@ components:
       - tier
       - action
       title: TierPolicy
+    TimersRun:
+      properties:
+        handled:
+          type: integer
+          minimum: 0.0
+          title: Handled
+          description: Orders whose timer was due and ran.
+      additionalProperties: false
+      type: object
+      required:
+      - handled
+      title: TimersRun
+      description: What one run of the no-response timers did (app/decision/timers.py).
+      examples:
+      - handled: 3
     TranscriptTurn:
       properties:
         speaker:

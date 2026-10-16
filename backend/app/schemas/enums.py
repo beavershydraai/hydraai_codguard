@@ -119,10 +119,11 @@ class ContactBlockReason(StrEnum):
 
 
 class CallAutomationMode(StrEnum):
-    """Who starts an AI call the engine chooses.
+    """Who starts a contact (link, AI call, deposit request) the engine chooses.
 
-    auto: the agent calls by itself when the order is inside the shop's automation rules ·
-    suggest: the agent only suggests the call; the shop confirms it
+    suggest: the agent only suggests it; the shop accepts it (default) ·
+    auto: automation is on: the agent contacts the buyer by itself, AI calls only inside the
+    shop's automation rules
     """
 
     AUTO = "auto"

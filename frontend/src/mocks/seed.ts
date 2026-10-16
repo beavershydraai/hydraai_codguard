@@ -82,7 +82,7 @@ export function defaultPolicy(effectiveFrom: string): Policy {
       },
     ],
     automation: {
-      mode: 'auto',
+      mode: 'suggest',
       min_tier: null,
       cod_ranges: [],
       channels: null,
