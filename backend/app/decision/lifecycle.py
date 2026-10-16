@@ -365,6 +365,7 @@ def _edit(
     if deposit_paid:
         _record_intervention(doc, "deposit")
     doc.update(changed)
+    doc["cod_amount_vnd"] = cod_amount(doc)
     _event(doc, "edited", now, "Order edited.", actor)
     scored = _score(store, doc, now, settings=settings, policy=policy)
     if not scored:

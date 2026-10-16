@@ -95,6 +95,34 @@ _SUMMARY_FIELDS = (
 )
 
 
+# What order_summary reads: the inbox loads only these fields of every order.
+SUMMARY_PROJECTION = (
+    "order_id",
+    *_SUMMARY_FIELDS,
+    "items",
+    "discount_vnd",
+    "shipping_fee_vnd",
+    "prepaid_vnd",
+    "decision",
+    *(
+        f"scoring.{name}"
+        for name in (
+            "id",
+            "scored_at",
+            "status",
+            "skipped_reason",
+            "probability",
+            "risk_score",
+            "tier",
+            "expected_loss_vnd",
+            "failed_delivery_cost_vnd",
+            "chosen_by",
+            "hard_rules",
+        )
+    ),
+)
+
+
 def order_detail(doc: dict) -> OrderDetail:
     """Current score and every earlier run, without changing the stored document."""
     doc = _readable(doc)

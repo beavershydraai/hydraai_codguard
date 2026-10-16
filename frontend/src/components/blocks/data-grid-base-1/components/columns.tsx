@@ -15,7 +15,7 @@ export const columns: ColumnDef<DataGridFeatures, OrderSummary>[] = [
     header: ({ column }) => <DataGridColumnHeader column={column} visibility={true} />,
     cell: ({ row }) => <OrderCell row={row} />,
     size: 170,
-    enableSorting: true,
+    enableSorting: false, // the server sorts by placing time, risk and COD only
     enableHiding: false,
     enableResizing: true,
     meta: { headerTitle: 'Order ID', headerClassName: 'ps-4!', cellClassName: 'ps-4!' },
@@ -27,7 +27,7 @@ export const columns: ColumnDef<DataGridFeatures, OrderSummary>[] = [
     cell: ({ row }) => <BuyerCell row={row} />,
     size: 210,
     minSize: 180,
-    enableSorting: true,
+    enableSorting: false, // the server sorts by placing time, risk and COD only
     enableHiding: false,
     enableResizing: true,
     meta: { headerTitle: 'Buyer', autoSize: true },
@@ -60,7 +60,7 @@ export const columns: ColumnDef<DataGridFeatures, OrderSummary>[] = [
     header: ({ column }) => <DataGridColumnHeader column={column} visibility={true} />,
     cell: ({ getValue }) => <span className="text-foreground">{(getValue() as string) || '—'}</span>,
     size: 150,
-    enableSorting: true,
+    enableSorting: false, // the server sorts by placing time, risk and COD only
     enableHiding: true,
     enableResizing: true,
     meta: { headerTitle: 'Action' },
@@ -71,7 +71,7 @@ export const columns: ColumnDef<DataGridFeatures, OrderSummary>[] = [
     header: ({ column }) => <DataGridColumnHeader column={column} visibility={true} />,
     cell: ({ row }) => <OrderStatusBadge status={row.original.status} />,
     size: 140,
-    enableSorting: true,
+    enableSorting: false, // the server sorts by placing time, risk and COD only
     enableHiding: true,
     enableResizing: true,
     meta: { headerTitle: 'Status' },

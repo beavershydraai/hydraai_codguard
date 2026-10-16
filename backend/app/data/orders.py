@@ -27,6 +27,13 @@ NOT_IN_SNAPSHOT = {
 }
 
 
+def cod_amount(order: dict) -> int:
+    """The amount still to collect: items − discount + shipping fee − prepaid, at least 0."""
+    subtotal = sum(i["quantity"] * i["unit_price_vnd"] for i in order["items"])
+    total = subtotal - order["discount_vnd"] + order["shipping_fee_vnd"]
+    return max(total - order["prepaid_vnd"], 0)
+
+
 def to_utc(at: datetime, tz: timezone = VN_TIME) -> datetime:
     """A time without a zone is in `tz`, the branch's local time (default Vietnam)."""
     return (at if at.tzinfo else at.replace(tzinfo=tz)).astimezone(UTC)
@@ -68,6 +75,9 @@ def order_document(
         "recipient_phone": recipient,
         "recipient_phone_hash": recipient_hash,
         "status": OrderStatus.NEW.value,
+        # Kept at the top level so the inbox can sort on them (app/decision/inbox.py).
+        "cod_amount_vnd": cod_amount(order.model_dump()),
+        "risk_score": None,
         "scoring": None,
         "decision": None,
         "score_history": [],

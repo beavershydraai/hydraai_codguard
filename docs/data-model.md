@@ -57,6 +57,8 @@ One document per order. It is a top-level collection with a `shop_id` field rath
 | `note` | string \| null | `OrderCreate.note` | |
 | `skip_agents` | bool, absent unless true | intake key | Sent with a `noagents` test key (`INTAKE_API_KEYS` entry `key:shop:noagents`): the pipeline skips the Gemini assessment |
 | `status` | string | lifecycle (E4.1) | One of the nine `OrderStatus` values; `new` on creation. Only the lifecycle service changes it |
+| `tier`, `risk_score` | string \| null, int \| null | scoring | Copies of the latest run's tier and score at the top level, so the inbox can filter and sort on them in Firestore. Null until scored, and `risk_score` stays null for a skipped order |
+| `cod_amount_vnd` | int | intake, edits | The amount still to collect, kept at the top level for sorting; recomputed on every edit |
 | `scoring` | map \| null | scoring (E2.4, E2.5) | Latest run: `probability`, `risk_score`, `tier`, `expected_loss_vnd`, `chosen_by`, `hard_rules`, `top_signals`, `shap`, `reasons`, `assessment`, `model_version`, `scored_at`, and `features`, the exact inputs the model saw. `shap` = exact TreeSHAP of every feature (`base_value`, `prediction`, `contributions`, before calibration); `reasons` = up to 3 reasons the Gemini assessment picked; `assessment` = its status, agents and model. `expected_loss_vnd` = probability × 60,000 VND until E2.5 uses the shop's costs. `top_signals` = the 5 features with the largest SHAP values for this order, rescaled to probability (positive raises risk) |
 | `decision` | map \| null | lifecycle (E4.1), policy (E4.2) | Current `Decision`: `decided_at`, `action`, `policy_version`, `expected_loss_vnd`, `contact_cost_vnd`, `block_reasons`, `next_action`, `next_action_at`, `suggested_action` (an AI call left to the shop by its call automation), `decided_by`. Null until decided |
 | `score_history` | array of map | rescore (E4.1) | Earlier `scoring` maps, newest first; starts empty. `OrderDetail.score_history` combines the current score with these earlier runs |
@@ -69,7 +71,7 @@ One document per order. It is a top-level collection with a `shop_id` field rath
 | `delivery` | map \| null | `DeliveryOutcome` | `result`, `carrier`, `tracking_code`, `occurred_at` (UTC) |
 | `created_at`, `updated_at` | timestamp | system | |
 
-- Totals are not stored. `total_vnd` = items − discount + shipping fee; `cod_amount_vnd` = total − prepaid.
+- `total_vnd` = items − discount + shipping fee is not stored; `cod_amount_vnd` = total − prepaid is, for sorting.
 - Earlier scores are stored in an array on the order for this prototype, so edits, scores, decisions and
   status changes can be written together in one transaction. The order-detail view converts the current
   and prior scoring maps to `RiskScore` values, newest first.

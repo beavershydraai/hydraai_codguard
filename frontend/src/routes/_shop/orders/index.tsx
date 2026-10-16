@@ -1,24 +1,28 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { PlusIcon, TruckIcon, UploadIcon } from 'lucide-react'
 import { useState } from 'react'
 
 import { importDeliveryOutcomes, importOrders, type OrderStatus, type RiskTier } from '@/api/gen'
-import { listOrdersOptions } from '@/api/gen/@tanstack/react-query.gen'
+import { listOrdersInfiniteOptions } from '@/api/gen/@tanstack/react-query.gen'
 import {
   type OrderFilters,
   OrdersDataGrid,
+  type OrderSort,
 } from '@/components/blocks/data-grid-base-1/components/data-grid-view'
 import { CreateOrderSheet } from '@/components/orders/create-order-sheet'
 import { CsvImportDialog } from '@/components/orders/csv-import-dialog'
 import { QueryError } from '@/components/query-error'
 import { Button } from '@/components/ui/button'
 import { invalidate } from '@/lib/api'
-import { ORDER_STATUS_LABELS, RISK_TIER_LABELS } from '@/lib/labels'
+import { BRANCH_LABELS, ORDER_STATUS_LABELS, RISK_TIER_LABELS } from '@/lib/labels'
 
 type OrdersSearch = {
   tier?: RiskTier[]
   status?: OrderStatus[]
+  branch?: string[]
+  q?: string
+  sort?: OrderSort
 }
 
 /** Keeps only known values; accepts a single value or a list. */
@@ -29,6 +33,9 @@ function pick<T extends string>(value: unknown, allowed: readonly T[]): T[] | un
 
 const TIERS = Object.keys(RISK_TIER_LABELS) as RiskTier[]
 const STATUSES = Object.keys(ORDER_STATUS_LABELS) as OrderStatus[]
+const BRANCHES = Object.keys(BRANCH_LABELS)
+const SORTS: OrderSort[] = ['-placed_at', 'placed_at', '-updated_at', '-risk_score', '-cod_amount_vnd']
+const PAGE_SIZE = 100
 
 const ORDER_TEMPLATE = [
   [
@@ -62,36 +69,55 @@ const DELIVERY_TEMPLATE = [
   ['FB-3002', 'refused', 'ghtk'],
 ]
 
-// One API page of the newest orders; search, filters, sorting and paging run in the browser.
-// Cursor paging for larger inboxes comes with E7.2.
-const LIST_QUERY = { sort: '-placed_at', limit: 100 } as const
-
+// The server filters, searches, sorts and pages (E7.2): 100 orders at a time, "Load more" for the
+// next 100. Filters, search and sort live in the URL.
 export const Route = createFileRoute('/_shop/orders/')({
   staticData: { crumb: 'Orders' },
   validateSearch: (search: Record<string, unknown>): OrdersSearch => ({
     tier: pick(search.tier, TIERS),
     status: pick(search.status, STATUSES),
+    branch: pick(search.branch, BRANCHES),
+    q: typeof search.q === 'string' && search.q.trim() ? search.q.trim() : undefined,
+    sort: pick(search.sort, SORTS)?.[0],
   }),
-  // Not awaited: the page renders its skeleton while the data loads.
-  loader: ({ context }) => {
-    void context.queryClient.prefetchQuery(listOrdersOptions({ query: LIST_QUERY }))
-  },
   component: OrdersPage,
 })
 
 function OrdersPage() {
   const search = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
-  const { data, error, isPending, refetch } = useQuery(listOrdersOptions({ query: LIST_QUERY }))
+  const sort = search.sort ?? '-placed_at'
+  const query = {
+    sort,
+    limit: PAGE_SIZE,
+    status: search.status,
+    tier: search.tier,
+    branch: search.branch,
+    q: search.q,
+  }
+  const { data, error, isPending, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useInfiniteQuery({
+      ...listOrdersInfiniteOptions({ query }),
+      initialPageParam: { query: {} },
+      getNextPageParam: (last) => last.next_cursor ?? undefined,
+    })
+  const orders = data?.pages.flatMap((page) => page.items) ?? []
   const queryClient = useQueryClient()
   const [panel, setPanel] = useState<'create' | 'import' | 'delivery' | null>(null)
   const close = (open: boolean) => !open && setPanel(null)
 
-  const filters: OrderFilters = { tiers: search.tier ?? [], statuses: search.status ?? [] }
-  const setFilters = ({ tiers, statuses }: OrderFilters) =>
-    navigate({
-      search: { tier: tiers.length ? tiers : undefined, status: statuses.length ? statuses : undefined },
-      replace: true,
+  const filters: OrderFilters = {
+    tiers: search.tier ?? [],
+    statuses: search.status ?? [],
+    branches: search.branch ?? [],
+  }
+  const setSearch = (next: OrdersSearch) =>
+    navigate({ search: (current) => ({ ...current, ...next }), replace: true })
+  const setFilters = ({ tiers, statuses, branches }: OrderFilters) =>
+    setSearch({
+      tier: tiers.length ? tiers : undefined,
+      status: statuses.length ? statuses : undefined,
+      branch: branches.length ? branches : undefined,
     })
 
   if (error) return <QueryError error={error} />
@@ -115,12 +141,18 @@ function OrdersPage() {
             </Button>
           </>
         }
-        orders={data?.items ?? []}
-        // The server's total can lag the page it returned (the mock's example says 0).
-        total={Math.max(data?.total ?? 0, data?.items.length ?? 0)}
+        orders={orders}
+        total={Math.max(data?.pages[0]?.total ?? 0, orders.length)}
         isLoading={isPending}
         filters={filters}
         onFiltersChange={setFilters}
+        search={search.q ?? ''}
+        onSearchChange={(q) => setSearch({ q: q || undefined })}
+        sort={sort}
+        onSortChange={(next) => setSearch({ sort: next === '-placed_at' ? undefined : next })}
+        hasMore={hasNextPage}
+        isLoadingMore={isFetchingNextPage}
+        onLoadMore={() => void fetchNextPage()}
         onRefresh={() => void refetch()}
       />
       <CreateOrderSheet open={panel === 'create'} onOpenChange={close} />

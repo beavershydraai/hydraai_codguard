@@ -61,9 +61,12 @@ describe('MockDb', () => {
     expect(second.items[0]!.id).not.toBe(first.items[0]!.id)
     expect(() => db.list({ limit: 10, cursor: first.next_cursor, tier: ['high'] })).toThrow()
 
+    // Search is exact, as on the backend: an order ID, a shop order ID or a full phone number.
     const someone = first.items[0]!
-    const folded = someone.buyer_name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/Đ/g, 'D')
-    expect(db.list({ q: folded.toLowerCase() }).items.map((o) => o.id)).toContain(someone.id)
+    expect(db.list({ q: someone.id }).items.map((o) => o.id)).toEqual([someone.id])
+    expect(db.list({ q: someone.buyer_phone }).items.map((o) => o.id)).toContain(someone.id)
+    expect(db.list({ q: someone.buyer_name }).items).toEqual([])
+    expect(db.list({ branch: ['branch_SG'] }).items).toEqual([]) // the mock's orders are VN_HCM
   })
 
   it('records who overrode, when and why', () => {

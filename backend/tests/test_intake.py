@@ -17,6 +17,23 @@ from tests.risk_data import START, orders
 ORDER = OrderCreate.model_config["json_schema_extra"]["examples"][0]
 
 
+def project(doc, fields):
+    """Only `fields` (dotted paths) of a document, as a Firestore projection returns it."""
+    out = {}
+    for path in fields:
+        *parents, last = path.split(".")
+        src, dst = doc, out
+        for key in parents:
+            src = (src or {}).get(key)
+            if not isinstance(src, dict):
+                break
+            dst = dst.setdefault(key, {})
+        else:
+            if isinstance(src, dict) and last in src:
+                dst[last] = deepcopy(src[last])
+    return out
+
+
 class FakeStore:
     def __init__(self):
         self.docs = {}
@@ -41,15 +58,43 @@ class FakeStore:
         self.docs[order_id] = deepcopy(result)
         return result
 
-    def for_shop(self, shop_id, placed_from=None, placed_to=None):
-        docs = [
-            deepcopy(d)
+    # The inbox's queries, as Firestore answers them (app/data/store.py).
+    def _filtered(self, shop_id, f):
+        return [
+            d
             for d in self.docs.values()
             if d["shop_id"] == shop_id
-            and (placed_from is None or d["placed_at"] >= placed_from)
-            and (placed_to is None or d["placed_at"] <= placed_to)
+            and (not f.branches or d.get("branch_id") in f.branches)
+            and (not f.statuses or d.get("status") in f.statuses)
+            and (not f.tiers or d.get("tier") in f.tiers)
+            and (f.placed_from is None or d["placed_at"] >= f.placed_from)
+            and (f.placed_to is None or d["placed_at"] <= f.placed_to)
         ]
-        return sorted(docs, key=lambda d: d["placed_at"], reverse=True)
+
+    def page(self, shop_id, filters, *, sort, after, limit, fields):
+        field = sort.lstrip("-")
+        # Firestore leaves out documents without the sort field and sorts null lowest.
+        rows = [d for d in self._filtered(shop_id, filters) if field in d]
+        rows.sort(
+            key=lambda d: (d[field] is not None, d[field] or 0, d["order_id"]),
+            reverse=sort.startswith("-"),
+        )
+        if after:
+            if after not in self.docs:
+                raise LookupError(after)
+            ids = [d["order_id"] for d in rows]
+            rows = rows[ids.index(after) + 1 :] if after in ids else []
+        return [project(d, fields) for d in rows[:limit]], len(rows) > limit
+
+    def count(self, shop_id, filters):
+        return len(self._filtered(shop_id, filters))
+
+    def find(self, shop_id, field, values, fields):
+        return [
+            project(d, fields)
+            for d in self.docs.values()
+            if d["shop_id"] == shop_id and d.get(field) in values
+        ]
 
     def history(self, phone_hash, before):
         return [
