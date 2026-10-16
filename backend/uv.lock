@@ -332,6 +332,7 @@ name = "codguard-backend"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "cryptography" },
     { name = "evidently" },
     { name = "fastapi" },
     { name = "google-adk" },
@@ -359,6 +360,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography", specifier = ">=50.0.2" },
     { name = "evidently", specifier = ">=0.7.23" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "google-adk", specifier = ">=2.11,<3" },

@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta, timezone
 
 from app.data import branches
-from app.data.phone import phone_hash, to_e164
+from app.data.phone import encrypt_phone, phone_hash, to_e164
 from app.schemas.delivery import DeliveryOutcome
 from app.schemas.enums import DeliveryResult, OrderStatus
 from app.schemas.orders import OrderCreate
@@ -32,12 +32,13 @@ def to_utc(at: datetime, tz: timezone = VN_TIME) -> datetime:
     return (at if at.tzinfo else at.replace(tzinfo=tz)).astimezone(UTC)
 
 
-def _phone(raw: str | None, key: bytes, calling_code: str) -> tuple[str | None, str | None]:
-    """(phone to store, its hash). An invalid phone is kept as received, with no hash."""
+def stored_phone(raw: str | None, key: bytes, calling_code: str) -> tuple[str | None, str | None]:
+    """(phone as stored, its hash): E.164, encrypted. An invalid phone is kept as received, also
+    encrypted, with no hash."""
     if raw is None:
         return None, None
     e164 = to_e164(raw, calling_code)
-    return (e164, phone_hash(e164, key)) if e164 else (raw, None)
+    return encrypt_phone(e164 or raw), phone_hash(e164, key) if e164 else None
 
 
 def order_document(
@@ -52,8 +53,8 @@ def order_document(
     """Firestore `orders/{order_id}` for a new order of `branch_id` (default: config default)."""
     branch_id = branch_id or branches.default_branch()
     country = branches.country(branches.branches()[branch_id])
-    buyer, buyer_hash = _phone(order.buyer_phone, phone_key, country.calling_code)
-    recipient, recipient_hash = _phone(order.recipient_phone, phone_key, country.calling_code)
+    buyer, buyer_hash = stored_phone(order.buyer_phone, phone_key, country.calling_code)
+    recipient, recipient_hash = stored_phone(order.recipient_phone, phone_key, country.calling_code)
     return {
         **order.model_dump(mode="json"),
         "currency": country.currency,

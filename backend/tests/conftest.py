@@ -6,6 +6,15 @@ from app.data import policies, shops
 from app.data.policies import PolicyStore, VersionTaken
 from app.data.shops import ShopStore
 
+# 32 zero bytes: a test key, never a real one.
+TEST_PHONE_ENC_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+
+
+@pytest.fixture(autouse=True)
+def phone_enc_key(monkeypatch):
+    """Phones are stored encrypted (app/data/phone.py); tests use a fixed test key."""
+    monkeypatch.setenv("PHONE_ENC_KEY", TEST_PHONE_ENC_KEY)
+
 
 @pytest.fixture(autouse=True)
 def policy_versions(monkeypatch):
