@@ -68,21 +68,20 @@ const PRE_SHIP: OrderStatus[] = [
 
 const nowIso = () => new Date().toISOString()
 
-function fold(text: string): string {
-  return text.toLowerCase().replace(/đ/g, 'd').normalize('NFD').replace(/[̀-ͯ]/g, '')
-}
-
 function phoneForms(phone: string): string[] {
   const digits = phone.replace(/\D/g, '')
   return digits.startsWith('84') ? [digits, `0${digits.slice(2)}`] : [digits]
 }
 
-export function matchesSearch(order: OrderSummary, q: string): boolean {
-  const needle = fold(q.trim())
-  if (!needle) return true
-  if (fold([order.id, order.external_id ?? '', order.buyer_name].join(' ')).includes(needle)) return true
-  const digits = q.replace(/\D/g, '')
-  return digits.length >= 3 && phoneForms(order.buyer_phone).some((form) => form.includes(digits))
+/** The backend's search: an exact order ID, shop order ID or full phone number. */
+export function matchesExactly(order: OrderSummary, q: string): boolean {
+  const value = q.trim()
+  const digits = value.replace(/\D/g, '')
+  return (
+    value === order.id ||
+    value === order.external_id ||
+    (digits.length >= 8 && phoneForms(order.buyer_phone).some((form) => form === digits))
+  )
 }
 
 export function summary(order: OrderDetail): OrderSummary {
@@ -179,11 +178,12 @@ export class MockDb {
   list(query: ListQuery): OrderPage {
     const statuses = query.status ?? []
     const tiers = query.tier ?? []
+    const branches = query.branch ?? []
     const from = query.placed_from ? Date.parse(query.placed_from) : null
     const to = query.placed_to ? Date.parse(query.placed_to) : null
     const sort = query.sort ?? '-placed_at'
     const limit = query.limit ?? 50
-    const fingerprint = JSON.stringify([statuses, tiers, query.q, from, to, sort])
+    const fingerprint = JSON.stringify([statuses, tiers, branches, query.q, from, to, sort])
 
     let offset = 0
     if (query.cursor) {
@@ -194,16 +194,16 @@ export class MockDb {
       offset = Number(o)
     }
 
-    const rows = [...this.orders.values()]
-      .map(summary)
-      .filter(
-        (o) =>
-          (!statuses.length || statuses.includes(o.status)) &&
-          (!tiers.length || (o.tier != null && tiers.includes(o.tier))) &&
-          (from == null || Date.parse(o.placed_at) >= from) &&
-          (to == null || Date.parse(o.placed_at) <= to) &&
-          (!query.q || matchesSearch(o, query.q)),
-      )
+    const rows = [...this.orders.values()].map(summary).filter(
+      (o) =>
+        (!statuses.length || statuses.includes(o.status)) &&
+        (!tiers.length || (o.tier != null && tiers.includes(o.tier))) &&
+        // The mock's orders have no branch: they are the default branch's, like the backend's.
+        (!branches.length || branches.includes(o.branch_id ?? 'branch_VN_HCM')) &&
+        (from == null || Date.parse(o.placed_at) >= from) &&
+        (to == null || Date.parse(o.placed_at) <= to) &&
+        (!query.q || matchesExactly(o, query.q)),
+    )
     const key = (o: OrderSummary): [number, string] => {
       switch (sort) {
         case '-updated_at':

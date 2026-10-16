@@ -10,7 +10,7 @@ import re
 from datetime import timedelta
 
 from app.data import branches
-from app.data.orders import final_state
+from app.data.orders import cod_amount, final_state
 
 M_SMOOTH = 5  # E2.3 rule 7
 CHANNELS = ["facebook", "zalo", "tiktok", "website", "instagram", "other"]
@@ -50,12 +50,6 @@ def has_house_number(address: dict) -> int:
     """A number before the ward ('Số 12 ...', '12/3 ...'). Digits in 'Phường 5' do not count."""
     head = address.get("street") or address["raw"].split(",")[0]
     return int(bool(_DIGIT.search(head)))
-
-
-def cod_amount(order: dict) -> int:
-    subtotal = sum(i["quantity"] * i["unit_price_vnd"] for i in order["items"])
-    total = subtotal - order["discount_vnd"] + order["shipping_fee_vnd"]
-    return max(total - order["prepaid_vnd"], 0)
 
 
 def compute_features(order: dict, history: list[dict], at, enc: dict) -> dict:

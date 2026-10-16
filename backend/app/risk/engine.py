@@ -163,6 +163,7 @@ def score(doc: dict, history: list[dict]) -> dict | None:
     )
     return {
         "tier": decision["tier"],
+        "risk_score": None if decision["tier"] is None else round(p * 100),  # inbox sort
         "contact_action": decision["action"],
         "random_slice": decision["random_slice"],
         "action_probability": decision["action_probability"],

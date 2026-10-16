@@ -2402,9 +2402,15 @@ export type ListOrdersData = {
      */
     tier?: Array<RiskTier>
     /**
+     * Branch
+     *
+     * Branch IDs (config/branches.yaml).
+     */
+    branch?: Array<string>
+    /**
      * Q
      *
-     * Search buyer name, phone or external_id.
+     * Exact order ID, shop order ID or full phone number.
      */
     q?: string | null
     /**

@@ -107,6 +107,14 @@ export const WEEKDAY_LABELS: Record<Weekday, string> = {
   sun: 'Sun',
 }
 
+/** The demo shop's branches (backend/config/branches.yaml). */
+export const BRANCH_LABELS: Record<string, string> = {
+  branch_VN_HCM: 'Vietnam · Ho Chi Minh City',
+  branch_VN_HN: 'Vietnam · Hanoi',
+  branch_SG: 'Singapore',
+  branch_PH: 'Philippines',
+}
+
 export const COUNTRY_LABELS: Record<string, string> = {
   VN: 'Vietnam',
   SG: 'Singapore',

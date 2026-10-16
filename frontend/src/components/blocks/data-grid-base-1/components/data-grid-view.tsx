@@ -1,17 +1,11 @@
-import {
-  type ColumnVisibilityState,
-  type PaginationState,
-  type SortingState,
-  useTable,
-} from '@tanstack/react-table'
+import { type ColumnVisibilityState, type SortingState, useTable } from '@tanstack/react-table'
 import { FileDownIcon, FilterIcon, MoreHorizontalIcon, RefreshCwIcon, SearchIcon, XIcon } from 'lucide-react'
-import { type ReactNode, useMemo, useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { toast } from 'sonner'
 
-import type { OrderStatus, OrderSummary, RiskTier } from '@/api/gen'
+import type { ListOrdersData, OrderStatus, OrderSummary, RiskTier } from '@/api/gen'
 import { Badge } from '@/components/reui/badge'
 import { DataGrid as ReuiDataGrid, dataGridFeatures } from '@/components/reui/data-grid/data-grid'
-import { DataGridPagination } from '@/components/reui/data-grid/data-grid-pagination'
 import { DataGridScrollArea } from '@/components/reui/data-grid/data-grid-scroll-area'
 import { DataGridTable } from '@/components/reui/data-grid/data-grid-table'
 import {
@@ -37,33 +31,37 @@ import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Separator } from '@/components/ui/separator'
+import { Spinner } from '@/components/ui/spinner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ordersToCsv } from '@/lib/orders-csv'
-import { ORDER_STATUS_LABELS, RISK_TIER_LABELS } from '@/lib/labels'
+import { BRANCH_LABELS, ORDER_STATUS_LABELS, RISK_TIER_LABELS } from '@/lib/labels'
 
 import { columns } from './columns'
 
+// The inbox is served page by page by the API (E7.2): filters, search and sort run on the server,
+// and "Load more" fetches the next page. Nothing is filtered or sorted in the browser.
+
 const TIER_ORDER = Object.keys(RISK_TIER_LABELS) as RiskTier[]
 const STATUS_ORDER = Object.keys(ORDER_STATUS_LABELS) as OrderStatus[]
+const BRANCH_ORDER = Object.keys(BRANCH_LABELS)
 
 export type OrderFilters = {
   tiers: RiskTier[]
   statuses: OrderStatus[]
+  branches: string[]
 }
+export type OrderSort = NonNullable<NonNullable<ListOrdersData['query']>['sort']>
 
-function orderSearchBlob(o: OrderSummary): string {
-  return [o.id, o.external_id, o.buyer_name, o.buyer_phone].filter(Boolean).join(' ').toLowerCase()
+/** The table's sort state for an API sort, and back. Only these columns sort on the server. */
+function toSorting(sort: OrderSort): SortingState {
+  return [{ id: sort.replace(/^-/, ''), desc: sort.startsWith('-') }]
 }
-
-function countBy<K extends string>(orders: OrderSummary[], key: (o: OrderSummary) => K | null | undefined) {
-  return orders.reduce(
-    (acc, o) => {
-      const k = key(o)
-      if (k) acc[k] = (acc[k] ?? 0) + 1
-      return acc
-    },
-    {} as Partial<Record<K, number>>,
-  )
+function toSort(sorting: SortingState): OrderSort {
+  const first = sorting[0]
+  if (first?.id === 'placed_at') return first.desc ? '-placed_at' : 'placed_at'
+  if (first?.id === 'risk_score') return '-risk_score'
+  if (first?.id === 'cod_amount_vnd') return '-cod_amount_vnd'
+  return '-placed_at'
 }
 
 // ── Filter popover (the block's status filter, reused for tier and status) ──
@@ -73,7 +71,6 @@ function FilterPopover<T extends string>({
   heading,
   options,
   selected,
-  counts,
   renderOption,
   onChange,
 }: {
@@ -81,7 +78,6 @@ function FilterPopover<T extends string>({
   heading: string
   options: T[]
   selected: T[]
-  counts: Partial<Record<T, number>>
   renderOption: (value: T) => ReactNode
   onChange: (next: T[]) => void
 }) {
@@ -114,9 +110,6 @@ function FilterPopover<T extends string>({
               className="flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-2 font-normal"
             >
               {renderOption(value)}
-              <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                {counts[value] ?? 0}
-              </span>
             </Label>
           </div>
         ))}
@@ -128,57 +121,73 @@ function FilterPopover<T extends string>({
 // ── Toolbar ──
 
 interface ToolbarProps {
-  searchQuery: string
+  search: string
   onSearchChange: (v: string) => void
   filters: OrderFilters
   onFiltersChange: (filters: OrderFilters) => void
-  tierCounts: Partial<Record<RiskTier, number>>
-  statusCounts: Partial<Record<OrderStatus, number>>
   onRefresh: () => void
   onExport: () => void
 }
 
-function Toolbar({
-  searchQuery,
-  onSearchChange,
-  filters,
-  onFiltersChange,
-  tierCounts,
-  statusCounts,
-  onRefresh,
-  onExport,
-}: ToolbarProps) {
+function Toolbar({ search, onSearchChange, filters, onFiltersChange, onRefresh, onExport }: ToolbarProps) {
+  // Searched on Enter: the server matches exact values, not as you type.
+  const [draft, setDraft] = useState(search)
   const hasActiveFilters =
-    searchQuery.trim().length > 0 || filters.tiers.length > 0 || filters.statuses.length > 0
+    search.length > 0 ||
+    filters.tiers.length > 0 ||
+    filters.statuses.length > 0 ||
+    filters.branches.length > 0
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <InputGroup className="w-full min-w-48 sm:w-56">
-          <InputGroupAddon align="inline-start">
-            <SearchIcon aria-hidden="true" />
-          </InputGroupAddon>
-          <InputGroupInput
-            placeholder="Search order ID, name, phone…"
-            aria-label="Search orders"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-          />
-          {searchQuery.length > 0 && (
-            <InputGroupAddon align="inline-end">
-              <InputGroupButton aria-label="Clear search" size="icon-xs" onClick={() => onSearchChange('')}>
-                <XIcon aria-hidden="true" />
-              </InputGroupButton>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            onSearchChange(draft.trim())
+          }}
+        >
+          <InputGroup className="w-full min-w-48 sm:w-72">
+            <InputGroupAddon align="inline-start">
+              <SearchIcon aria-hidden="true" />
             </InputGroupAddon>
-          )}
-        </InputGroup>
+            <InputGroupInput
+              placeholder="Order ID, shop order ID or full phone"
+              aria-label="Search orders by exact order ID, shop order ID or full phone number"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+            {draft.length > 0 && (
+              <InputGroupAddon align="inline-end">
+                <InputGroupButton
+                  aria-label="Clear search"
+                  size="icon-xs"
+                  onClick={() => {
+                    setDraft('')
+                    onSearchChange('')
+                  }}
+                >
+                  <XIcon aria-hidden="true" />
+                </InputGroupButton>
+              </InputGroupAddon>
+            )}
+          </InputGroup>
+        </form>
+
+        <FilterPopover
+          label="Branch"
+          heading="Filter by branch"
+          options={BRANCH_ORDER}
+          selected={filters.branches}
+          renderOption={(branch) => <span className="truncate text-sm">{BRANCH_LABELS[branch]}</span>}
+          onChange={(branches) => onFiltersChange({ ...filters, branches })}
+        />
 
         <FilterPopover
           label="Risk"
           heading="Filter by risk tier"
           options={TIER_ORDER}
           selected={filters.tiers}
-          counts={tierCounts}
           renderOption={(tier) => <TierBadge tier={tier} />}
           onChange={(tiers) => onFiltersChange({ ...filters, tiers })}
         />
@@ -188,7 +197,6 @@ function Toolbar({
           heading="Filter by status"
           options={STATUS_ORDER}
           selected={filters.statuses}
-          counts={statusCounts}
           renderOption={(status) => <OrderStatusBadge status={status} />}
           onChange={(statuses) => onFiltersChange({ ...filters, statuses })}
         />
@@ -200,8 +208,9 @@ function Toolbar({
             size="sm"
             className="text-muted-foreground"
             onClick={() => {
+              setDraft('')
               onSearchChange('')
-              onFiltersChange({ tiers: [], statuses: [] })
+              onFiltersChange({ tiers: [], statuses: [], branches: [] })
             }}
           >
             Clear filters
@@ -216,11 +225,11 @@ function Toolbar({
             Actions
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuGroup>
             <DropdownMenuItem onClick={onExport}>
               <FileDownIcon aria-hidden="true" />
-              Export CSV
+              Export loaded orders
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onRefresh}>
               <RefreshCwIcon aria-hidden="true" />
@@ -241,81 +250,86 @@ export function OrdersDataGrid({
   isLoading,
   filters,
   onFiltersChange,
+  search,
+  onSearchChange,
+  sort,
+  onSortChange,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
   onRefresh,
   headerActions,
 }: {
+  /** The pages loaded so far, in the server's order. */
   orders: OrderSummary[]
-  /** Orders matching on the server; `orders` holds the newest page of them. */
+  /** Orders matching the filters on the server. */
   total: number
   isLoading: boolean
   filters: OrderFilters
   onFiltersChange: (filters: OrderFilters) => void
+  search: string
+  onSearchChange: (search: string) => void
+  sort: OrderSort
+  onSortChange: (sort: OrderSort) => void
+  hasMore: boolean
+  isLoadingMore: boolean
+  onLoadMore: () => void
   onRefresh: () => void
   /** Buttons in the frame header, like the block's "Add customer" button. */
   headerActions?: ReactNode
 }) {
-  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 25 })
-  const [sorting, setSorting] = useState<SortingState>([])
-  const [searchQuery, setSearchQuery] = useState('')
   const [columnOrder, setColumnOrder] = useState<string[]>(columns.map((c) => c.id as string))
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>({})
-
-  const tierCounts = useMemo(() => countBy(orders, (o) => o.tier), [orders])
-  const statusCounts = useMemo(() => countBy(orders, (o) => o.status), [orders])
-
-  const filteredData = useMemo(() => {
-    const searchLower = searchQuery.trim().toLowerCase()
-    return orders.filter(
-      (o) =>
-        (!filters.tiers.length || (o.tier != null && filters.tiers.includes(o.tier))) &&
-        (!filters.statuses.length || filters.statuses.includes(o.status)) &&
-        (!searchLower || orderSearchBlob(o).includes(searchLower)),
-    )
-  }, [orders, searchQuery, filters])
-
-  // Back to the first page whenever the search or a filter changes (also from the sidebar).
-  const filterKey = JSON.stringify([searchQuery, filters])
-  const [lastFilterKey, setLastFilterKey] = useState(filterKey)
-  if (filterKey !== lastFilterKey) {
-    setLastFilterKey(filterKey)
-    setPagination((current) => ({ ...current, pageIndex: 0 }))
-  }
+  const sorting = toSorting(sort)
 
   const table = useTable({
     features: dataGridFeatures,
     columns,
-    data: filteredData,
-    pageCount: Math.ceil(filteredData.length / pagination.pageSize),
+    data: orders,
     getRowId: (row) => row.id,
-    state: { pagination, sorting, columnOrder, columnVisibility },
-    autoResetPageIndex: false,
+    // Every loaded order on one page: the server sorts and pages.
+    state: {
+      pagination: { pageIndex: 0, pageSize: Math.max(orders.length, 1) },
+      sorting,
+      columnOrder,
+      columnVisibility,
+    },
+    manualSorting: true,
+    manualPagination: true,
+    pageCount: 1,
     onColumnOrderChange: setColumnOrder,
     onColumnVisibilityChange: setColumnVisibility,
-    onPaginationChange: setPagination,
-    onSortingChange: setSorting,
+    onSortingChange: (updater) =>
+      onSortChange(toSort(typeof updater === 'function' ? updater(sorting) : updater)),
   })
 
   const handleExport = () => {
-    const blob = new Blob([ordersToCsv(filteredData)], { type: 'text/csv;charset=utf-8' })
+    const blob = new Blob([ordersToCsv(orders)], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
     link.download = `orders-${new Date().toISOString().slice(0, 10)}.csv`
     link.click()
     URL.revokeObjectURL(url)
-    toast.success('CSV exported', { description: `${filteredData.length} orders` })
+    toast.success('CSV exported', { description: `${orders.length} loaded orders` })
   }
+
+  const filtered =
+    search.length > 0 ||
+    filters.tiers.length > 0 ||
+    filters.statuses.length > 0 ||
+    filters.branches.length > 0
 
   return (
     <TooltipProvider delayDuration={200}>
       <ReuiDataGrid
         table={table}
-        recordCount={filteredData.length}
+        recordCount={orders.length}
         isLoading={isLoading}
         emptyMessage={
-          orders.length === 0
-            ? 'No orders yet.'
-            : 'No orders match the search or filters. Clear the filters to see all orders.'
+          filtered
+            ? 'No orders match the search or filters. Clear the filters to see all orders.'
+            : 'No orders yet.'
         }
         tableLayout={{
           columnsPinnable: true,
@@ -330,7 +344,7 @@ export function OrdersDataGrid({
             <div className="flex flex-col gap-0.5">
               <FrameTitle className="text-balance">Orders</FrameTitle>
               <FrameDescription className="text-xs text-pretty">
-                {filteredData.length} / {total} orders scored for failed-delivery risk
+                {total} orders{filtered ? ' match' : ''}, scored for failed-delivery risk
               </FrameDescription>
             </div>
             {headerActions && <div className="flex flex-wrap items-center gap-2">{headerActions}</div>}
@@ -338,12 +352,11 @@ export function OrdersDataGrid({
           <FramePanel className="bg-card p-0! shadow-none!">
             <div className="px-4 py-3">
               <Toolbar
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
+                key={search}
+                search={search}
+                onSearchChange={onSearchChange}
                 filters={filters}
                 onFiltersChange={onFiltersChange}
-                tierCounts={tierCounts}
-                statusCounts={statusCounts}
                 onRefresh={onRefresh}
                 onExport={handleExport}
               />
@@ -353,13 +366,16 @@ export function OrdersDataGrid({
               <DataGridTable />
             </DataGridScrollArea>
           </FramePanel>
-          <FrameFooter>
-            <DataGridPagination
-              info="{from}–{to} of {count} orders"
-              rowsPerPageLabel="Orders per page"
-              previousPageLabel="Previous page"
-              nextPageLabel="Next page"
-            />
+          <FrameFooter className="flex-row items-center justify-between gap-3">
+            <span className="text-xs text-muted-foreground tabular-nums">
+              Showing {orders.length} of {total}
+            </span>
+            {hasMore && (
+              <Button variant="outline" size="sm" onClick={onLoadMore} disabled={isLoadingMore}>
+                {isLoadingMore && <Spinner data-icon="inline-start" />}
+                Load more
+              </Button>
+            )}
           </FrameFooter>
         </Frame>
       </ReuiDataGrid>

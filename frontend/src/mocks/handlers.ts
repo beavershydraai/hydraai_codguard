@@ -65,6 +65,7 @@ on('GET', '/api/v1/orders', ({ url }) => {
   const query: NonNullable<ListOrdersData['query']> = {
     status: p.getAll('status') as OrderStatus[],
     tier: p.getAll('tier') as RiskTier[],
+    branch: p.getAll('branch'),
     q: p.get('q'),
     placed_from: p.get('placed_from'),
     placed_to: p.get('placed_to'),

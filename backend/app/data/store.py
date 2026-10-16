@@ -9,6 +9,7 @@ import hashlib
 import os
 import uuid
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from functools import lru_cache
 
@@ -20,6 +21,17 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 @lru_cache
 def _client() -> firestore.Client:
     return firestore.Client(database=os.environ.get("FIRESTORE_DATABASE", "(default)"))
+
+
+@dataclass(frozen=True)
+class OrderFilters:
+    """What the inbox filters on in Firestore. Empty tuples filter nothing."""
+
+    branches: tuple[str, ...] = ()
+    statuses: tuple[str, ...] = ()
+    tiers: tuple[str, ...] = ()
+    placed_from: datetime | None = None
+    placed_to: datetime | None = None
 
 
 class OrderStore:
@@ -72,17 +84,67 @@ class OrderStore:
         )
         return [d.to_dict() for d in query.stream()]
 
-    def for_shop(
-        self, shop_id: str, placed_from: datetime | None = None, placed_to: datetime | None = None
-    ) -> list[dict]:
-        """A shop's orders, newest first (composite index: shop_id, placed_at desc;
-        see infra/firestore.indexes.json)."""
+    def _filtered(self, shop_id: str, filters: OrderFilters):
+        """The query for one shop's orders matching `filters`. Each list filter is an `in` (one
+        value: `==`); the placing-time range needs the placing time as the sort."""
         query = self.orders.where(filter=FieldFilter("shop_id", "==", shop_id))
-        if placed_from is not None:
-            query = query.where(filter=FieldFilter("placed_at", ">=", placed_from))
-        if placed_to is not None:
-            query = query.where(filter=FieldFilter("placed_at", "<=", placed_to))
-        query = query.order_by("placed_at", direction=firestore.Query.DESCENDING)
+        for field, values in (
+            ("branch_id", filters.branches),
+            ("status", filters.statuses),
+            ("tier", filters.tiers),
+        ):
+            if len(values) == 1:
+                query = query.where(filter=FieldFilter(field, "==", values[0]))
+            elif values:
+                query = query.where(filter=FieldFilter(field, "in", list(values)))
+        if filters.placed_from is not None:
+            query = query.where(filter=FieldFilter("placed_at", ">=", filters.placed_from))
+        if filters.placed_to is not None:
+            query = query.where(filter=FieldFilter("placed_at", "<=", filters.placed_to))
+        return query
+
+    def page(
+        self,
+        shop_id: str,
+        filters: OrderFilters,
+        *,
+        sort: str,
+        after: str | None,
+        limit: int,
+        fields: tuple[str, ...],
+    ) -> tuple[list[dict], bool]:
+        """Up to `limit` orders after the order `after`, sorted by `sort` (a field, `-` for
+        descending), with only `fields`, and whether more follow (composite indexes:
+        infra/firestore.indexes.json). Raises LookupError when `after` is not an order."""
+        direction = (
+            firestore.Query.DESCENDING if sort.startswith("-") else firestore.Query.ASCENDING
+        )
+        query = (
+            self._filtered(shop_id, filters)
+            .order_by(sort.lstrip("-"), direction=direction)
+            .order_by("__name__", direction=direction)
+            .select(list(fields))
+        )
+        if after:
+            snapshot = self.orders.document(after).get()
+            if not snapshot.exists:
+                raise LookupError(after)
+            query = query.start_after(snapshot)
+        docs = [d.to_dict() for d in query.limit(limit + 1).stream()]
+        return docs[:limit], len(docs) > limit
+
+    def count(self, shop_id: str, filters: OrderFilters) -> int:
+        """Orders matching `filters` (a count aggregation: no order is read)."""
+        result = self._filtered(shop_id, filters).count(alias="n").get()
+        return int(result[0][0].value)
+
+    def find(self, shop_id: str, field: str, values: list[str], fields: tuple[str, ...]):
+        """A shop's orders whose `field` is one of `values` (search by an exact value)."""
+        query = (
+            self.orders.where(filter=FieldFilter("shop_id", "==", shop_id))
+            .where(filter=FieldFilter(field, "in", values))
+            .select(list(fields))
+        )
         return [d.to_dict() for d in query.stream()]
 
     def all(self) -> list[dict]:

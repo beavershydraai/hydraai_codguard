@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
+from app.data.backfill_orders import changes
 from app.data.orders import order_document
 from app.data.store import get_store
 from app.main import create_app
@@ -26,6 +27,7 @@ def make(
     status=None,
     tier=None,
     score=None,
+    branch_id=None,
 ):
     order = OrderCreate(
         external_id=external_id,
@@ -42,6 +44,7 @@ def make(
         shop_id=shop_id,
         phone_key=b"test-key",
         now=T0 + timedelta(minutes=minutes),
+        branch_id=branch_id,
     )
     if status:
         doc["status"] = status
@@ -54,7 +57,11 @@ def make(
             "expected_loss_vnd": 1000,
             "chosen_by": "tier rule",
             "model_version": "test",
+            # A full run also has these: the inbox never reads them (it reads a projection).
+            "features": {"phone_orders_24h": 1},
+            "shap": {"available": True},
         }
+        doc["tier"], doc["risk_score"] = tier, score
     return doc
 
 
@@ -64,6 +71,7 @@ def api(monkeypatch):
     monkeypatch.setenv("ADMIN_PASSWORD", "admin12345")
     monkeypatch.setenv("AUTH_TOKEN_SECRET", "test-secret-at-least-32-bytes-long")
     monkeypatch.setenv("ADMIN_SHOP_ID", "shop_a")
+    monkeypatch.setenv("PHONE_HASH_KEY", "test-key")
     store = FakeStore()
     for doc in (
         make("ord_1", minutes=1, name="Nguyễn Văn An", external_id="FB-1", tier="low", score=10),
@@ -77,7 +85,7 @@ def api(monkeypatch):
             tier="high",
             score=70,
         ),
-        make("ord_3", minutes=3, name="Lê Đức", tier="very_high", score=95),
+        make("ord_3", minutes=3, name="Lê Đức", tier="very_high", score=95, branch_id="branch_SG"),
         make("ord_4", minutes=4, name="Phạm Unscored"),
         make("ord_b", shop_id="shop_b", minutes=5, name="Other shop", tier="high", score=80),
     ):
@@ -128,17 +136,44 @@ def test_filters_by_status_and_tier(api):
 @pytest.mark.parametrize(
     ("q", "expected"),
     [
-        ("nguyen", ["ord_1"]),  # without diacritics
-        ("ĐỨC", ["ord_3"]),
-        ("fb-1", ["ord_1"]),
-        ("0000000002", ["ord_2"]),  # local form of +84000000002
+        ("ord_3", ["ord_3"]),  # order ID
+        ("FB-1", ["ord_1"]),  # the shop's order ID
+        ("0000000002", ["ord_2"]),  # full phone, local form of +84000000002
         ("+84 000 000 002", ["ord_2"]),
-        ("000002", ["ord_2"]),  # part of a phone
-        ("zzz", []),
+        ("000002", []),  # part of a phone: phones are stored encrypted, matched by hash
+        ("Nguyễn Văn An", []),  # no text search in Firestore
+        ("ord_b", []),  # another shop's order
     ],
 )
-def test_search(api, q, expected):
+def test_search_finds_exact_values(api, q, expected):
     assert ids(api.get("/api/v1/orders", params={"q": q})) == expected
+
+
+def test_search_keeps_the_other_filters(api):
+    params = {"q": "0000000002", "status": "new"}
+    assert ids(api.get("/api/v1/orders", params=params)) == []
+
+
+def test_filters_by_branch(api):
+    assert ids(api.get("/api/v1/orders", params={"branch": "branch_SG"})) == ["ord_3"]
+    both = [("branch", "branch_SG"), ("branch", "branch_VN_HCM")]
+    assert ids(api.get("/api/v1/orders", params=both)) == ["ord_4", "ord_3", "ord_2", "ord_1"]
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"branch": "branch_XX"},
+        [("status", s) for s in ("new", "pending_review", "shipped", "delivered")]
+        + [("tier", t) for t in ("low", "medium", "high")]
+        + [("branch", b) for b in ("branch_SG", "branch_PH", "branch_VN_HN")],  # 36 > 30
+        {"placed_from": T0.isoformat(), "sort": "-risk_score"},
+    ],
+)
+def test_queries_firestore_cannot_serve_are_rejected(api, params):
+    response = api.get("/api/v1/orders", params=params)
+    assert response.status_code == 422, response.text
+    assert response.json()["code"] == "validation_error"
 
 
 def test_sorts(api):
@@ -179,7 +214,7 @@ def test_cursor_pages_through_all_orders(api):
     assert seen == ["ord_4", "ord_3", "ord_2", "ord_1"]
 
 
-@pytest.mark.parametrize("cursor", ["garbage", "MzpmYWtl"])
+@pytest.mark.parametrize("cursor", ["garbage", "MzpmYWtl", "eyJhZnRlciI6ICJvcmRfMSJ9"])
 def test_bad_or_foreign_cursor_is_a_validation_error(api, cursor):
     response = api.get("/api/v1/orders", params={"cursor": cursor})
     assert response.status_code == 422
@@ -206,3 +241,18 @@ def test_other_shops_and_missing_orders_are_not_found(api, order_id):
     response = api.get(f"/api/v1/orders/{order_id}")
     assert response.status_code == 404
     assert response.json()["code"] == "not_found"
+
+
+def test_sort_fields_are_stored_at_the_top_level():
+    doc = make("ord_x", price=200_000)
+    assert doc["cod_amount_vnd"] == 200_000 and doc["risk_score"] is None
+
+
+def test_the_backfill_adds_only_missing_sort_fields():
+    old = make("ord_y", price=150_000, tier="high", score=40)
+    del old["cod_amount_vnd"], old["risk_score"]
+    assert changes(old) == {"cod_amount_vnd": 150_000, "risk_score": 40}
+    unscored = make("ord_z")
+    del unscored["risk_score"]
+    assert changes(unscored) == {"risk_score": None}
+    assert changes(make("ord_w")) == {}

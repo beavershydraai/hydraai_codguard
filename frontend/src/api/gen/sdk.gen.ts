@@ -250,7 +250,7 @@ export const listPolicyVersions = <ThrowOnError extends boolean = false>(
 /**
  * Order inbox
  *
- * Filter by status and tier. The manual review queue is `status=pending_review`.
+ * One page of the shop's orders, filtered and sorted in the database; pass `next_cursor` back as `cursor` for the next page. Filter by branch, status, tier and placing time (a placing-time range needs `sort` by placing time). The manual review queue is `status=pending_review`. `q` finds orders by an exact order ID, shop order ID or full phone number; with `q` the result is one page.
  */
 export const listOrders = <ThrowOnError extends boolean = false>(
   options?: Options<ListOrdersData, ThrowOnError>,

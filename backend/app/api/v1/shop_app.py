@@ -18,7 +18,7 @@ from app.data.policies import PolicyStore, VersionTaken, get_policy_store
 from app.data.shops import ShopStore, get_shop_store, shop_view
 from app.data.store import OrderStore, get_store
 from app.decision import lifecycle
-from app.decision.inbox import InvalidCursor, order_page
+from app.decision.inbox import InvalidQuery, order_page
 from app.decision.views import order_detail, order_summary
 from app.risk import artifacts
 from app.schemas.calls import Call
@@ -160,13 +160,22 @@ OrderSort = Literal["-placed_at", "placed_at", "-risk_score", "-cod_amount_vnd",
     response_model=OrderPage,
     responses=problem_responses(401, 422),
     summary="Order inbox",
-    description="Filter by status and tier. The manual review queue is `status=pending_review`.",
+    description="One page of the shop's orders, filtered and sorted in the database; pass "
+    "`next_cursor` back as `cursor` for the next page. Filter by branch, status, tier and placing "
+    "time (a placing-time range needs `sort` by placing time). The manual review queue is "
+    "`status=pending_review`. `q` finds orders by an exact order ID, shop order ID or full "
+    "phone number; with `q` the result is one page.",
 )
 def list_orders(
     status_: Annotated[list[OrderStatus], Query(alias="status", default_factory=list)],
     tier: Annotated[list[RiskTier], Query(default_factory=list)],
+    branch: Annotated[
+        list[str],
+        Query(default_factory=list, description="Branch IDs (config/branches.yaml)."),
+    ],
     q: Annotated[
-        str | None, Query(max_length=100, description="Search buyer name, phone or external_id.")
+        str | None,
+        Query(max_length=100, description="Exact order ID, shop order ID or full phone number."),
     ] = None,
     placed_from: Annotated[datetime | None, Query()] = None,
     placed_to: Annotated[datetime | None, Query()] = None,
@@ -177,30 +186,27 @@ def list_orders(
     user: CurrentUser,
     store: Annotated[OrderStore, Depends(get_store)],
 ) -> OrderPage:
-    docs = store.for_shop(
-        user.shop_id,
-        placed_from=to_utc(placed_from) if placed_from else None,
-        placed_to=to_utc(placed_to) if placed_to else None,
-    )
     try:
         return order_page(
-            docs,
+            store,
+            user.shop_id,
             statuses=status_,
             tiers=tier,
+            branch_ids=branch,
             q=q,
-            placed_from=placed_from,
-            placed_to=placed_to,
+            placed_from=to_utc(placed_from) if placed_from else None,
+            placed_to=to_utc(placed_to) if placed_to else None,
             sort=sort,
             cursor=cursor,
             limit=limit,
         )
-    except InvalidCursor as exc:
+    except InvalidQuery as exc:
         raise ApiError(
             422,
             ErrorCode.VALIDATION_ERROR,
             "Validation error",
             str(exc),
-            errors=[{"loc": ["query", "cursor"], "msg": str(exc), "type": "value_error"}],
+            errors=[{"loc": ["query"], "msg": str(exc), "type": "value_error"}],
         ) from exc
 
 
