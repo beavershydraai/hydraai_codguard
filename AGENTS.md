@@ -45,7 +45,6 @@ frontend/       Shop web app + buyer confirmation page (Vite + React, served by 
   src/components/ui/, src/components/reui/  shadcn and ReUI registry components
   src/components/blocks/  ReUI blocks adapted to the app: app-shell-1 (layout), auth-4 (login), wizard-1 (onboarding), dashboard-1 (dashboard, backtest), data-grid-base-1 (orders), receipt-2 (order page), solution-agents-5 and card-2 (review queue), settings-3 (settings, demo), receipt-6 (buyer page)
   src/mocks/    In-browser mock API with seeded synthetic data, used while endpoints return 501
-ml/             Data prep, synthetic data generator, BigQuery ML SQL, backtest
 data/seed/      Pseudonymised demo data only
 infra/          Deployment and Firebase config; firestore.indexes.json lists the composite indexes the queries need
 scripts/        Demo reset, abuse simulation, call test runner
@@ -59,7 +58,8 @@ scripts/        Demo reset, abuse simulation, call test runner
 - Server state lives in TanStack Query through the generated `*Options` helpers; Zustand only holds client state (auth token, theme).
 - The login page calls `POST /api/v1/auth/login` (`src/lib/auth.ts`) and keeps the token in the Zustand auth store; a 401 from any call signs the user out.
 - AI: Gemini (signal extraction and reasons), Gemini Live API (voice), Agent Development Kit (orchestration)
-- Data: BigQuery ML boosted trees (risk model), BigQuery (training data, analytics), Firestore (app state)
+- Risk model: scikit-learn `HistGradientBoostingClassifier` with isotonic calibration and SHAP (`backend/app/risk/`), one per country, trained by the Cloud Run job `codguard-train` from Firestore and stored in Cloud Storage (`ai-codguard-ml`). No BigQuery.
+- Data: Firestore (orders and app state), Cloud Storage (models, monitoring reports)
 - Secrets in Secret Manager; region `asia-southeast1`. Exceptions: the Gemini assessment (`GEMINI_MODEL`, `gemini-3.1-flash-lite` in `ci.yml`) calls Vertex AI in `GOOGLE_CLOUD_LOCATION=global`, because that model is not served from `asia-southeast1`; Gemini Live API sessions run in `GEMINI_LIVE_LOCATION` (`us-central1`), because the Live API is not served from Asia regions.
 - Model IDs come from environment variables (`GEMINI_MODEL`, `GEMINI_LIVE_MODEL`). Never hard-code them.
 - Telephony: Asterisk and the call controller run on the VM `codguard-asterisk` (`us-central1`); the backend sends them call jobs on the Pub/Sub topic `call-jobs`. Read `docs/call-controller.md` before changing call code.
