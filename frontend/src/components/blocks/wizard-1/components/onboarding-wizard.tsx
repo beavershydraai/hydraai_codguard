@@ -1,7 +1,7 @@
 import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, LoaderCircleIcon } from 'lucide-react'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useCallback, useState } from 'react'
 
-import type { Policy, Shop } from '@/api/gen'
+import type { HistoryImportResult, Policy, Shop } from '@/api/gen'
 import { Badge } from '@/components/reui/badge'
 import {
   Stepper,
@@ -24,16 +24,20 @@ import { Separator } from '@/components/ui/separator'
 import { COUNTRY_LABELS, CURRENCY_SYMBOLS, DECISION_ACTION_LABELS, formatMoney, toMinor } from '@/lib/labels'
 
 import { type CountryValues, hoursValid, initialOnboardingValues, type OnboardingValues } from './data'
+import { HistoryStep, TrainStep } from './history-steps'
 
-// Shop onboarding (E7.1) in the three-step grammar of ReUI wizard-1: horizontal stepper,
-// per-step validation, and a review step. Every value starts at the default of its country
-// (one set of costs and contact hours per country where the shop has branches), so the shop can
-// finish without changing anything.
+// Shop onboarding (E7.1) in the grammar of ReUI wizard-1: horizontal stepper, per-step
+// validation, and a review step. Every value starts at the default of its country (one set of
+// costs and contact hours per country where the shop has branches), so the shop can finish
+// without changing anything. A new shop then uploads its past orders and its risk models learn
+// from them (history-steps.tsx); both steps can be skipped.
 
 const STEPS = [
   { id: 'shop', step: 1, title: 'Shop' },
-  { id: 'costs', step: 2, title: 'Costs & contact hours' },
-  { id: 'policy', step: 3, title: 'Policy & review' },
+  { id: 'costs', step: 2, title: 'Costs' },
+  { id: 'history', step: 3, title: 'History' },
+  { id: 'model', step: 4, title: 'Risk model' },
+  { id: 'policy', step: 5, title: 'Review' },
 ] as const
 
 /** Field errors by key: `name`, or `<country>.failed` / `<country>.hours`. */
@@ -67,6 +71,13 @@ export function OnboardingWizard({
   const [unlocked, setUnlocked] = useState(1)
   const [values, setValues] = useState(() => initialOnboardingValues(shop))
   const [errors, setErrors] = useState<Errors>({})
+  // History: undefined until uploaded or skipped; null when skipped. Training is skipped with it.
+  const [history, setHistory] = useState<HistoryImportResult | null | undefined>(undefined)
+  const [trained, setTrained] = useState(false)
+  const onTrained = useCallback(() => {
+    setTrained(true)
+    setErrors((e) => ({ ...e, model: undefined }))
+  }, [])
 
   const setName = (event: { target: { value: string } }) => {
     setValues((v) => ({ ...v, name: event.target.value }))
@@ -85,8 +96,16 @@ export function OnboardingWizard({
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const found = stepErrors(current, values)
+    if (current === 3 && history === undefined) found.history = 'Upload your past orders, or skip this step.'
+    if (current === 4 && history && !trained) found.model = 'Wait until your risk model has learned.'
     if (Object.values(found).some(Boolean)) {
       setErrors(found)
+      return
+    }
+    if (current === 3 && history === null) {
+      // No history: nothing to learn from yet, go straight to the review.
+      setUnlocked((u) => Math.max(u, 5))
+      setCurrent(5)
       return
     }
     if (current < STEPS.length) {
@@ -100,7 +119,7 @@ export function OnboardingWizard({
   const isLast = current === STEPS.length
 
   return (
-    <form onSubmit={handleSubmit} className="flex w-full max-w-xl flex-col" aria-label="Shop setup">
+    <form onSubmit={handleSubmit} className="flex w-full max-w-2xl flex-col" aria-label="Shop setup">
       <Card>
         <Stepper
           value={current}
@@ -236,6 +255,21 @@ export function OnboardingWizard({
               </StepperContent>
 
               <StepperContent value={3}>
+                <HistoryStep
+                  onDone={(result) => {
+                    setHistory(result)
+                    setErrors((e) => ({ ...e, history: undefined }))
+                  }}
+                />
+                {errors.history && <FieldError className="mt-3">{errors.history}</FieldError>}
+              </StepperContent>
+
+              <StepperContent value={4}>
+                <TrainStep onDone={onTrained} />
+                {errors.model && <FieldError className="mt-3">{errors.model}</FieldError>}
+              </StepperContent>
+
+              <StepperContent value={5}>
                 <div className="flex flex-col gap-4">
                   <p className="text-muted-foreground">
                     The default policy below works out of the box; change it any time in Settings.

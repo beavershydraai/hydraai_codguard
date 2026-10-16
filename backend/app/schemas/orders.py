@@ -366,6 +366,50 @@ class ImportRowError(ApiModel):
     message: str
 
 
+class HistoryCountry(ApiModel):
+    country: str
+    orders: int = Field(ge=0)
+    delivered: int = Field(ge=0)
+    failed: int = Field(
+        ge=0, description="Refused or unreachable: what the model learns as failed."
+    )
+    cancelled: int = Field(ge=0, description="Cancelled by the buyer before shipping.")
+
+
+class HistoryImportResult(ApiModel):
+    """What a history upload stored (onboarding)."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "received": 7520,
+                    "imported": 7518,
+                    "rejected_count": 2,
+                    "rejected": [
+                        {"row": 17, "field": "delivery_result", "message": "Use one of: …"}
+                    ],
+                    "countries": [
+                        {
+                            "country": "VN",
+                            "orders": 5010,
+                            "delivered": 4420,
+                            "failed": 410,
+                            "cancelled": 130,
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+
+    received: int = Field(ge=0, description="Rows read.")
+    imported: int = Field(ge=0, description="Past orders stored.")
+    rejected_count: int = Field(ge=0)
+    rejected: list[ImportRowError] = Field(description="The first 100 rejected rows.")
+    countries: list[HistoryCountry]
+
+
 class ImportResult(ApiModel):
     model_config = ConfigDict(
         json_schema_extra={

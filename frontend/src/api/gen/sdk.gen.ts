@@ -46,6 +46,9 @@ import type {
   ImportDeliveryOutcomesData,
   ImportDeliveryOutcomesErrors,
   ImportDeliveryOutcomesResponses,
+  ImportHistoryData,
+  ImportHistoryErrors,
+  ImportHistoryResponses,
   ImportOrdersData,
   ImportOrdersErrors,
   ImportOrdersResponses,
@@ -240,6 +243,31 @@ export const updatePolicy = <ThrowOnError extends boolean = false>(
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  })
+
+/**
+ * Import the shop's past orders with their delivery results (onboarding, owner only)
+ *
+ * CSV, UTF-8, up to 20,000 rows: the columns of the order import plus `branch_id`, `delivery_result` (delivered, refused, unreachable, carrier_issue, shop_issue or cancelled) and `outcome_at`; `external_id` is required. Rows are checked one by one and stored as finished orders; the next model update learns from them. Importing the same file again replaces the same orders.
+ */
+export const importHistory = <ThrowOnError extends boolean = false>(
+  options: Options<ImportHistoryData, ThrowOnError>,
+): RequestResult<ImportHistoryResponses, ImportHistoryErrors, ThrowOnError> =>
+  (options.client ?? client).post<ImportHistoryResponses, ImportHistoryErrors, ThrowOnError>({
+    ...formDataBodySerializer,
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/v1/shop/history',
+    ...options,
+    headers: {
+      'Content-Type': null,
       ...options.headers,
     },
   })

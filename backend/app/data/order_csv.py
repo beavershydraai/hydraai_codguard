@@ -43,10 +43,14 @@ class BadFile(ValueError):
     Answered with 400; a bad row is reported in `rejected` instead."""
 
 
-def read_rows(data: bytes) -> list[dict[str, str]]:
-    """Data rows keyed by lower-case column name; blank rows are dropped."""
-    if len(data) > MAX_BYTES:
-        raise BadFile(f"The file is larger than {MAX_BYTES // (1024 * 1024)} MB.")
+def read_rows(
+    data: bytes, *, max_rows: int | None = None, max_bytes: int | None = None
+) -> list[dict[str, str]]:
+    """Data rows keyed by lower-case column name; blank rows are dropped. The limits default to
+    the order import's (MAX_ROWS, MAX_BYTES)."""
+    max_rows, max_bytes = max_rows or MAX_ROWS, max_bytes or MAX_BYTES
+    if len(data) > max_bytes:
+        raise BadFile(f"The file is larger than {max_bytes // (1024 * 1024)} MB.")
     try:
         text = data.decode("utf-8-sig")
     except UnicodeDecodeError as error:
@@ -64,8 +68,8 @@ def read_rows(data: bytes) -> list[dict[str, str]]:
             continue
         cells += [""] * (len(header) - len(cells))
         rows.append({name: cells[i].strip() for i, name in enumerate(header)})
-        if len(rows) > MAX_ROWS:
-            raise BadFile(f"The file has more than {MAX_ROWS:,} orders.")
+        if len(rows) > max_rows:
+            raise BadFile(f"The file has more than {max_rows:,} orders.")
     return rows
 
 

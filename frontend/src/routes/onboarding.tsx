@@ -32,7 +32,7 @@ function OnboardingPage() {
     onSuccess: (saved) => {
       markDone(saved.id)
       void invalidate(queryClient, 'getShop')
-      toast.success('Your shop is ready', { description: 'New orders are scored as soon as they arrive.' })
+      toast.success("You're all set", { description: 'New orders are scored as soon as they arrive.' })
       void navigate({ to: '/' })
     },
     onError: (error) => toast.error('Could not save', { description: problemMessage(error) }),
@@ -50,7 +50,7 @@ function OnboardingPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Set up your shop</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            3 steps, about 1 minute. Every value already has a default.
+            5 steps, about 5 minutes with your order history. Every value already has a default.
           </p>
         </div>
       </div>

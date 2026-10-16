@@ -253,7 +253,7 @@ jobs:
             --update-env-vars "$DATA_ENV,$GEMINI_ENV,$APP_ENV,$CALLS_ENV,AUTH_TOKEN_SECRET=$AUTH_TOKEN_SECRET" \
             --update-env-vars "ADMIN_USERNAME=$DEMO_ADMIN_USERNAME,ADMIN_PASSWORD=$DEMO_ADMIN_PASSWORD" \
             --remove-env-vars MODEL_URI,CALL_TARGET_OVERRIDE \
-            --update-secrets "PHONE_HASH_KEY=phone-hash-key-synthetic:latest,PHONE_ENC_KEY=phone-enc-key-synthetic:latest,INTAKE_API_KEYS=intake-api-keys:latest,CALL_TARGET_OVERRIDE=call-target-override:latest,CALL_ALLOWED_PHONES=call-allowed-phones:latest" --quiet
+            --update-secrets "PHONE_HASH_KEY=phone-hash-key-synthetic:latest,PHONE_ENC_KEY=phone-enc-key-synthetic:latest,SHOP_ACCOUNTS=shop-accounts:latest,INTAKE_API_KEYS=intake-api-keys:latest,CALL_TARGET_OVERRIDE=call-target-override:latest,CALL_ALLOWED_PHONES=call-allowed-phones:latest" --quiet
           URL=$(gcloud run services describe "$SERVICE" --project "$GCP_PROJECT_ID" \
             --region "$GCP_REGION" --format 'value(status.url)')
           echo "URL=$URL" >> "$GITHUB_ENV"

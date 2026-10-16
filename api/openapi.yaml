@@ -285,6 +285,84 @@ paths:
                   type: string_pattern_mismatch
       security:
       - bearerAuth: []
+  /api/v1/shop/history:
+    post:
+      tags:
+      - shop
+      summary: Import the shop's past orders with their delivery results (onboarding, owner only)
+      description: 'CSV, UTF-8, up to 20,000 rows: the columns of the order import plus `branch_id`, `delivery_result`
+        (delivered, refused, unreachable, carrier_issue, shop_issue or cancelled) and `outcome_at`; `external_id`
+        is required. Rows are checked one by one and stored as finished orders; the next model update
+        learns from them. Importing the same file again replaces the same orders.'
+      operationId: import_history
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_import_history'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryImportResult'
+        '400':
+          description: Malformed request or file.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Bad request
+                status: 400
+                code: validation_error
+                detail: CSV header is missing the buyer_phone column.
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Unauthorized
+                status: 401
+                code: unauthorized
+                detail: Missing or expired access token.
+        '403':
+          description: Authenticated but not allowed (e.g. staff changing policy).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Forbidden
+                status: 403
+                code: forbidden
+                detail: Only the shop owner can change the policy.
+        '422':
+          description: Request body or parameters failed validation. See `errors`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example: &id001
+                type: about:blank
+                title: Validation error
+                status: 422
+                code: validation_error
+                errors:
+                - loc:
+                  - body
+                  - buyer_phone
+                  msg: String should match pattern '^\+?[0-9]{9,15}$'
+                  type: string_pattern_mismatch
+      security:
+      - bearerAuth: []
   /api/v1/shop/policy/versions:
     get:
       tags:
@@ -662,17 +740,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
-              example: &id001
-                type: about:blank
-                title: Validation error
-                status: 422
-                code: validation_error
-                errors:
-                - loc:
-                  - body
-                  - buyer_phone
-                  msg: String should match pattern '^\+?[0-9]{9,15}$'
-                  type: string_pattern_mismatch
+              example: *id001
     patch:
       tags:
       - orders
@@ -2064,6 +2132,17 @@ components:
       required:
       - file
       title: Body_import_delivery_outcomes
+    Body_import_history:
+      properties:
+        file:
+          type: string
+          contentMediaType: application/octet-stream
+          title: File
+          description: CSV, UTF-8.
+      type: object
+      required:
+      - file
+      title: Body_import_history
     Body_import_orders:
       properties:
         file:
@@ -3618,6 +3697,89 @@ components:
 
         prepaid_skip: fully prepaid, not scored · invalid_phone: invalid phone, held for review ·
         high_return_phone: phone with a ≥75% return rate over at least 3 orders, Very High
+    HistoryCountry:
+      properties:
+        country:
+          type: string
+          title: Country
+        orders:
+          type: integer
+          minimum: 0.0
+          title: Orders
+        delivered:
+          type: integer
+          minimum: 0.0
+          title: Delivered
+        failed:
+          type: integer
+          minimum: 0.0
+          title: Failed
+          description: 'Refused or unreachable: what the model learns as failed.'
+        cancelled:
+          type: integer
+          minimum: 0.0
+          title: Cancelled
+          description: Cancelled by the buyer before shipping.
+      additionalProperties: false
+      type: object
+      required:
+      - country
+      - orders
+      - delivered
+      - failed
+      - cancelled
+      title: HistoryCountry
+    HistoryImportResult:
+      properties:
+        received:
+          type: integer
+          minimum: 0.0
+          title: Received
+          description: Rows read.
+        imported:
+          type: integer
+          minimum: 0.0
+          title: Imported
+          description: Past orders stored.
+        rejected_count:
+          type: integer
+          minimum: 0.0
+          title: Rejected Count
+        rejected:
+          items:
+            $ref: '#/components/schemas/ImportRowError'
+          type: array
+          title: Rejected
+          description: The first 100 rejected rows.
+        countries:
+          items:
+            $ref: '#/components/schemas/HistoryCountry'
+          type: array
+          title: Countries
+      additionalProperties: false
+      type: object
+      required:
+      - received
+      - imported
+      - rejected_count
+      - rejected
+      - countries
+      title: HistoryImportResult
+      description: What a history upload stored (onboarding).
+      examples:
+      - countries:
+        - cancelled: 130
+          country: VN
+          delivered: 4420
+          failed: 410
+          orders: 5010
+        imported: 7518
+        received: 7520
+        rejected:
+        - field: delivery_result
+          message: 'Use one of: …'
+          row: 17
+        rejected_count: 2
     ImportResult:
       properties:
         received:
