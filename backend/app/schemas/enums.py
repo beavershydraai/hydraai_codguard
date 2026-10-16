@@ -85,6 +85,29 @@ class ContactChannel(StrEnum):
     DEPOSIT_REQUEST = "deposit_request"
 
 
+class ReviewReason(StrEnum):
+    """Why an order waits in Pending review, from what is stored on it.
+
+    suggested: a contact the engine suggests waits for the shop to accept it ·
+    invalid_phone: hard rule, the buyer cannot be contacted · no_answer_link: no answer to the
+    confirmation link · no_answer_call: no answer to the AI calls · deposit_unpaid: the deposit
+    was not paid in time · call_unclear: the buyer spoke on the AI call but did not confirm, change
+    or cancel · wrong_person: the AI call reached someone else · attempts_used: every AI call
+    attempt is used · staff: a person held the order · other: held by the policy, or a step failed
+    """
+
+    SUGGESTED = "suggested"
+    INVALID_PHONE = "invalid_phone"
+    NO_ANSWER_LINK = "no_answer_link"
+    NO_ANSWER_CALL = "no_answer_call"
+    DEPOSIT_UNPAID = "deposit_unpaid"
+    CALL_UNCLEAR = "call_unclear"
+    WRONG_PERSON = "wrong_person"
+    ATTEMPTS_USED = "attempts_used"
+    STAFF = "staff"
+    OTHER = "other"
+
+
 class ContactBlockReason(StrEnum):
     """Why the buyer was not contacted.
 

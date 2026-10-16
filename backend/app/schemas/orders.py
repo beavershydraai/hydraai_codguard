@@ -7,7 +7,14 @@ from pydantic import ConfigDict, Field
 
 from app.schemas.calls import Call, ContactAttempt
 from app.schemas.common import Address, ApiModel, Currency, Phone, Vnd
-from app.schemas.enums import DecisionAction, OrderStatus, RiskTier, SalesChannel
+from app.schemas.enums import (
+    DecisionAction,
+    HardRule,
+    OrderStatus,
+    ReviewReason,
+    RiskTier,
+    SalesChannel,
+)
 from app.schemas.scoring import Decision, RiskScore
 
 _ITEM_EXAMPLE = {
@@ -134,7 +141,27 @@ class OrderSummary(ApiModel):
                     "current_action": "ai_call",
                     "placed_at": "2026-10-09T10:15:00+07:00",
                     "updated_at": "2026-10-09T10:16:31+07:00",
-                }
+                },
+                {
+                    "id": "ord_02",
+                    "external_id": "TT-20261016-0007",
+                    "channel": "tiktok",
+                    "buyer_name": "Trần Thị B",
+                    "buyer_phone": "+84000000002",
+                    "is_gift": False,
+                    "total_vnd": 4530000,
+                    "cod_amount_vnd": 4530000,
+                    "status": "pending_review",
+                    "tier": "high",
+                    "risk_score": 24,
+                    "current_action": "hold_for_review",
+                    "review_reason": "call_unclear",
+                    "hard_rules": [],
+                    "contact_summary": "The buyer confirmed being the buyer and agreed while the "
+                    "items were read, then hung up before the address and total were confirmed.",
+                    "placed_at": "2026-10-16T21:00:23+07:00",
+                    "updated_at": "2026-10-16T21:01:27+07:00",
+                },
             ]
         }
     )
@@ -156,7 +183,18 @@ class OrderSummary(ApiModel):
     current_action: DecisionAction | None = None
     suggested_action: DecisionAction | None = Field(
         default=None,
-        description="An AI call waiting for the shop to confirm it (call automation).",
+        description="A contact waiting for the shop to accept it: automation is off, or an AI "
+        "call is outside the automation rules.",
+    )
+    review_reason: ReviewReason | None = Field(
+        default=None, description="Why the order waits in Pending review; null otherwise."
+    )
+    hard_rules: list[HardRule] = Field(
+        default_factory=list, description="Hard rules that fired on the latest score."
+    )
+    contact_summary: str | None = Field(
+        default=None,
+        description="The latest AI call, summarised for the shop by the agents (English).",
     )
     placed_at: datetime
     updated_at: datetime

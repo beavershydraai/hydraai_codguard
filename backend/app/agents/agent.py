@@ -154,7 +154,7 @@ async def assess_order(node_input: dict) -> dict:
     if pipe.assess:
         raw = await assessment.assess(deepcopy(node_input["order"] | fields), log=pipe.log, now=now)
     else:
-        raw = {"status": "skipped", "reasons": []}
+        raw = assessment.skipped(node_input["order"] | fields)
     result = AssessmentResult.model_validate(raw)
     # Over the daily budget the order goes on like `disabled`: the engine decides, without Gemini
     # reasons. Raising here held every later order of the day for review.

@@ -38,6 +38,7 @@ import {
   formatRelative,
   formatMoney,
   HARD_RULE_LABELS,
+  REVIEW_REASON_LABELS,
   SALES_CHANNEL_LABELS,
   SIGNAL_GROUP_LABELS,
 } from '@/lib/labels'
@@ -414,6 +415,15 @@ function DecisionPanel({
         </span>
       }
     >
+      {order.review_reason && !decision.suggested_action && (
+        <p className="rounded-lg bg-warning/10 p-3 text-sm">
+          <span className="font-medium">Why it is in review:</span>{' '}
+          {REVIEW_REASON_LABELS[order.review_reason]}
+          {order.contact_summary && (
+            <span className="text-muted-foreground"> · AI call: {order.contact_summary}</span>
+          )}
+        </p>
+      )}
       <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         <Metric label="Decided at" value={formatDateTime(decision.decided_at)} />
         <Metric label="Policy" value={`Version ${decision.policy_version}`} />

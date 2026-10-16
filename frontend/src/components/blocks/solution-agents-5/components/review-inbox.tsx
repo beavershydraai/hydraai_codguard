@@ -253,7 +253,8 @@ function ReviewQueue({
   const [search, setSearch] = useState('')
   const [lateOnly, setLateOnly] = useState(false)
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 })
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'updated_at', desc: false }])
+  // Newest first, so an order that just arrived is on the first page.
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'updated_at', desc: true }])
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const now = useNow()
 

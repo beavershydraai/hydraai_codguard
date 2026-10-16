@@ -12,7 +12,15 @@ import {
 import { TierBadge } from '@/components/tier-badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { DECISION_ACTION_LABELS, formatRelative, formatMoney, SALES_CHANNEL_LABELS } from '@/lib/labels'
+import { Badge } from '@/components/reui/badge'
+import {
+  DECISION_ACTION_LABELS,
+  formatMoney,
+  formatRelative,
+  HARD_RULE_LABELS,
+  REVIEW_REASON_LABELS,
+  SALES_CHANNEL_LABELS,
+} from '@/lib/labels'
 import { cn } from '@/lib/utils'
 
 export type ReviewDecision = Extract<DecisionAction, 'ship_now' | 'require_deposit' | 'cancel'>
@@ -90,27 +98,42 @@ export function createReviewColumns({
       size: 130,
     },
     {
-      id: 'held_by',
-      accessorFn: (o) => o.current_action ?? '',
-      header: ({ column }) => <DataGridColumnHeader column={column} title="Current step" />,
-      cell: ({ row }) => (
-        <div className="flex flex-col gap-0.5">
-          <span className="text-sm">
-            {row.original.current_action ? DECISION_ACTION_LABELS[row.original.current_action] : '—'}
-          </span>
-          {row.original.suggested_action && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-medium text-primary">
-                Suggested: {DECISION_ACTION_LABELS[row.original.suggested_action]}
-              </span>
-              <Button size="xs" variant="outline" onClick={() => onAccept(row.original)}>
-                Accept
-              </Button>
-            </div>
-          )}
-        </div>
-      ),
-      size: 190,
+      // Why the order is here: what happened (rules), the hard rule that fired, and the AI's
+      // summary of the last call. The full reasons are on the order page.
+      id: 'review_reason',
+      accessorFn: (o) => o.review_reason ?? '',
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Review reason" />,
+      cell: ({ row }) => {
+        const o = row.original
+        return (
+          <div className="flex min-w-0 flex-col gap-1 py-0.5">
+            {o.suggested_action ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-medium text-primary">
+                  Suggested: {DECISION_ACTION_LABELS[o.suggested_action]}
+                </span>
+                <Button size="xs" variant="outline" onClick={() => onAccept(o)}>
+                  Accept
+                </Button>
+              </div>
+            ) : (
+              <span className="text-sm">{o.review_reason ? REVIEW_REASON_LABELS[o.review_reason] : '—'}</span>
+            )}
+            {(o.hard_rules ?? []).map((rule) => (
+              <Badge key={rule} variant="destructive-light" size="sm" className="w-fit">
+                Hard rule: {HARD_RULE_LABELS[rule]}
+              </Badge>
+            ))}
+            {o.contact_summary && (
+              <p className="line-clamp-2 text-xs text-muted-foreground" title={o.contact_summary}>
+                AI call: {o.contact_summary}
+              </p>
+            )}
+          </div>
+        )
+      },
+      enableSorting: false,
+      size: 380,
     },
     {
       id: 'updated_at',

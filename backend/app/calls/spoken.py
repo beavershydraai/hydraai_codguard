@@ -94,11 +94,26 @@ def en_number(n: int) -> str:
     return " ".join(words)
 
 
-def amount(vnd: int, language: CallLanguage) -> str:
-    """450000 -> "bốn trăm năm mươi nghìn đồng" / "four hundred fifty thousand dong"."""
-    if language == CallLanguage.EN:
-        return f"{en_number(vnd)} dong"
-    return f"{vi_number(vnd)} đồng"
+# Currency words (Vietnamese, English) for a whole unit and a hundredth of one.
+CURRENCY_WORDS = {
+    "VND": (("đồng", "dong"), None),
+    "SGD": (("đô la Singapore", "Singapore dollars"), ("xu", "cents")),
+    "PHP": (("peso Philippines", "Philippine pesos"), ("centavo", "centavos")),
+}
+
+
+def amount(minor: int, language: CallLanguage, currency: str = "VND") -> str:
+    """An amount in the currency's minor unit, spoken: 450000 VND -> "bốn trăm năm mươi nghìn
+    đồng" / "four hundred fifty thousand dong"; 4530 SGD -> "forty-five Singapore dollars and
+    thirty cents"."""
+    (unit_vi, unit_en), cents = CURRENCY_WORDS[currency]
+    en = language == CallLanguage.EN
+    number = en_number if en else vi_number
+    whole, part = divmod(minor, 100) if cents else (minor, 0)
+    spoken = f"{number(whole)} {unit_en if en else unit_vi}"
+    if part:
+        spoken += f" {'and ' if en else ''}{number(part)} {cents[1] if en else cents[0]}"
+    return spoken
 
 
 def _part_of_day(hour: int, language: CallLanguage) -> str:

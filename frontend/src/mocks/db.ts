@@ -97,6 +97,16 @@ export function summary(order: OrderDetail): OrderSummary {
     risk_score: order.risk_score,
     current_action: order.current_action,
     suggested_action: order.decision?.suggested_action ?? null,
+    review_reason:
+      order.status !== 'pending_review'
+        ? null
+        : order.decision?.suggested_action
+          ? 'suggested'
+          : order.decision?.decided_by === 'staff'
+            ? 'staff'
+            : 'other',
+    hard_rules: order.current_score?.hard_rules ?? [],
+    contact_summary: order.calls?.findLast((c) => c.summary_vi)?.summary_vi ?? null,
     placed_at: order.placed_at,
     updated_at: order.updated_at,
   }

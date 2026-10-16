@@ -231,6 +231,7 @@ export type {
   RespondConfirmationErrors,
   RespondConfirmationResponse,
   RespondConfirmationResponses,
+  ReviewReason,
   RiskScore,
   RiskTier,
   Role,

@@ -3,7 +3,13 @@
 from app.data import branches
 from app.data.phone import decrypt_phone
 from app.decision.lifecycle import allowed_overrides
-from app.schemas.enums import HardRule
+from app.schemas.enums import (
+    CallOutcome,
+    ContactBlockReason,
+    HardRule,
+    OrderStatus,
+    ReviewReason,
+)
 from app.schemas.orders import OrderDetail, OrderEvent, OrderSummary
 from app.schemas.scoring import RiskScore
 
@@ -14,10 +20,62 @@ _ENGINE_HARD_RULES = {
 }
 
 
+def _hard_rules(raw: dict) -> list[HardRule]:
+    rule = _ENGINE_HARD_RULES.get(raw.get("chosen_by"))
+    return raw.get("hard_rules", [rule] if rule else [])
+
+
+# The order's first contact (`intervention`) when the buyer never answered it.
+_NO_ANSWER = {
+    "link": ReviewReason.NO_ANSWER_LINK,
+    "call": ReviewReason.NO_ANSWER_CALL,
+    "deposit": ReviewReason.DEPOSIT_UNPAID,
+}
+
+
+def review_reason(doc: dict) -> ReviewReason | None:
+    """Why the order waits in Pending review, from what is stored on it: the decision, the hard
+    rule, the last AI call and the contacts made. Null for an order in any other status."""
+    if doc.get("status") != OrderStatus.PENDING_REVIEW:
+        return None
+    decision = doc.get("decision") or {}
+    if decision.get("suggested_action"):
+        return ReviewReason.SUGGESTED
+    if decision.get("decided_by") == "staff":
+        return ReviewReason.STAFF
+    if (doc.get("scoring") or {}).get("chosen_by") == "hard rule: invalid phone":
+        return ReviewReason.INVALID_PHONE
+    if ContactBlockReason.ATTEMPTS_EXHAUSTED in (decision.get("block_reasons") or []):
+        return ReviewReason.ATTEMPTS_USED
+    calls = doc.get("calls") or []
+    outcome = calls[-1].get("outcome") if calls else None
+    if outcome == CallOutcome.UNCLEAR:
+        return ReviewReason.CALL_UNCLEAR
+    if outcome == CallOutcome.WRONG_PERSON:
+        return ReviewReason.WRONG_PERSON
+    if (doc.get("attempts") or {}).get("ai_call"):  # the last contact was an AI call
+        return ReviewReason.NO_ANSWER_CALL
+    first = (doc.get("intervention") or {}).get("contact_action")
+    return _NO_ANSWER.get(first, ReviewReason.OTHER)
+
+
+def contact_summary(doc: dict) -> str | None:
+    """The summary of the latest AI call that has one."""
+    calls = reversed(doc.get("calls") or [])
+    return next((c["summary_vi"] for c in calls if c.get("summary_vi")), None)
+
+
+def _review_fields(doc: dict) -> dict:
+    return {
+        "review_reason": review_reason(doc),
+        "hard_rules": _hard_rules(doc.get("scoring") or {}),
+        "contact_summary": contact_summary(doc),
+    }
+
+
 def _risk_score(order_id: str, raw: dict, fail_cost: int) -> RiskScore:
     """Expose scoring inputs only through the API's signal and reason fields."""
-    rule = _ENGINE_HARD_RULES.get(raw.get("chosen_by"))
-    hard_rules = raw.get("hard_rules", [rule] if rule else [])
+    hard_rules = _hard_rules(raw)
     skipped = raw.get("status") == "skipped" or HardRule.PREPAID_SKIP in hard_rules
     return RiskScore(
         id=raw.get("id") or f"scr_{order_id}_{raw['scored_at']}",
@@ -77,6 +135,7 @@ def order_summary(doc: dict) -> OrderSummary:
         risk_score=current.risk_score if current else None,
         current_action=decision["action"] if decision else None,
         suggested_action=(decision or {}).get("suggested_action"),
+        **_review_fields(doc),
     )
 
 
@@ -104,6 +163,9 @@ SUMMARY_PROJECTION = (
     "shipping_fee_vnd",
     "prepaid_vnd",
     "decision",
+    "calls",
+    "attempts",
+    "intervention.contact_action",
     *(
         f"scoring.{name}"
         for name in (
@@ -168,6 +230,7 @@ def order_detail(doc: dict) -> OrderDetail:
         risk_score=current.risk_score if current else None,
         current_action=decision["action"] if decision else None,
         suggested_action=(decision or {}).get("suggested_action"),
+        **_review_fields(doc),
         current_score=current,
         score_history=sorted(runs, key=lambda run: run.scored_at, reverse=True),
         decision=decision,

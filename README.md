@@ -49,7 +49,7 @@ COD Guard targets **social-commerce and website sellers** (Facebook, TikTok live
 
 1. **Order in:** a COD order arrives by file import or through the order intake API.
 2. **Score:** COD Guard estimates the probability of failed delivery, assigns a risk tier and calculates the expected loss in VND.
-3. **Explain:** Gemini writes up to 3 short reasons in plain English, based only on signals actually present on the order.
+3. **Explain:** two Gemini agents write up to 3 short reasons in plain English from the business rules that fire, the strongest model signals and, after a call, what was said; code keeps only reasons that cite real evidence with matching numbers. After an AI call they also summarise it for the shop.
 4. **Act:** the decision engine picks the cheapest action worth taking, based on the shop's policy and the expected loss.
 5. **Verify:** if needed, an AI voice assistant (Gemini Live) or a confirmation page lets the buyer confirm, edit or cancel the order.
 6. **Learn:** delivery outcomes flow back to update phone history and improve the model.
@@ -129,7 +129,7 @@ COD Guard evaluates each order in three layers:
    - invalid phone number → held for review;
    - phone with a ≥75% return rate over at least 3 past orders → Very High.
 2. **Statistical model** (scikit-learn gradient boosting, `backend/app/risk/`) turns signals into a probability of failed delivery.
-3. **Gemini** extracts signals from unstructured text (address, sales conversation) and writes the reasons. Gemini **never** sets the score.
+3. **Gemini** writes the reasons from verified evidence and summarises AI calls. Gemini **never** sets the score, the tier or the action.
 
 ### Signals
 
