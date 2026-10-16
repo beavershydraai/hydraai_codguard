@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.agents.log import get_decision_log
+from app.data.phone import decrypt_phone
 from app.data.store import get_store
 from app.main import create_app
 from app.risk import artifacts, engine
@@ -120,7 +121,7 @@ def test_intake_stores_a_normalised_order(api):
     assert body["status"] == "new" and body["duplicate"] is False
     doc = store.docs[body["order_id"]]
     assert doc["shop_id"] == "shop_a"
-    assert doc["buyer_phone"] == "+84000000001"
+    assert decrypt_phone(doc["buyer_phone"]) == "+84000000001"
     assert doc["buyer_phone_hash"]
 
 
@@ -146,7 +147,7 @@ def test_the_key_sets_the_branch_country_and_currency(api):
     sg = ORDER | {"external_id": "B-2", "buyer_phone": "+6500000042", "currency": "SGD"}
     doc = store.docs[post(client, "key-sg", sg).json()["order_id"]]
     assert (doc["branch_id"], doc["country"], doc["currency"]) == ("branch_SG", "SG", "SGD")
-    assert doc["buyer_phone"] == "+6500000042" and doc["buyer_phone_hash"]
+    assert decrypt_phone(doc["buyer_phone"]) == "+6500000042" and doc["buyer_phone_hash"]
     assert doc["skip_agents"] is True
 
 

@@ -42,11 +42,11 @@ One document per order. It is a top-level collection with a `shop_id` field rath
 | `channel` | string | `OrderCreate.channel` | One of `SalesChannel` |
 | `placed_at` | timestamp | `OrderCreate.placed_at` | Stored in UTC. A time without a zone is Vietnam time (UTC+7) |
 | `buyer_name` | string | `OrderCreate.buyer_name` | Shown in the app; never copied into snapshots |
-| `buyer_phone` | string | `OrderCreate.buyer_phone` | E.164 for the branch's country (`+84…`, `+65…`, `+63…`). Kept as received if it cannot be normalised |
+| `buyer_phone` | string | `OrderCreate.buyer_phone` | Encrypted (`enc:v1:…`, AES-GCM with `PHONE_ENC_KEY`) E.164 for the branch's country (`+84…`, `+65…`, `+63…`); kept as received, still encrypted, if it cannot be normalised. The API decrypts it for the shop |
 | `buyer_phone_hash` | string \| null | derived | HMAC-SHA256 of the E.164 number with a secret key. Null means the phone is invalid |
 | `is_gift` | bool | `OrderCreate.is_gift` | |
 | `recipient_name` | string \| null | `OrderCreate.recipient_name` | |
-| `recipient_phone` | string \| null | `OrderCreate.recipient_phone` | E.164 |
+| `recipient_phone` | string \| null | `OrderCreate.recipient_phone` | E.164, encrypted like the buyer phone |
 | `recipient_phone_hash` | string \| null | derived | Same hashing as the buyer phone |
 | `address` | map | `OrderCreate.address` | `raw`, `street`, `ward`, `province` (2025 two-level units) |
 | `items` | array of map | `OrderCreate.items` | `sku`, `name`, `variant`, `quantity`, `unit_price_vnd` |
@@ -85,6 +85,7 @@ One document per order. It is a top-level collection with a `shop_id` field rath
   scoring fallback, and documents without an intervention use their top-level assignment metadata.
 - Phone history query: `buyer_phone_hash == h and placed_at < t`. It needs a composite index on
   (`buyer_phone_hash`, `placed_at`).
+- Phones are stored encrypted and matched by hash. Encryption uses a random nonce, so the same number never gives the same ciphertext and cannot be looked up; the keyed hash can. `PHONE_ENC_KEY` (Secret Manager `phone-enc-key-synthetic`) decrypts, `PHONE_HASH_KEY` only matches. Orders stored before encryption are migrated with `python -m app.data.encrypt_phones --apply`.
 - The phone key lives in Secret Manager and is the same for every shop, otherwise a phone would not match
   across shops. A plain SHA-256 of a phone number can be reversed by trying every number, so the key is
   required.
@@ -101,7 +102,7 @@ One document per AI call attempt, written by `app/calls/` (docs/call-controller.
 | `status` | string | `queued` → `dialing` (claimed by `controller_id`) → `in_progress` (answered) → `completed` or `failed` |
 | `requested_by` | string | `system` (pipeline) or the staff member's email |
 | `queued_at`, `started_at`, `answered_at`, `ended_at` | timestamp | `started_at` is when the controller started dialling |
-| `job` | map | The `CallJob` published to `call-jobs` |
+| `job` | map | The `CallJob` published to `call-jobs`; a phone target (`target.address`) is kept encrypted, the published job carries it in clear because the controller dials it |
 | `outcome`, `failure_reason`, `changes`, `cancel_reason`, `human_callback_requested`, `buyer_requests`, `summary_vi` | | From the `CallResult` |
 | `transcript`, `recording_uri` | | Personal data: kept here only, never copied to the order or to logs |
 | `result` | map | The `CallResult` as received, to tell an identical repeat from a conflicting one |

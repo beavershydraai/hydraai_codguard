@@ -20,6 +20,7 @@ from datetime import datetime
 
 from app.calls import spoken
 from app.data import branches, phone
+from app.data.phone import decrypt_phone
 from app.data.shops import default_name
 from app.schemas.enums import CallAgent, CallLanguage, CallTargetKind
 from app.schemas.telephony import CallBuyer, CallItem, CallJob, CallOrder, CallTarget
@@ -62,7 +63,7 @@ def allowed_phones() -> set[str]:
 def buyer_phone(doc: dict) -> str | None:
     """The buyer's phone as intake stored it, if valid. A phone that failed validation at intake
     has no hash and is never dialled."""
-    number = str(doc.get("buyer_phone") or "")
+    number = str(decrypt_phone(doc.get("buyer_phone")) or "")
     return number if doc.get("buyer_phone_hash") and number.startswith("+") else None
 
 

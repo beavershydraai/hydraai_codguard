@@ -1,6 +1,7 @@
 """Views of stored order documents for the shop API contract."""
 
 from app.data import branches
+from app.data.phone import decrypt_phone
 from app.decision.lifecycle import allowed_overrides
 from app.schemas.enums import HardRule
 from app.schemas.orders import OrderDetail, OrderEvent, OrderSummary
@@ -55,8 +56,15 @@ def _total_vnd(doc: dict) -> int:
     )
 
 
+def _readable(doc: dict) -> dict:
+    """The order with its phones decrypted: stored encrypted, shown in full to the shop."""
+    phones = {k: decrypt_phone(doc.get(k)) for k in ("buyer_phone", "recipient_phone") if k in doc}
+    return doc | phones
+
+
 def order_summary(doc: dict) -> OrderSummary:
     """Inbox row: the same figures as order_detail, without histories."""
+    doc = _readable(doc)
     current = _current_score(doc)
     total = _total_vnd(doc)
     decision = doc.get("decision")
@@ -89,6 +97,7 @@ _SUMMARY_FIELDS = (
 
 def order_detail(doc: dict) -> OrderDetail:
     """Current score and every earlier run, without changing the stored document."""
+    doc = _readable(doc)
     current = _current_score(doc)
     runs = [
         _risk_score(doc["order_id"], run, _fail_cost(doc)) for run in doc.get("score_history", [])

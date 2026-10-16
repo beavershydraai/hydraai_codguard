@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.agents.log import get_decision_log
 from app.calls.service import get_call_service
 from app.data import order_csv
+from app.data.phone import decrypt_phone
 from app.data.store import get_store
 from app.main import create_app
 from app.risk import engine
@@ -140,7 +141,7 @@ def test_import_reads_the_shop_app_template(api, monkeypatch):
         assert doc["timeline"][-1]["message_vi"] == "Order imported from a CSV file."
     fb2 = next(d for d in imported if d["external_id"] == "FB-2")
     assert fb2["channel"] == "other"
-    assert fb2["buyer_phone"] == "+84000000002"
+    assert decrypt_phone(fb2["buyer_phone"]) == "+84000000002"
     assert fb2["items"][0] == {
         "sku": None,
         "name": "Quần",

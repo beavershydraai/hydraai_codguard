@@ -9,7 +9,7 @@ from app.data.orders import (
     to_utc,
     training_label,
 )
-from app.data.phone import phone_hash, to_e164
+from app.data.phone import decrypt_phone, phone_hash, to_e164
 from app.schemas.delivery import DeliveryOutcome
 from app.schemas.orders import OrderCreate, OrderEvent
 
@@ -52,7 +52,11 @@ def _doc(**changes) -> dict:
 
 def test_order_document_normalises_and_hashes_phones():
     doc = _doc(buyer_phone="0000000001", recipient_phone="+84000000002")
-    assert doc["buyer_phone"] == "+84000000001"
+    assert decrypt_phone(doc["buyer_phone"]) == "+84000000001"
+    # Stored encrypted, with a fresh nonce: the same number never gives the same ciphertext.
+    assert doc["buyer_phone"].startswith("enc:v1:") and "000000001" not in doc["buyer_phone"]
+    assert doc["buyer_phone"] != _doc(buyer_phone="0000000001")["buyer_phone"]
+    assert decrypt_phone(doc["recipient_phone"]) == "+84000000002"
     assert doc["buyer_phone_hash"] == phone_hash("+84000000001", KEY)
     assert doc["recipient_phone_hash"] == phone_hash("+84000000002", KEY)
     assert (doc["order_id"], doc["shop_id"], doc["status"]) == ("ord_01", "shop_01", "new")
@@ -63,7 +67,7 @@ def test_order_document_normalises_and_hashes_phones():
 
 def test_order_document_keeps_an_invalid_phone_without_hash():
     doc = _doc(buyer_phone="123456789")
-    assert doc["buyer_phone"] == "123456789"
+    assert decrypt_phone(doc["buyer_phone"]) == "123456789"
     assert doc["buyer_phone_hash"] is None
 
 

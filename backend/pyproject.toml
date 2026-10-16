@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "COD Guard API: COD order risk scoring, decisions and buyer verification"
 requires-python = ">=3.12"
 dependencies = [
+    "cryptography>=50.0.2",
     "evidently>=0.7.23",
     "fastapi>=0.115",
     "google-adk>=2.11,<3",

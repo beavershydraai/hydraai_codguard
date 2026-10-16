@@ -7,6 +7,7 @@ import pytest
 
 from app.api.errors import ApiError
 from app.data.orders import order_document, training_label
+from app.data.phone import decrypt_phone
 from app.decision import lifecycle, policy
 from app.risk import engine
 from app.risk.features import compute_features
@@ -235,7 +236,7 @@ def test_edit_rehashes_a_new_phone_and_uses_its_history_at_placement(store, monk
     store.create(earlier)
 
     def score(doc, history):
-        assert doc["buyer_phone"] == "+84000000002"
+        assert decrypt_phone(doc["buyer_phone"]) == "+84000000002"
         assert doc["placed_at"] == old["placed_at"]
         assert [d["order_id"] for d in history] == ["earlier"]
         return scored_fields()

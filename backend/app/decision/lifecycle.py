@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 
 from app.api.errors import ApiError
 from app.data import branches
-from app.data.orders import delivery_fields
-from app.data.phone import phone_hash, to_e164
+from app.data.orders import delivery_fields, stored_phone
+from app.data.phone import decrypt_phone, to_e164
 from app.data.shops import Settings, settings_for
 from app.data.store import OrderStore, phone_key
 from app.decision import policy as decisions
@@ -345,9 +345,13 @@ def _edit(
             "Required order fields cannot be null.",
         )
     if "buyer_phone" in fields:
-        normalised = to_e164(fields["buyer_phone"], branches.country_of(doc).calling_code)
-        fields["buyer_phone"] = normalised or fields["buyer_phone"]
-        fields["buyer_phone_hash"] = phone_hash(normalised, phone_key()) if normalised else None
+        calling_code = branches.country_of(doc).calling_code
+        normalised = to_e164(fields["buyer_phone"], calling_code) or fields["buyer_phone"]
+        if normalised == decrypt_phone(doc.get("buyer_phone")):
+            del fields["buyer_phone"]  # the same number: stored encrypted, so compare it in clear
+        else:
+            phone, fields["buyer_phone_hash"] = stored_phone(normalised, phone_key(), calling_code)
+            fields["buyer_phone"] = phone
     changed = {k: v for k, v in fields.items() if doc.get(k) != v}
     if not changed:
         return False

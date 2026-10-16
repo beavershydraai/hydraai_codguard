@@ -29,6 +29,7 @@ from app.calls import jobs
 from app.calls.pubsub import PubSubPublisher
 from app.calls.store import CallNotFound, CallStore, get_call_store
 from app.data import branches
+from app.data.phone import decrypt_phone, encrypt_phone
 from app.data.policies import PolicyStore, get_policy_store
 from app.data.shops import ShopStore, get_shop_store, settings_for
 from app.data.store import OrderStore, get_store
@@ -41,6 +42,7 @@ from app.schemas.enums import (
     CallFailureReason,
     CallOutcome,
     CallStatus,
+    CallTargetKind,
     ContactBlockReason,
     ContactChannel,
     DecisionAction,
@@ -75,6 +77,15 @@ def mask_phone(phone: str | None) -> str:
     if len(phone) < 7:
         return "*" * len(phone) or "***"
     return phone[:3] + "*" * (len(phone) - 6) + phone[-3:]
+
+
+def stored_job(job: CallJob) -> dict:
+    """The job as kept on the call: the number it dials is encrypted like every stored phone. The
+    job published to the controller carries it in clear, because the controller dials it."""
+    data = job.model_dump(mode="json")
+    if data["target"]["kind"] == CallTargetKind.PSTN:
+        data["target"]["address"] = encrypt_phone(data["target"]["address"])
+    return data
 
 
 def call_view(doc: dict) -> Call:
@@ -265,12 +276,12 @@ class CallService:
             "shop_id": doc["shop_id"],
             "order_ids": [doc["order_id"]],
             "phone_hash": doc.get("buyer_phone_hash"),
-            "phone_masked": mask_phone(doc.get("buyer_phone")),
+            "phone_masked": mask_phone(decrypt_phone(doc.get("buyer_phone"))),
             "attempt": attempt,
             "status": CallStatus.QUEUED.value,
             "requested_by": actor,
             "queued_at": now,
-            "job": job.model_dump(mode="json"),
+            "job": stored_job(job),
         }
         existing = self.calls.create(stored)
         if existing:
