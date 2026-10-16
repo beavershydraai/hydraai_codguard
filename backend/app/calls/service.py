@@ -18,6 +18,7 @@ to the same phone into one call is not done yet.
 import asyncio
 import logging
 import os
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
@@ -117,8 +118,40 @@ def _at(value) -> datetime | None:
     return datetime.fromisoformat(value)
 
 
+class UnclearChange(ValueError):
+    """A change read back on the call that cannot be applied with certainty."""
+
+
+_QUANTITY = re.compile(r"\s*(\d+)")
+
+
+def _quantity(value: str) -> tuple[int, str]:
+    """The quantity at the start of what the voice agent wrote, and the rest of it:
+    "5 (size S)" -> (5, "(size S)")."""
+    match = _QUANTITY.match(str(value))
+    if match is None:
+        raise UnclearChange(f"no quantity in {value!r}")
+    return int(match.group(1)), str(value)[match.end() :]
+
+
+def _item_for(items: list[dict], name: str, hint: str) -> dict:
+    """The one item the change is about: by name, and when several items share the name (one
+    jacket in three sizes), by the variant the agent named alongside the value."""
+    same = [item for item in items if item["name"].casefold() == name.casefold()]
+    if len(same) > 1:
+        words = set(re.findall(r"\w+", hint.casefold()))
+        same = [
+            i for i in same if set(re.findall(r"\w+", (i.get("variant") or "").casefold())) <= words
+        ]
+    if len(same) != 1:
+        raise UnclearChange(f"cannot tell which {name!r} the change is about")
+    return same[0]
+
+
 def order_update(doc: dict, changes: list[dict]) -> OrderUpdate | None:
-    """The order edit a call confirmed, from its read-back changes. None when nothing changed."""
+    """The order edit a call confirmed, from its read-back changes. None when nothing changed.
+    The voice agent writes `new_value` as free text ("5 (size S)"); a change that cannot be
+    applied with certainty raises UnclearChange, and the order goes to review instead."""
     fields: dict = {}
     items = [dict(item) for item in doc["items"]]
     items_changed = False
@@ -130,16 +163,13 @@ def order_update(doc: dict, changes: list[dict]) -> OrderUpdate | None:
             fields["recipient_name"] = value
         elif field == CallChangeField.DELIVERY_NOTE:
             fields["note"] = value
-        elif field in {CallChangeField.ITEM_VARIANT, CallChangeField.ITEM_QUANTITY}:
-            name = (change.get("item_name") or "").casefold()
-            for item in items:
-                if item["name"].casefold() != name:
-                    continue
-                items_changed = True
-                if field == CallChangeField.ITEM_VARIANT:
-                    item["variant"] = value
-                else:
-                    item["quantity"] = int(value)
+        elif field == CallChangeField.ITEM_QUANTITY:
+            quantity, hint = _quantity(value)
+            _item_for(items, change.get("item_name") or "", hint)["quantity"] = quantity
+            items_changed = True
+        elif field == CallChangeField.ITEM_VARIANT:
+            _item_for(items, change.get("item_name") or "", "")["variant"] = value
+            items_changed = True
     if items_changed:
         kept = [item for item in items if item["quantity"] > 0]
         if kept:
@@ -428,7 +458,17 @@ class CallService:
             if any(c["field"] == CallChangeField.CANCEL_ORDER for c in changes):
                 outcome = CallOutcome.CANCELLED
             order = self.orders.get(order_id)
-            update = order_update(order, changes) if outcome == CallOutcome.EDITED else None
+            update = None
+            if outcome == CallOutcome.EDITED:
+                try:
+                    update = order_update(order, changes)
+                except UnclearChange as reason:
+                    # The buyer changed the order but the change cannot be applied with
+                    # certainty: a person applies it from the call summary.
+                    log.warning(
+                        "Call %s: %s; order %s goes to review", doc["call_id"], reason, order_id
+                    )
+                    outcome = CallOutcome.UNCLEAR
             if outcome == CallOutcome.EDITED and update is None:
                 outcome = CallOutcome.CONFIRMED  # the only change was to another order
             event = {

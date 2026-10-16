@@ -13,7 +13,14 @@ from app.api import security
 from app.api.errors import ApiError
 from app.calls import jobs, spoken
 from app.calls.pubsub import PubSubPublisher
-from app.calls.service import CallService, call_id_for, get_call_service, mask_phone
+from app.calls.service import (
+    CallService,
+    UnclearChange,
+    call_id_for,
+    get_call_service,
+    mask_phone,
+    order_update,
+)
 from app.calls.store import CallNotFound
 from app.main import create_app
 from app.risk import engine
@@ -401,6 +408,52 @@ def test_an_edited_call_changes_the_address(calls):
     doc = order(calls)
     assert doc["address"]["raw"] == "Số 15 ngõ 34, Hà Nội"
     assert doc["confirmation"]["via"] == "call"
+
+
+JACKETS = {
+    "items": [
+        {"name": "Jacket", "variant": size, "quantity": 2, "unit_price_vnd": 750000}
+        for size in ("S", "M", "L")
+    ]
+}
+
+
+def test_quantities_written_as_free_text_reach_the_right_variant():
+    """The voice agent wrote "5 (size S)": the quantity is read, and the size picks the item."""
+    changes = [
+        {"field": "item_quantity", "item_name": "Jacket", "new_value": "5 (size S)"},
+        {"field": "item_quantity", "item_name": "jacket", "new_value": "3 (size M)"},
+    ]
+    update = order_update(JACKETS, changes)
+    assert [(i.variant, i.quantity) for i in update.items] == [("S", 5), ("M", 3), ("L", 2)]
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"field": "item_quantity", "item_name": "Jacket", "new_value": "five"},
+        {"field": "item_quantity", "item_name": "Jacket", "new_value": "5"},  # which size?
+        {"field": "item_variant", "item_name": "Jacket", "new_value": "XL"},
+        {"field": "item_quantity", "item_name": "Hat", "new_value": "1"},
+    ],
+)
+def test_a_change_that_cannot_be_applied_with_certainty_is_unclear(change):
+    with pytest.raises(UnclearChange):
+        order_update(JACKETS, [change])
+
+
+def test_an_unclear_edit_sends_the_order_to_review_instead_of_failing(calls):
+    asyncio.run(run(_pipe(calls)))
+    call = calls.start_for_shop("ord_test", "shop_a", "admin@gmail.com", NOW)
+    dialing(calls, call.id)
+    change = {
+        "order_id": "ord_test",
+        "field": "item_quantity",
+        "item_name": "Nope",
+        "new_value": "x",
+    }
+    calls.record_result(call.id, result(outcome="edited", changes=[change]))
+    assert order(calls)["status"] == OrderStatus.PENDING_REVIEW
 
 
 def test_a_failed_call_leaves_the_order_waiting(calls):
