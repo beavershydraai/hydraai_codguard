@@ -39,6 +39,9 @@ class Timing:
     """Starting values from docs/gemini-live.md, "Call flow"; tune them in E9.2."""
 
     no_response_s: float = 8.0
+    # After a cut-off with no buyer speech: long enough for the buyer's first words to be
+    # transcribed, short enough not to leave dead air on the line.
+    nothing_heard_s: float = 2.5
     closing_grace_s: float = 0.5
     closing_timeout_s: float = 20.0
     tick_s: float = 0.25
@@ -158,6 +161,7 @@ class LiveAgent:
         self._closing_since = 0.0
         self._spoke_since_decision = False
         self._model_turn_ended: float | None = None
+        self._interrupted_at: float | None = None
         self._no_response_sent = False
         self._time_up_sent = False
         self._buyer_spoke = False
@@ -259,8 +263,13 @@ class LiveAgent:
         if content:
             if content.interrupted:
                 self._out.clear()
+                # Line noise or echo can cut the agent off as well as the buyer can. The model
+                # then waits for a buyer who says nothing; `_timers` tells it to go on.
+                self._interrupted_at = self._clock()
+                log.info("agent interrupted")
             if content.model_turn and content.model_turn.parts:
                 self._model_turn_ended = None
+                self._interrupted_at = None
                 for part in content.model_turn.parts:
                     if part.inline_data and part.inline_data.data:
                         self._out.play(self._downsampler.process(part.inline_data.data))
@@ -338,6 +347,12 @@ class LiveAgent:
                 if now - self._closing_since > self._timing.closing_timeout_s:
                     self._finish("closed")
                 continue
+            cut_off = self._interrupted_at
+            if cut_off is not None and now - cut_off >= self._timing.nothing_heard_s:
+                self._interrupted_at = None
+                self._model_turn_ended = now  # if the model stays silent, ask the buyer
+                await self._event("[NOTHING_HEARD]")
+                continue
             ended = self._model_turn_ended
             if ended is not None and now - ended >= self._timing.no_response_s:
                 if self._no_response_sent:
@@ -352,6 +367,7 @@ class LiveAgent:
         self._buyer_spoke = True
         self._no_response_sent = False
         self._model_turn_ended = None
+        self._interrupted_at = None
 
     def _transcribe(self, speaker: str, text: str) -> None:
         if speaker != self._turn_speaker:

@@ -141,7 +141,7 @@ The backend marks a call `failed` (`controller_error`) when it stays `dialing` o
 
 ### `gemini_live`
 
-- Model, session config, instruction, tool and events exactly as in [gemini-live.md](gemini-live.md): `render_instruction`, `live_config`, `[CALL_CONNECTED]`, `[NO_RESPONSE]`, `[TIME_UP]`, `record_call_outcome`.
+- Model, session config, instruction, tool and events exactly as in [gemini-live.md](gemini-live.md): `render_instruction`, `live_config`, `[CALL_CONNECTED]`, `[NO_RESPONSE]`, `[NOTHING_HEARD]`, `[TIME_UP]`, `record_call_outcome`.
 - The order context is the job minus what the model must not see: drop `orders[].order_id`, the `_vnd` amounts, `call_id`, `target` and everything about routing. Keep `shop_name`, `buyer`, `orders[]` and `total_cod_amount_spoken`.
 - Audio: on answer, the controller creates an External Media channel (`format=ulaw`, `encapsulation=rtp`, `transport=udp`, `external_host=127.0.0.1:<port>`), sends to the address in its `UNICASTRTP_LOCAL_*` variables so the agent can speak first, and bridges it with the caller. Caller audio arrives as 8 kHz μ-law: decode it and upsample to the 16 kHz PCM that `send_realtime_input` takes. Model audio is 24 kHz: low-pass filter it, keep every third sample, encode it as μ-law and send it back in 20 ms RTP frames. On `interrupted`, drop the queued audio. Not `slin16`: Asterisk 20.6 sends slin16 to the application but drops what the application sends back (checked against a local Asterisk); μ-law is what the phone leg carries anyway.
 - Keys pressed during a Gemini call are sent as `[DTMF:<digit>]` with `send_client_content`. The instruction does not know this event yet (open question 2).
