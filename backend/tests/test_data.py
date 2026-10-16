@@ -29,6 +29,21 @@ def test_to_e164_rejects_wrong_shapes(raw):
     assert to_e164(raw) is None
 
 
+@pytest.mark.parametrize(
+    ("raw", "code", "e164"),
+    [
+        ("+84 000 000 001", "65", "+84000000001"),  # a Vietnamese buyer of the Singapore branch
+        ("+65 0000 0001", "84", "+6500000001"),
+        ("+63 000 000 0001", "65", "+630000000001"),
+        ("84000000001", "65", None),  # without "+" the number belongs to the order's country
+        ("+84 000 001", "65", None),  # too short for Vietnam
+        ("+1 000 000 0001", "65", None),  # a country the shop does not serve
+    ],
+)
+def test_a_number_in_international_form_may_be_of_another_country(raw, code, e164):
+    assert to_e164(raw, code) == e164
+
+
 def test_phone_hash_is_stable_and_keyed():
     assert phone_hash("+84000000001", KEY) == phone_hash("+84000000001", KEY)
     assert phone_hash("+84000000001", KEY) != phone_hash("+84000000002", KEY)
@@ -163,6 +178,6 @@ def test_to_e164_accepts_singapore_and_philippine_numbers(raw, code, e164):
     assert to_e164(raw, code) == e164
 
 
-def test_a_number_of_another_country_is_invalid_for_the_branch():
-    assert to_e164("+84 000 000 001", "65") is None
-    assert to_e164("+65 0000 0042", "84") is None
+def test_a_national_number_of_another_country_is_invalid_for_the_branch():
+    assert to_e164("0000 000 001", "65") is None  # a Vietnamese national form, on a SG order
+    assert to_e164("6500000042", "84") is None

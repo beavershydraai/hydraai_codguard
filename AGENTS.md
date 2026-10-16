@@ -130,7 +130,7 @@ These rules come from the README and the epics. Code and tests must enforce them
 
 - The demo shop has branches in Vietnam, Singapore and the Philippines (`backend/config/branches.yaml`). Each intake key belongs to a branch (`key:shop:branch[:noagents]`); intake stores `branch_id`, `country` and `currency` on the order.
 - One risk model per country, never trained on another country's orders. A branch uses its country's model; a second branch in a country is one more line in the config.
-- Amounts are integers in the currency's minor unit (VND has none; SGD and PHP are in cents). Field names keep the `_vnd` suffix for compatibility. Costs, local time and phone format come from the order's country.
+- Amounts are integers in the currency's minor unit (VND has none; SGD and PHP are in cents). Field names keep the `_vnd` suffix for compatibility. Costs, local time and phone format come from the order's country; a number written in international form (`+84…`, `+65…`, `+63…`) may be of another country the shop serves.
 - Tier cut-offs are the same in every country.
 - The shop's profile (`GET/PATCH /shop`, Firestore `shops/{shop_id}`, onboarding E7.1) holds its name and, per country, its costs and contact hours. It starts with the country defaults of `branches.yaml` and stores only what the owner changed. Decisions and calls use the shop's values for the order's country: the expected loss is recomputed with the shop's cost of a failed delivery, and the AI call introduces itself with the shop's name. Training and the backtest keep the country defaults.
 
