@@ -557,6 +557,7 @@ function AutomationForm({ policy, canEdit }: { policy: Policy; canEdit: boolean 
   const queryClient = useQueryClient()
   const initial = { ...DEFAULT_AUTOMATION, ...policy.automation }
   const [auto, setAuto] = useState(initial)
+  const [randomTests, setRandomTests] = useState(policy.random_tests ?? true)
   const [ranges, setRanges] = useState<Record<string, { min: string; max: string }>>(() =>
     Object.fromEntries(
       CURRENCIES.map((cur) => {
@@ -606,7 +607,11 @@ function AutomationForm({ policy, canEdit }: { policy: Policy; canEdit: boolean 
       onSubmit={(event) => {
         event.preventDefault()
         mutation.mutate({
-          body: { tiers: policy.tiers, automation: { ...auto, cod_ranges: codRanges } },
+          body: {
+            tiers: policy.tiers,
+            automation: { ...auto, cod_ranges: codRanges },
+            random_tests: randomTests,
+          },
         })
       }}
     >
@@ -636,6 +641,20 @@ function AutomationForm({ policy, canEdit }: { policy: Policy; canEdit: boolean 
                   checked={auto.mode === 'auto'}
                   onCheckedChange={(on) => update({ mode: (on ? 'auto' : 'suggest') as CallAutomationMode })}
                   aria-label="Automation"
+                />
+              </SettingField>
+              <SettingField
+                title="Random test orders"
+                description={
+                  randomTests
+                    ? 'On: about 12 % of orders get a random action among those their tier allows, so COD Guard learns what each action prevents. These orders show a "Random test" badge.'
+                    : 'Off: every order follows the policy by risk tier (use this for demos).'
+                }
+              >
+                <Switch
+                  checked={randomTests}
+                  onCheckedChange={setRandomTests}
+                  aria-label="Random test orders"
                 />
               </SettingField>
               <SettingField
@@ -917,7 +936,13 @@ function PolicyHistory({ versions, canEdit }: { versions: Policy[]; canEdit: boo
                       className="mt-2"
                       disabled={restore.isPending}
                       onClick={() =>
-                        restore.mutate({ body: { tiers: version.tiers, automation: version.automation } })
+                        restore.mutate({
+                          body: {
+                            tiers: version.tiers,
+                            automation: version.automation,
+                            random_tests: version.random_tests,
+                          },
+                        })
                       }
                     >
                       Restore this version

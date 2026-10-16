@@ -196,6 +196,11 @@ class OrderSummary(ApiModel):
         default=None,
         description="The latest AI call, summarised for the shop by the agents (English).",
     )
+    random_test: bool = Field(
+        default=False,
+        description="The current action was picked at random among the tier's options (the "
+        "random test, Settings → Automation), not by the tier policy.",
+    )
     placed_at: datetime
     updated_at: datetime
 

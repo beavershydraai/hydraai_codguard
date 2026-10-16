@@ -58,7 +58,19 @@ export const columns: ColumnDef<DataGridFeatures, OrderSummary>[] = [
     id: 'current_action',
     accessorFn: (o) => (o.current_action ? DECISION_ACTION_LABELS[o.current_action] : ''),
     header: ({ column }) => <DataGridColumnHeader column={column} visibility={true} />,
-    cell: ({ getValue }) => <span className="text-foreground">{(getValue() as string) || '—'}</span>,
+    cell: ({ getValue, row }) => (
+      <span className="flex flex-col gap-0.5">
+        <span className="text-foreground">{(getValue() as string) || '—'}</span>
+        {row.original.random_test && (
+          <span
+            className="w-fit rounded bg-info/10 px-1.5 text-xs text-info"
+            title="Picked at random among the actions this tier allows (random test, Settings → Automation)"
+          >
+            Random test
+          </span>
+        )}
+      </span>
+    ),
     size: 150,
     enableSorting: false, // the server sorts by placing time, risk and COD only
     enableHiding: true,

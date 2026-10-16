@@ -322,6 +322,12 @@ class Policy(ApiModel):
     updated_by: str
     tiers: list[TierPolicy] = Field(min_length=4, max_length=4)
     automation: CallAutomation = Field(default_factory=CallAutomation)
+    random_tests: bool = Field(
+        default=True,
+        description="On: about 12 % of orders whose tier allows more than one action get one at "
+        "random, so the shop learns what each action really prevents. Off (e.g. for a demo): "
+        "every order follows the tier policy.",
+    )
 
 
 class PolicyUpdate(ApiModel):
@@ -342,6 +348,7 @@ class PolicyUpdate(ApiModel):
 
     tiers: list[TierPolicy] = Field(min_length=4, max_length=4)
     automation: CallAutomation | None = None
+    random_tests: bool | None = Field(default=None, description="Left out: keeps the setting.")
 
 
 ShopUpdate.model_rebuild()
