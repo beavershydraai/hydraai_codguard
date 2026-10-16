@@ -133,9 +133,7 @@ def decide(
             a: float(expected_cost(models["model2"], X, a, costs_of(country))[0]) for a in options
         }
         return {"tier": tier, "action": min(costs, key=costs.get), "chosen_by": "model 2"}
-    decision = policy.decide(
-        RiskTier(tier), loss, datetime.now(UTC), settings=country.settings
-    )
+    decision = policy.decide(RiskTier(tier), loss, datetime.now(UTC), settings=country.settings)
     chosen_by = "tier rule: expected loss ≤ contact cost" if decision.block_reasons else "tier rule"
     if capped:
         chosen_by += ", capped at medium: location was the only reason for high"
