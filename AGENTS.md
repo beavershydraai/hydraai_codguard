@@ -118,7 +118,7 @@ These rules come from the README and the epics. Code and tests must enforce them
   - fully prepaid order → skipped;
   - invalid phone number → held for review;
   - phone with a ≥75% return rate over at least 3 past orders → Very High.
-- Location may contribute to a score but is never the only reason for High or Very High.
+- Location may contribute to a score but is never the only reason for High or Very High. The engine checks it (`engine.location_only`): when an order scored with the average province would be below High, its tier is capped at Medium.
 - The training label "failed" counts buyer-caused failures only (refused, unreachable), never carrier or shop errors.
 
 ### Branches and countries
@@ -131,7 +131,7 @@ These rules come from the README and the epics. Code and tests must enforce them
 
 ### Decisions
 
-- `expected_loss = P(failed delivery) × cost of one failed delivery`, based on the amount still to collect after any deposit.
+- `expected_loss = P(failed delivery) × max(cost of one failed delivery − amount already paid, 0)`: the shop keeps what the buyer paid when the buyer refuses, so a deposit lowers the loss. A fully prepaid order is skipped.
 - Contact the buyer only when `expected_loss` is higher than the cost of the contact action.
 - Default policy:
 

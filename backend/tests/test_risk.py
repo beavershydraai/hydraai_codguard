@@ -235,3 +235,42 @@ def test_each_country_is_scored_by_its_own_model(trained, tmp_path, monkeypatch)
     assert fields["scoring"]["failed_delivery_cost_vnd"] == 60_000
     assert engine.score(sg, []) is None  # no SG model yet: the order waits unscored
     engine._cache.clear()
+
+
+# --- E2.5: expected loss on what is still owed, and location is never the only reason --------
+
+
+def test_expected_loss_counts_what_the_buyer_already_paid():
+    assert engine.expected_loss(0.5, 60_000) == 30_000
+    assert engine.expected_loss(0.5, 60_000, prepaid=20_000) == 20_000  # kept on a refusal
+    assert engine.expected_loss(0.5, 60_000, prepaid=100_000) == 0  # never below zero
+
+
+def test_a_deposit_can_make_contact_not_worth_it():
+    d = engine.decide(BASE, 0.1, True, MODELS, Rng(0.99), loss=100)  # medium, link costs 300
+    assert (d["action"], d["chosen_by"]) == ("none", "tier rule: expected loss ≤ contact cost")
+
+
+def location_models(monkeypatch, p_with_average_province):
+    """A model whose score depends on the province: with the average province (p0) it gives
+    `p_with_average_province`."""
+    monkeypatch.setattr(
+        engine,
+        "predict1",
+        lambda model, X: [p_with_average_province if X["province_fail_rate_te"][0] == 0.1 else 0.5],
+    )
+    return MODELS | {"model1": {"enc": {"p0": 0.1}}}
+
+
+def test_location_alone_never_makes_an_order_high(monkeypatch):
+    models = location_models(monkeypatch, p_with_average_province=0.15)  # medium without it
+    order = BASE | {"province_fail_rate_te": 0.6}
+    d = engine.decide(order, 0.5, True, models, Rng(0.99))
+    assert d["tier"] == "medium" and d["action"] == "link"
+    assert "location was the only reason" in d["chosen_by"]
+
+
+def test_location_may_add_to_other_reasons(monkeypatch):
+    models = location_models(monkeypatch, p_with_average_province=0.45)  # very high anyway
+    d = engine.decide(BASE | {"province_fail_rate_te": 0.6}, 0.5, True, models, Rng(0.99))
+    assert d["tier"] == "very_high" and d["chosen_by"] == "tier rule"

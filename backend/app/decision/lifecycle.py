@@ -223,7 +223,9 @@ def _apply_score(
     if raw.get("failed_delivery_cost_vnd") not in (None, shop.failed_delivery_cost_vnd):
         # The shop's own cost of a failed delivery replaces the country default (E7.1).
         raw["failed_delivery_cost_vnd"] = shop.failed_delivery_cost_vnd
-        raw["expected_loss_vnd"] = round(raw["probability"] * shop.failed_delivery_cost_vnd)
+        raw["expected_loss_vnd"] = engine.expected_loss(
+            raw["probability"], shop.failed_delivery_cost_vnd, doc.get("prepaid_vnd", 0)
+        )
     _event(doc, "scored", now, "Order rescored." if previous else "Order scored.")
     if staff:
         _set_decision(doc, Decision.model_validate(staff_decision))

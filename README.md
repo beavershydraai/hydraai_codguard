@@ -145,7 +145,7 @@ COD Guard evaluates each order in three layers:
 ### Decision Logic
 
 ```
-expected_loss = P(failed delivery) × cost of one failed delivery (shop settings)
+expected_loss = P(failed delivery) × max(cost of one failed delivery − amount already paid, 0)
 ```
 
 The buyer is contacted only if `expected_loss` is higher than the cost of the contact action. Default policy:
