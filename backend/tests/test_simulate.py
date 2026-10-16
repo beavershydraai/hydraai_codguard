@@ -1,6 +1,7 @@
 """The demo world, the history seed and the live simulator (app/demo/)."""
 
 import collections
+import random
 import re
 from datetime import UTC, datetime
 
@@ -10,7 +11,7 @@ from app.data import branches
 from app.data.orders import final_state
 from app.data.phone import to_e164
 from app.demo.seed import stored_doc
-from app.demo.simulate import branch_keys
+from app.demo.simulate import branch_keys, schedule
 from app.demo.world import BRANCH_REGIONS, CODE, World
 from app.schemas.orders import OrderCreate
 
@@ -69,8 +70,25 @@ def test_the_history_is_the_same_for_the_same_seed():
 
 def test_the_agents_switch_picks_each_branch_s_normal_or_noagents_key():
     env = "k1:shop_demo:branch_SG,k2:shop_demo:branch_SG:noagents,k3:shop_demo,k4:other:branch_PH"
-    assert branch_keys(env, agents=True) == {"branch_SG": "k1"}
+    # A key without a branch is the default branch's (branch_VN_HCM).
+    assert branch_keys(env, agents=True) == {"branch_SG": "k1", "branch_VN_HCM": "k3"}
     assert branch_keys(env, agents=False) == {"branch_SG": "k2"}
+
+
+def test_each_country_gets_exactly_its_orders_within_the_window():
+    keys = {"branch_VN_HCM": "a", "branch_VN_HN": "b", "branch_SG": "c", "branch_PH": "d"}
+    plan = schedule(["VN", "SG", "PH"], keys, 60, 10, random.Random(1))
+    per_country = collections.Counter(branches.branches()[b] for _, b in plan)
+    assert per_country == {"VN": 60, "SG": 60, "PH": 60}
+    assert all(0 <= at <= 600 for at, _ in plan) and plan == sorted(plan)
+    assert {b for _, b in plan if branches.branches()[b] == "VN"} == {
+        "branch_VN_HCM",
+        "branch_VN_HN",
+    }
+    only_sg = schedule(["SG"], keys, 5, 1, random.Random(1))
+    assert [b for _, b in only_sg] == ["branch_SG"] * 5
+    with pytest.raises(SystemExit):
+        schedule(["PH"], {"branch_SG": "c"}, 1, 1, random.Random(1))
 
 
 def test_a_sale_day_brings_more_orders():
