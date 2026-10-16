@@ -25,13 +25,20 @@ TRUNK_ZERO = {"84", "63"}
 
 
 def to_e164(raw: str, calling_code: str = "84") -> str | None:
-    """A number of the given country, with any spaces, dots or dashes, as E.164, else None.
+    """A phone number as E.164, with any spaces, dots or dashes, else None.
 
-    Accepts the international form (`+84xxx`, `84xxx`) and the national one (`0xxx` in VN and PH,
-    8 digits in SG). Checks the shape only, not whether the prefix exists, because test data uses
-    numbers with `000` after the calling code that no carrier issues.
+    Accepts the order country's international form (`+84xxx`, `84xxx`) and national one (`0xxx`
+    in VN and PH, 8 digits in SG). A number written with `+` may also be of another country the
+    shop serves (`+84…` on an order of the Singapore branch): its calling code says which.
+    Checks the shape only, not whether the prefix exists, because test data uses numbers with
+    `000` after the calling code that no carrier issues.
     """
     digits = _NON_DIGITS.sub("", raw)
+    if raw.strip().startswith("+") and not digits.startswith(calling_code):
+        foreign = next((code for code in NATIONAL if digits.startswith(code)), None)
+        if foreign and len(digits) - len(foreign) in NATIONAL[foreign]:
+            return f"+{digits}"
+        return None
     lengths = NATIONAL[calling_code]
     if digits.startswith(calling_code) and len(digits) - len(calling_code) in lengths:
         national = digits[len(calling_code) :]
