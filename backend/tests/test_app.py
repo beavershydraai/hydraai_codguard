@@ -16,12 +16,12 @@ def test_health() -> None:
 
 
 def test_contract_stub_returns_501_problem() -> None:
-    response = client.get("/api/v1/dashboard/summary?from=2026-10-01&to=2026-10-15")
+    response = client.get("/api/v1/public/confirmations/abcdefghijklmnop1234")
     assert response.status_code == 501
     assert response.headers["content-type"] == PROBLEM
     body = response.json()
     assert body["code"] == "not_implemented"
-    assert "get_dashboard_summary" in body["detail"]
+    assert "get_confirmation" in body["detail"]
 
 
 def test_validation_error_is_problem_json() -> None:

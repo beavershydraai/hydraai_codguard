@@ -958,15 +958,6 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
   }
 }
 
-export const ALL_ACTIONS: DecisionAction[] = [
-  'ship_now',
-  'send_confirmation_link',
-  'ai_call',
-  'require_deposit',
-  'hold_for_review',
-  'cancel',
-]
-
 /** What staff may choose instead of the engine, as in the backend's `lifecycle.OVERRIDES`. */
 export const OVERRIDE_ACTIONS: DecisionAction[] = ['ship_now', 'require_deposit', 'hold_for_review', 'cancel']
 

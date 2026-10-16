@@ -666,7 +666,9 @@ export const getDashboardSummaryQueryKey = (options: Options<GetDashboardSummary
   createQueryKey('getDashboardSummary', options)
 
 /**
- * ROI dashboard
+ * ROI dashboard of one country
+ *
+ * Orders of the country's branches placed from `from` to `to` (inclusive, local time). The savings are an estimate (app/decision/dashboard.py).
  */
 export const getDashboardSummaryOptions = (options: Options<GetDashboardSummaryData>) =>
   queryOptions<

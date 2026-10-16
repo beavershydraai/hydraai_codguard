@@ -966,7 +966,21 @@ export type DashboardSummary = {
    */
   period_to: string
   /**
+   * Country
+   *
+   * Orders of this country's branches.
+   */
+  country: 'VN' | 'SG' | 'PH'
+  /**
+   * Currency
+   *
+   * Currency of the amounts (minor unit).
+   */
+  currency: 'VND' | 'SGD' | 'PHP'
+  /**
    * Orders Screened
+   *
+   * Orders the decision engine decided.
    */
   orders_screened: number
   /**
@@ -996,7 +1010,7 @@ export type DashboardSummary = {
   /**
    * Good Orders Contacted Rate
    *
-   * Share of orders that were delivered fine but still contacted.
+   * Among screened orders that were delivered fine, the share still contacted.
    */
   good_orders_contacted_rate: number
 }
@@ -2909,6 +2923,10 @@ export type GetDashboardSummaryData = {
      * To
      */
     to: string
+    /**
+     * Country
+     */
+    country?: 'VN' | 'SG' | 'PH'
   }
   url: '/api/v1/dashboard/summary'
 }

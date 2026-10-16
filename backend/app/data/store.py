@@ -138,6 +138,11 @@ class OrderStore:
         result = self._filtered(shop_id, filters).count(alias="n").get()
         return int(result[0][0].value)
 
+    def select(self, shop_id: str, filters: OrderFilters, fields: tuple[str, ...]) -> list[dict]:
+        """Every order matching `filters`, with only `fields` (the dashboard counts them)."""
+        query = self._filtered(shop_id, filters).select(list(fields))
+        return [d.to_dict() for d in query.stream()]
+
     def last_change(self, shop_id: str) -> datetime | None:
         """When one of the shop's orders last changed (one document read)."""
         query = (

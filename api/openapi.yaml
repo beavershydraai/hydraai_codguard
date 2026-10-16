@@ -1088,7 +1088,9 @@ paths:
     get:
       tags:
       - dashboard
-      summary: ROI dashboard
+      summary: ROI dashboard of one country
+      description: Orders of the country's branches placed from `from` to `to` (inclusive, local time).
+        The savings are an estimate (app/decision/dashboard.py).
       operationId: get_dashboard_summary
       security:
       - bearerAuth: []
@@ -1107,6 +1109,17 @@ paths:
           type: string
           format: date
           title: To
+      - name: country
+        in: query
+        required: false
+        schema:
+          enum:
+          - VN
+          - SG
+          - PH
+          type: string
+          default: VN
+          title: Country
       responses:
         '200':
           description: Successful Response
@@ -3136,10 +3149,27 @@ components:
           type: string
           format: date
           title: Period To
+        country:
+          type: string
+          enum:
+          - VN
+          - SG
+          - PH
+          title: Country
+          description: Orders of this country's branches.
+        currency:
+          type: string
+          enum:
+          - VND
+          - SGD
+          - PHP
+          title: Currency
+          description: Currency of the amounts (minor unit).
         orders_screened:
           type: integer
           minimum: 0.0
           title: Orders Screened
+          description: Orders the decision engine decided.
         actions:
           items:
             $ref: '#/components/schemas/ActionCount'
@@ -3167,12 +3197,14 @@ components:
           maximum: 1.0
           minimum: 0.0
           title: Good Orders Contacted Rate
-          description: Share of orders that were delivered fine but still contacted.
+          description: Among screened orders that were delivered fine, the share still contacted.
       additionalProperties: false
       type: object
       required:
       - period_from
       - period_to
+      - country
+      - currency
       - orders_screened
       - actions
       - cancelled_before_ship
@@ -3194,6 +3226,8 @@ components:
         - action: hold_for_review
           count: 20
         cancelled_before_ship: 64
+        country: VN
+        currency: VND
         delivered: 2410
         delivery_failed: 96
         estimated_savings_vnd: 3840000
