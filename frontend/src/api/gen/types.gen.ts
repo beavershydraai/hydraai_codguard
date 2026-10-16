@@ -1811,6 +1811,20 @@ export type OrderUpdate = {
 }
 
 /**
+ * OrdersChange
+ *
+ * When the shop's orders last changed: the inbox polls it and reloads only on a change.
+ */
+export type OrdersChange = {
+  /**
+   * Updated At
+   *
+   * Null while the shop has no orders.
+   */
+  updated_at: string | null
+}
+
+/**
  * OverrideRequest
  *
  * Staff decision that replaces the engine's. Recorded in the audit log.
@@ -2524,6 +2538,31 @@ export type ImportOrdersResponses = {
 }
 
 export type ImportOrdersResponse = ImportOrdersResponses[keyof ImportOrdersResponses]
+
+export type LastOrdersChangeData = {
+  body?: never
+  path?: never
+  query?: never
+  url: '/api/v1/orders/last-change'
+}
+
+export type LastOrdersChangeErrors = {
+  /**
+   * Missing or invalid credentials.
+   */
+  401: ProblemDetail
+}
+
+export type LastOrdersChangeError = LastOrdersChangeErrors[keyof LastOrdersChangeErrors]
+
+export type LastOrdersChangeResponses = {
+  /**
+   * Successful Response
+   */
+  200: OrdersChange
+}
+
+export type LastOrdersChangeResponse = LastOrdersChangeResponses[keyof LastOrdersChangeResponses]
 
 export type GetOrderData = {
   body?: never

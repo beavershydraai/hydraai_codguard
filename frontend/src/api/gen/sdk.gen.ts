@@ -46,6 +46,9 @@ import type {
   IntakeOrderData,
   IntakeOrderErrors,
   IntakeOrderResponses,
+  LastOrdersChangeData,
+  LastOrdersChangeErrors,
+  LastOrdersChangeResponses,
   ListOrdersData,
   ListOrdersErrors,
   ListOrdersResponses,
@@ -314,6 +317,26 @@ export const importOrders = <ThrowOnError extends boolean = false>(
       'Content-Type': null,
       ...options.headers,
     },
+  })
+
+/**
+ * When the shop's orders last changed
+ *
+ * One document read. The inbox polls it and reloads its page only when the value changes, so new orders appear within seconds without reloading pages for nothing.
+ */
+export const lastOrdersChange = <ThrowOnError extends boolean = false>(
+  options?: Options<LastOrdersChangeData, ThrowOnError>,
+): RequestResult<LastOrdersChangeResponses, LastOrdersChangeErrors, ThrowOnError> =>
+  (options?.client ?? client).get<LastOrdersChangeResponses, LastOrdersChangeErrors, ThrowOnError>({
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/v1/orders/last-change',
+    ...options,
   })
 
 /**

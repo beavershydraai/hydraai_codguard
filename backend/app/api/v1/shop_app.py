@@ -31,6 +31,7 @@ from app.schemas.orders import (
     OrderCreate,
     OrderDetail,
     OrderPage,
+    OrdersChange,
     OrderSummary,
     OrderUpdate,
     OverrideRequest,
@@ -317,6 +318,20 @@ def import_orders(
         duplicates=repeats + known,
         rejected=rejected,
     )
+
+
+@orders_router.get(
+    "/last-change",
+    response_model=OrdersChange,
+    responses=problem_responses(401),
+    summary="When the shop's orders last changed",
+    description="One document read. The inbox polls it and reloads its page only when the value "
+    "changes, so new orders appear within seconds without reloading pages for nothing.",
+)
+def last_orders_change(
+    user: CurrentUser, store: Annotated[OrderStore, Depends(get_store)]
+) -> OrdersChange:
+    return OrdersChange(updated_at=store.last_change(user.shop_id))
 
 
 @orders_router.get(
