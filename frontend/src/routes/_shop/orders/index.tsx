@@ -36,6 +36,7 @@ const STATUSES = Object.keys(ORDER_STATUS_LABELS) as OrderStatus[]
 const BRANCHES = Object.keys(BRANCH_LABELS)
 const SORTS: OrderSort[] = ['-placed_at', 'placed_at', '-updated_at', '-risk_score', '-cod_amount_vnd']
 const PAGE_SIZE = 100
+const REFRESH_MS = 10_000
 
 const ORDER_TEMPLATE = [
   [
@@ -100,6 +101,10 @@ function OrdersPage() {
       ...listOrdersInfiniteOptions({ query }),
       initialPageParam: { query: {} },
       getNextPageParam: (last) => last.next_cursor ?? undefined,
+      // New orders (intake, the simulator) show up on their own: the first page is fetched again
+      // every 10 s in the background while the tab is visible. The rows on screen stay until the
+      // new ones arrive, so nothing flickers. Paused once "Load more" has loaded further pages.
+      refetchInterval: (q) => ((q.state.data?.pages.length ?? 0) > 1 ? false : REFRESH_MS),
     })
   const orders = data?.pages.flatMap((page) => page.items) ?? []
   const queryClient = useQueryClient()
