@@ -96,6 +96,7 @@ export function summary(order: OrderDetail): OrderSummary {
     tier: order.tier,
     risk_score: order.risk_score,
     current_action: order.current_action,
+    suggested_action: order.decision?.suggested_action ?? null,
     placed_at: order.placed_at,
     updated_at: order.updated_at,
   }
@@ -312,9 +313,10 @@ export class MockDb {
         : 'ship_now'
     // A confirmed order is never contacted again.
     const chosen: DecisionAction = confirmed && policyAction !== 'hold_for_review' ? 'ship_now' : policyAction
-    // Call automation "suggest": the engine's AI call waits in review until the shop confirms it.
-    // The mock leaves out the other automation rules (tier, amounts, channels, hours).
-    const suggested = chosen === 'ai_call' && this.policy.automation?.mode === 'suggest'
+    // Automation off ("suggest", the default): every contact waits in review until the shop accepts
+    // it. The mock leaves out the rules for automatic calls (tier, amounts, channels, hours).
+    const contact: DecisionAction[] = ['send_confirmation_link', 'ai_call', 'require_deposit']
+    const suggested = contact.includes(chosen) && this.policy.automation?.mode !== 'auto'
     const action: DecisionAction = suggested ? 'hold_for_review' : chosen
     order.decision = {
       decided_at: nowIso(),
@@ -327,11 +329,11 @@ export class MockDb {
         : confirmed && policyAction !== action
           ? ['already_confirmed']
           : [],
-      suggested_action: suggested ? 'ai_call' : null,
+      suggested_action: suggested ? chosen : null,
       decided_by: 'engine',
     }
     order.current_action = action
-    order.suggested_action = suggested ? 'ai_call' : null
+    order.suggested_action = suggested ? chosen : null
     this.event(order, 'decided', 'engine', decisionMessage(action))
     this.setStatus(order, statusFor(action))
   }
@@ -430,6 +432,25 @@ export class MockDb {
     this.event(order, 'override', actor, `Staff chose: ${DECISION_ACTION_LABELS[action]}.`, reason)
     this.setStatus(order, statusFor(action))
     if (action === 'cancel') this.event(order, 'status_changed', actor, 'Order cancelled by the shop.')
+    return publicDetail(order)
+  }
+
+  acceptSuggestion(orderId: string, actor: string): OrderDetail {
+    const order = this.order(orderId)
+    const action = order.status === 'pending_review' ? order.decision?.suggested_action : null
+    if (!action) throw new MockError(409, 'conflict', 'The order has no suggestion.')
+    order.decision = {
+      ...order.decision!,
+      decided_at: nowIso(),
+      action,
+      block_reasons: [],
+      suggested_action: null,
+      decided_by: 'staff',
+    }
+    order.current_action = action
+    order.suggested_action = null
+    this.event(order, 'override', actor, `Shop accepted the suggested ${DECISION_ACTION_LABELS[action]}.`)
+    this.setStatus(order, statusFor(action))
     return publicDetail(order)
   }
 

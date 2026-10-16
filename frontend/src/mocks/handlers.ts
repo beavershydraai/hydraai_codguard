@@ -108,6 +108,9 @@ on('POST', '/api/v1/orders/{order_id}/override', async ({ params, body }) => {
   }
   return mockDb.override(params.order_id!, action, reason, ME.email)
 })
+on('POST', '/api/v1/orders/{order_id}/suggestion/accept', ({ params }) =>
+  mockDb.acceptSuggestion(params.order_id!, ME.email),
+)
 on('POST', '/api/v1/orders/{order_id}/calls', ({ params }) => mockDb.startCall(params.order_id!), 202)
 on('GET', '/api/v1/calls/{call_id}', ({ params }) => mockDb.getCall(params.call_id!))
 

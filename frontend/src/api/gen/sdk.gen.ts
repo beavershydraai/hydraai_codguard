@@ -10,6 +10,9 @@ import {
 } from './client'
 import { client } from './client.gen'
 import type {
+  AcceptSuggestionData,
+  AcceptSuggestionErrors,
+  AcceptSuggestionResponses,
   CreateOrderData,
   CreateOrderErrors,
   CreateOrderResponses,
@@ -82,6 +85,9 @@ import type {
   RunSpamSimulationData,
   RunSpamSimulationErrors,
   RunSpamSimulationResponses,
+  RunTimersData,
+  RunTimersErrors,
+  RunTimersResponses,
   StartCallData,
   StartCallErrors,
   StartCallResponses,
@@ -412,6 +418,26 @@ export const overrideOrder = <ThrowOnError extends boolean = false>(
   })
 
 /**
+ * Accept the contact the engine suggested
+ *
+ * For an order waiting in review with `suggested_action` (automation off, or an AI call outside the automation rules): sends the link or the deposit request, or places the AI call, then the order waits for the buyer with the usual no-response timer. 409 when there is nothing to accept, or contact protection blocks the call.
+ */
+export const acceptSuggestion = <ThrowOnError extends boolean = false>(
+  options: Options<AcceptSuggestionData, ThrowOnError>,
+): RequestResult<AcceptSuggestionResponses, AcceptSuggestionErrors, ThrowOnError> =>
+  (options.client ?? client).post<AcceptSuggestionResponses, AcceptSuggestionErrors, ThrowOnError>({
+    security: [
+      {
+        key: 'bearerAuth',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/v1/orders/{order_id}/suggestion/accept',
+    ...options,
+  })
+
+/**
  * Start an AI confirmation call now
  *
  * Contact protection still applies: 409 `contact_blocked` with `block_reasons` when the call is not allowed.
@@ -710,4 +736,24 @@ export const recordCallResult = <ThrowOnError extends boolean = false>(
       'Content-Type': 'application/json',
       ...options.headers,
     },
+  })
+
+/**
+ * Fire the no-response timers that are due
+ *
+ * Called by Cloud Scheduler (`codguard-timers`) every 5 minutes with a Google ID token of `codguard-runtime`. Each order whose `decision.next_action_at` has passed runs the pipeline's `no_response` event: the next AI call, the call after a link, or review.
+ */
+export const runTimers = <ThrowOnError extends boolean = false>(
+  options?: Options<RunTimersData, ThrowOnError>,
+): RequestResult<RunTimersResponses, RunTimersErrors, ThrowOnError> =>
+  (options?.client ?? client).post<RunTimersResponses, RunTimersErrors, ThrowOnError>({
+    security: [
+      {
+        key: 'googleIdToken',
+        scheme: 'bearer',
+        type: 'http',
+      },
+    ],
+    url: '/api/v1/internal/timers/run',
+    ...options,
   })

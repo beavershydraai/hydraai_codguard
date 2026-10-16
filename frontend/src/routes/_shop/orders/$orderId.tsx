@@ -4,7 +4,12 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 
 import type { Call, ContactAttempt } from '@/api/gen'
-import { getOrderOptions, getShopOptions, startCallMutation } from '@/api/gen/@tanstack/react-query.gen'
+import {
+  acceptSuggestionMutation,
+  getOrderOptions,
+  getShopOptions,
+  startCallMutation,
+} from '@/api/gen/@tanstack/react-query.gen'
 import { OrderDetailView } from '@/components/blocks/receipt-2/components/order-detail'
 import { CallSimulator } from '@/components/orders/call-simulator'
 import { EditOrderSheet } from '@/components/orders/edit-order-sheet'
@@ -49,6 +54,16 @@ function OrderDetailPage() {
     onError: (err) => toast.error('Could not start the call', { description: problemMessage(err) }),
   })
 
+  const accept = useMutation({
+    ...acceptSuggestionMutation(),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(getOrderOptions({ path: { order_id: orderId } }).queryKey, updated)
+      void invalidate(queryClient, 'listOrders')
+      toast.success('Suggestion accepted', { description: 'The buyer is contacted now.' })
+    },
+    onError: (err) => toast.error('Could not accept the suggestion', { description: problemMessage(err) }),
+  })
+
   if (error) return <QueryError error={error} />
   if (isPending || !order) return <DetailSkeleton />
 
@@ -75,6 +90,8 @@ function OrderDetailPage() {
           onEdit: () => setPanel('edit'),
           onOverride: () => setPanel('override'),
           onPreviewMessage: setMessage,
+          onAcceptSuggestion: () => accept.mutate({ path: { order_id: order.id } }),
+          acceptingSuggestion: accept.isPending,
         }}
       />
       <EditOrderSheet

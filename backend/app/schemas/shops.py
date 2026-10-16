@@ -169,7 +169,7 @@ class TierPolicy(ApiModel):
 
 
 _DEFAULT_AUTOMATION = {
-    "mode": "auto",
+    "mode": "suggest",
     "min_tier": None,
     "cod_ranges": [],
     "channels": None,
@@ -237,12 +237,16 @@ class CodRange(ApiModel):
 
 
 class CallAutomation(ApiModel):
-    """When the agent places an AI call by itself. The engine still scores every order and picks
-    the action; an AI call outside these rules is not placed but suggested: the order waits in
-    review with `suggested_action: ai_call` until the shop confirms the call
-    (`POST /orders/{id}/calls`) or chooses something else. The defaults are the tier policy as it
-    was: every call the engine picks is placed. Contact protection (contact hours, one call per
-    phone per day, blocked phones) applies to every call on top of these rules."""
+    """What the agent does by itself. The engine still scores every order and picks the action.
+
+    - `suggest` (default): every contact it picks (confirmation link, AI call, deposit request) is
+      only suggested: the order waits in review with `suggested_action` until the shop accepts it
+      (`POST /orders/{id}/suggestion/accept`) or chooses something else.
+    - `auto`: the shop switched automation on. Links and deposit requests go out by themselves;
+      an AI call does when the order is inside the rules below, otherwise it is suggested.
+
+    Contact protection (contact hours, one call per phone per day, blocked phones) applies to
+    every call on top of these rules."""
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -264,7 +268,7 @@ class CallAutomation(ApiModel):
         }
     )
 
-    mode: CallAutomationMode = CallAutomationMode.AUTO
+    mode: CallAutomationMode = CallAutomationMode.SUGGEST
     min_tier: RiskTier | None = Field(
         default=None,
         description="Auto-call from this risk tier up; an AI call for a lower tier is only "

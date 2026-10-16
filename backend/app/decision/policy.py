@@ -94,15 +94,22 @@ def follow_up(
 
 
 def automation_blocks(
-    automation: CallAutomation, order: dict | None, now: datetime, tier: RiskTier
+    automation: CallAutomation,
+    order: dict | None,
+    now: datetime,
+    tier: RiskTier,
+    action: DecisionAction = DecisionAction.AI_CALL,
 ) -> list[ContactBlockReason]:
-    """Why the agent may not place an AI call for `order` (risk `tier`) by itself now; empty
-    when it may. Without an order (a bare policy check) nothing blocks."""
+    """Why the agent may not contact the buyer of `order` (risk `tier`) with `action` by itself
+    now; empty when it may. Without an order (a bare policy check) nothing blocks. The rules
+    beyond the mode apply to AI calls only."""
     if order is None:
         return []
     auto, reason, blocks = automation, ContactBlockReason, []
     if auto.mode == CallAutomationMode.SUGGEST:
         blocks.append(reason.MANUAL_APPROVAL)
+    if action != DecisionAction.AI_CALL:
+        return blocks
     tiers = list(RiskTier)
     if auto.min_tier is not None and tiers.index(tier) < tiers.index(auto.min_tier):
         blocks.append(reason.BELOW_AUTO_CALL_TIER)
@@ -221,9 +228,9 @@ def _decision(
     elif cost is not None and expected_loss_vnd <= cost:  # contact only when it pays for itself
         action, cost = DecisionAction.SHIP_NOW, None
         blocks = [ContactBlockReason.EXPECTED_LOSS_BELOW_COST]
-    elif action == DecisionAction.AI_CALL and (blocks := automation_blocks(auto, order, now, tier)):
-        # Outside the shop's call automation: suggest the call, a person starts it.
-        action, cost, suggested = DecisionAction.HOLD_FOR_REVIEW, None, DecisionAction.AI_CALL
+    elif cost is not None and (blocks := automation_blocks(auto, order, now, tier, action)):
+        # Outside the shop's automation: suggest the contact, a person accepts it.
+        action, cost, suggested = DecisionAction.HOLD_FOR_REVIEW, None, action
     calls_made = call_attempts + (action == DecisionAction.AI_CALL)
     next_action, wait = follow_up(tier_rule(policy, tier), action, calls_made, auto)
     return Decision(

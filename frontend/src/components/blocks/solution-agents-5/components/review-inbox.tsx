@@ -81,11 +81,14 @@ export function ReviewInbox({
   decisions,
   onRefresh,
   onDecide,
+  onAccept,
 }: {
   orders: OrderSummary[]
   isLoading: boolean
   decisions: SessionDecision[]
   onRefresh: () => void
+  /** Accepts the contact the engine suggested for one order. */
+  onAccept: (order: OrderSummary) => void
   /** Applies one decision with its reason to the given orders. */
   onDecide: (orders: OrderSummary[], action: ReviewDecision, reason: string) => Promise<void>
 }) {
@@ -176,7 +179,7 @@ export function ReviewInbox({
             ]}
           />
 
-          <ReviewQueue orders={orders} isLoading={isLoading} onDecide={ask} />
+          <ReviewQueue orders={orders} isLoading={isLoading} onDecide={ask} onAccept={onAccept} />
 
           <RecentDecisions decisions={decisions} />
         </div>
@@ -240,10 +243,12 @@ function ReviewQueue({
   orders,
   isLoading,
   onDecide,
+  onAccept,
 }: {
   orders: OrderSummary[]
   isLoading: boolean
   onDecide: (orders: OrderSummary[], action: ReviewDecision) => void
+  onAccept: (order: OrderSummary) => void
 }) {
   const [search, setSearch] = useState('')
   const [lateOnly, setLateOnly] = useState(false)
@@ -263,8 +268,8 @@ function ReviewQueue({
   }, [orders, search, lateOnly, now])
 
   const columns = useMemo(
-    () => createReviewColumns({ onDecide: (order, action) => onDecide([order], action) }),
-    [onDecide],
+    () => createReviewColumns({ onDecide: (order, action) => onDecide([order], action), onAccept }),
+    [onDecide, onAccept],
   )
   const table = useTable({
     features: dataGridFeatures,

@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Path, Query, Security, UploadFile, status
 
+from app.agents import contact
 from app.agents.agent import Pipeline
 from app.agents.intake import receive
 from app.agents.log import DecisionLog, entry, get_decision_log
@@ -24,7 +25,14 @@ from app.risk import artifacts, health
 from app.schemas.calls import Call
 from app.schemas.dashboard import BacktestResult, DashboardSummary, ModelHealth
 from app.schemas.delivery import DeliveryImportResult, DeliveryOutcomeBatch
-from app.schemas.enums import ContactBlockReason, ErrorCode, OrderStatus, RiskTier, Role
+from app.schemas.enums import (
+    ContactBlockReason,
+    DecisionAction,
+    ErrorCode,
+    OrderStatus,
+    RiskTier,
+    Role,
+)
 from app.schemas.orders import (
     ImportResult,
     ImportRowError,
@@ -401,6 +409,53 @@ def override_order(
     )
     row = entry(doc, Decision.model_validate(doc["decision"]), workflow="staff", step="override")
     decision_log.write(row | {"actor": user.email, "reason": body.reason})
+    return order_detail(doc)
+
+
+@orders_router.post(
+    "/{order_id}/suggestion/accept",
+    response_model=OrderDetail,
+    responses=problem_responses(401, 404, 409, examples={409: _CONTACT_BLOCKED}),
+    summary="Accept the contact the engine suggested",
+    description="For an order waiting in review with `suggested_action` (automation off, or an "
+    "AI call outside the automation rules): sends the link or the deposit request, or places "
+    "the AI call, then the order waits for the buyer with the usual no-response timer. 409 when "
+    "there is nothing to accept, or contact protection blocks the call.",
+)
+def accept_suggestion(
+    order_id: OrderId,
+    user: CurrentUser,
+    store: Annotated[OrderStore, Depends(get_store)],
+    decision_log: Annotated[DecisionLog, Depends(get_decision_log)],
+    calls: Annotated[CallService | None, Depends(get_call_service)],
+    shops: Shops,
+    policies: Policies,
+) -> OrderDetail:
+    now = datetime.now(UTC)
+    doc = store.get(order_id)
+    if doc is None or doc["shop_id"] != user.shop_id:
+        raise ApiError(404, ErrorCode.NOT_FOUND, "Not found", "Order not found.")
+    action = lifecycle.suggested(doc)
+    if action is None:
+        raise ApiError(409, ErrorCode.CONFLICT, "Conflict", "The order has no suggestion.")
+    if action == DecisionAction.AI_CALL and calls is not None and not doc.get("skip_agents"):
+        calls.start_for_shop(order_id, user.shop_id, user.email, now)  # accepts once placed
+        doc = store.get(order_id)
+    else:  # a link or deposit request, or a call that stays simulated (test orders)
+        doc = lifecycle.accept_suggestion(
+            store,
+            order_id,
+            action,
+            user.email,
+            now,
+            settings=shops.settings(user.shop_id),
+            policy=policies.current(user.shop_id),
+        )
+        sent = contact.contact(decision_log, doc, action, now)
+        if "attempt" in sent and sent["sent"]:
+            doc = lifecycle.record_call_attempt(store, order_id, sent["attempt"], now)
+    row = entry(doc, Decision.model_validate(doc["decision"]), workflow="staff", step="accept")
+    decision_log.write(row | {"actor": user.email})
     return order_detail(doc)
 
 

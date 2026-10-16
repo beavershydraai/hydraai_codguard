@@ -26,6 +26,7 @@ import { TierBadge } from '@/components/tier-badge'
 import { Button } from '@/components/ui/button'
 import { Item, ItemMedia } from '@/components/ui/item'
 import { Separator } from '@/components/ui/separator'
+import { Spinner } from '@/components/ui/spinner'
 import {
   BLOCK_REASON_LABELS,
   CALL_OUTCOME_LABELS,
@@ -67,6 +68,9 @@ export type OrderDetailActions = {
   /** Shown for an open confirmation link: preview of the simulated Zalo ZNS / SMS. */
   onPreviewMessage?: (contact: ContactAttempt) => void
   callDisabledReason?: string | null
+  /** Accepts the contact the engine suggested (automation off). */
+  onAcceptSuggestion?: () => void
+  acceptingSuggestion?: boolean
 }
 
 export function OrderDetailView({ order, actions }: { order: OrderDetail; actions: OrderDetailActions }) {
@@ -155,7 +159,11 @@ export function OrderDetailView({ order, actions }: { order: OrderDetail; action
 
         <div className="flex min-w-0 flex-col gap-6">
           <RiskPanel score={order.current_score ?? null} currency={order.currency ?? 'VND'} />
-          <DecisionPanel order={order} />
+          <DecisionPanel
+            order={order}
+            onAcceptSuggestion={actions.onAcceptSuggestion}
+            acceptingSuggestion={actions.acceptingSuggestion}
+          />
           <ContactsPanel order={order} onPreviewMessage={actions.onPreviewMessage} />
           <DetailsPanel order={order} />
           <PartiesPanel order={order} />
@@ -376,7 +384,15 @@ function formatSignalValue({ key, value }: Signal, currency: string): string {
 
 // ── Decision ──
 
-function DecisionPanel({ order }: { order: OrderDetail }) {
+function DecisionPanel({
+  order,
+  onAcceptSuggestion,
+  acceptingSuggestion,
+}: {
+  order: OrderDetail
+  onAcceptSuggestion?: () => void
+  acceptingSuggestion?: boolean
+}) {
   const decision = order.decision
   if (!decision) {
     return (
@@ -408,11 +424,21 @@ function DecisionPanel({ order }: { order: OrderDetail }) {
           estimated
         />
       </dl>
-      {decision.suggested_action === 'ai_call' && (
-        <p className="rounded-lg bg-primary/5 p-3 text-sm">
-          <span className="font-medium">AI call suggested.</span> The shop's call automation leaves this call
-          to you: press AI confirmation call to place it, or choose another action.
-        </p>
+      {decision.suggested_action && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-primary/5 p-3 text-sm">
+          <p>
+            <span className="font-medium">
+              Suggested: {DECISION_ACTION_LABELS[decision.suggested_action]}.
+            </span>{' '}
+            Automation is off for this contact, so it waits for you. Accept it, or choose another action.
+          </p>
+          {onAcceptSuggestion && (
+            <Button size="sm" onClick={onAcceptSuggestion} disabled={acceptingSuggestion}>
+              {acceptingSuggestion && <Spinner data-icon="inline-start" />}
+              Accept suggestion
+            </Button>
+          )}
+        </div>
       )}
       {(decision.block_reasons?.length ?? 0) > 0 && (
         <div className="flex flex-col gap-1.5">

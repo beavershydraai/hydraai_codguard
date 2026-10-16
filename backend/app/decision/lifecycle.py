@@ -77,9 +77,12 @@ def transition(
     repeated cancellation or delivery result as the same event.
     """
     status = OrderStatus(status)
-    if event in {"decided", "rescored", "no_response", "staff_override"}:
+    if event in {"decided", "rescored", "no_response", "staff_override", "suggestion_accepted"}:
         allowed = WAITING if event == "no_response" else EDITABLE
         targets = STATUS_FOR_ACTION
+        if event == "suggestion_accepted":
+            allowed = {OrderStatus.PENDING_REVIEW}
+            targets = {a: STATUS_FOR_ACTION[a] for a in decisions.CONTACT_COST_FIELD}
         if event == "staff_override":
             targets = {
                 a: STATUS_FOR_ACTION[a]
@@ -108,10 +111,6 @@ def transition(
                 OrderStatus.DELIVERY_FAILED,
             ),
             "call_needs_review": (EDITABLE, OrderStatus.PENDING_REVIEW),
-            "suggestion_accepted": (
-                {OrderStatus.PENDING_REVIEW},
-                OrderStatus.AWAITING_CONFIRMATION,
-            ),
         }
         if event in events:
             allowed, target = events[event]
@@ -471,48 +470,60 @@ def override_order(
     return _transact(store, order_id, apply)
 
 
-def accept_suggested_call(
+def suggested(doc: dict) -> DecisionAction | None:
+    """The contact the engine suggested for an order waiting in review, if any."""
+    action = (doc.get("decision") or {}).get("suggested_action")
+    if action and doc["status"] == OrderStatus.PENDING_REVIEW:
+        return DecisionAction(action)
+    return None
+
+
+_SUGGESTION_LABELS = {
+    DecisionAction.SEND_CONFIRMATION_LINK: "confirmation link",
+    DecisionAction.AI_CALL: "AI call",
+    DecisionAction.REQUIRE_DEPOSIT: "deposit request",
+}
+
+
+def accept_suggestion(
     store: OrderStore,
     order_id: str,
+    action: DecisionAction,
     actor: str,
     now: datetime,
     *,
     settings: Settings = None,
     policy: Policy | None = None,
 ) -> dict:
-    """The shop confirms the AI call the engine suggested (call automation): the order then
-    waits for the buyer as after an automatic call, and the timeline records who confirmed it.
-    An order without a suggested call is left alone."""
+    """The shop accepts the contact the engine suggested (`suggest` mode, or an AI call outside
+    the automation rules): the order then waits for the buyer as after an automatic contact,
+    with the same no-response timer, and the timeline records who accepted it. An order without
+    that suggestion is left alone."""
 
     def apply(doc):
-        previous = doc.get("decision") or {}
-        if (
-            previous.get("suggested_action") != DecisionAction.AI_CALL
-            or doc["status"] != OrderStatus.PENDING_REVIEW
-        ):
+        if suggested(doc) != action:
             return doc
+        previous = doc["decision"]
         current = policy or decisions.default_policy()
         rule = decisions.tier_rule(current, RiskTier(doc.get("tier") or RiskTier.LOW))
-        next_action, wait = decisions.follow_up(
-            rule, DecisionAction.AI_CALL, calls_made(doc) + 1, current.automation
-        )
-        _move(doc, "suggestion_accepted")
+        calls = calls_made(doc) + (action == DecisionAction.AI_CALL)
+        next_action, wait = decisions.follow_up(rule, action, calls, current.automation)
+        _move(doc, "suggestion_accepted", action)
         _set_decision(
             doc,
             Decision(
                 decided_at=now,
-                action=DecisionAction.AI_CALL,
+                action=action,
                 policy_version=current.version,
                 expected_loss_vnd=previous.get("expected_loss_vnd"),
-                contact_cost_vnd=decisions.contact_cost(
-                    DecisionAction.AI_CALL, settings_for(doc, settings)
-                ),
+                contact_cost_vnd=decisions.contact_cost(action, settings_for(doc, settings)),
                 next_action=next_action,
                 next_action_at=now + timedelta(minutes=wait) if next_action else None,
                 decided_by="staff",
             ),
         )
-        _event(doc, "override", now, "Shop confirmed the suggested AI call.", actor)
+        label = _SUGGESTION_LABELS[action]
+        _event(doc, "override", now, f"Shop accepted the suggested {label}.", actor)
         doc["timeline"][0]["reason"] = "Suggested by the decision engine."
         return doc
 

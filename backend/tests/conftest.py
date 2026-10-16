@@ -50,3 +50,18 @@ def shop_docs(monkeypatch):
     monkeypatch.setattr(ShopStore, "_create", create)
     monkeypatch.setattr(ShopStore, "_write", lambda self, i, doc: docs.update({i: deepcopy(doc)}))
     return docs
+
+
+@pytest.fixture(autouse=True)
+def automation_on(request, monkeypatch):
+    """Most tests check what the agent does by itself, so they run with automation on. The real
+    default is `suggest` (the shop accepts every contact); tests of it are marked
+    `default_automation`."""
+    if request.node.get_closest_marker("default_automation"):
+        return
+    from app.decision import policy
+    from app.schemas.shops import CallAutomation
+
+    auto = policy.default_policy().model_copy(update={"automation": CallAutomation(mode="auto")})
+    monkeypatch.setattr(policy, "default_policy", lambda: auto)
+    monkeypatch.setattr(policies, "default_policy", lambda: auto)
