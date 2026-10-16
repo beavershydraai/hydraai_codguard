@@ -51,6 +51,8 @@ def review_reason(doc: dict) -> ReviewReason | None:
     outcome = calls[-1].get("outcome") if calls else None
     if outcome == CallOutcome.UNCLEAR:
         return ReviewReason.CALL_UNCLEAR
+    if outcome == CallOutcome.EDITED:  # an edited call that left the order here changed items
+        return ReviewReason.ITEMS_CHANGED
     if outcome == CallOutcome.WRONG_PERSON:
         return ReviewReason.WRONG_PERSON
     if (doc.get("attempts") or {}).get("ai_call"):  # the last contact was an AI call

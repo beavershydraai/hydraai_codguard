@@ -15,11 +15,11 @@ from app.calls import jobs, spoken
 from app.calls.pubsub import PubSubPublisher
 from app.calls.service import (
     CallService,
-    UnclearChange,
     call_id_for,
     get_call_service,
     mask_phone,
     order_update,
+    requested_items,
 )
 from app.calls.store import CallNotFound
 from app.main import create_app
@@ -418,42 +418,52 @@ JACKETS = {
 }
 
 
-def test_quantities_written_as_free_text_reach_the_right_variant():
-    """The voice agent wrote "5 (size S)": the quantity is read, and the size picks the item."""
-    changes = [
-        {"field": "item_quantity", "item_name": "Jacket", "new_value": "5 (size S)"},
-        {"field": "item_quantity", "item_name": "jacket", "new_value": "3 (size M)"},
-    ]
-    update = order_update(JACKETS, changes)
-    assert [(i.variant, i.quantity) for i in update.items] == [("S", 5), ("M", 3), ("L", 2)]
-
-
 @pytest.mark.parametrize(
-    "change",
+    ("change", "described"),
     [
-        {"field": "item_quantity", "item_name": "Jacket", "new_value": "five"},
-        {"field": "item_quantity", "item_name": "Jacket", "new_value": "5"},  # which size?
-        {"field": "item_variant", "item_name": "Jacket", "new_value": "XL"},
-        {"field": "item_quantity", "item_name": "Hat", "new_value": "1"},
+        (
+            {"item_name": "Jacket", "item_variant": "S", "quantity": 5, "new_value": "5"},
+            "Jacket (S): quantity 2 → 5",
+        ),
+        ({"item_name": "Jacket", "new_value": "3 (size M)"}, "Jacket (M): quantity 2 → 3"),
+        ({"item_name": "Jacket", "new_value": "5"}, "Jacket: 5"),  # which size: shown as said
     ],
 )
-def test_a_change_that_cannot_be_applied_with_certainty_is_unclear(change):
-    with pytest.raises(UnclearChange):
-        order_update(JACKETS, [change])
+def test_item_changes_are_described_not_applied(change, described):
+    change = {"field": "item_quantity"} | change
+    assert requested_items(JACKETS, [change]) == [described]
+    assert order_update(JACKETS, [change]) is None
 
 
-def test_an_unclear_edit_sends_the_order_to_review_instead_of_failing(calls):
+def test_delivery_details_still_apply():
+    changes = [{"field": "delivery_address", "new_value": "Số 42 ngõ 59, Hà Nội"}]
+    assert order_update(JACKETS, changes).address.raw == "Số 42 ngõ 59, Hà Nội"
+    assert requested_items(JACKETS, changes) == []
+
+
+def test_an_item_change_sends_the_order_to_review_with_the_address_applied(calls):
     asyncio.run(run(_pipe(calls)))
     call = calls.start_for_shop("ord_test", "shop_a", "admin@gmail.com", NOW)
     dialing(calls, call.id)
-    change = {
-        "order_id": "ord_test",
-        "field": "item_quantity",
-        "item_name": "Nope",
-        "new_value": "x",
-    }
-    calls.record_result(call.id, result(outcome="edited", changes=[change]))
-    assert order(calls)["status"] == OrderStatus.PENDING_REVIEW
+    item = order(calls)["items"][0]
+    changes = [
+        {
+            "order_id": "ord_test",
+            "field": "item_quantity",
+            "item_name": item["name"],
+            "quantity": 5,
+            "new_value": "5",
+        },
+        {"order_id": "ord_test", "field": "delivery_address", "new_value": "Số 42 ngõ 59, Hà Nội"},
+    ]
+    calls.record_result(call.id, result(outcome="edited", changes=changes))
+    doc = order(calls)
+    assert doc["status"] == OrderStatus.PENDING_REVIEW and not doc.get("confirmation")
+    assert doc["address"]["raw"] == "Số 42 ngõ 59, Hà Nội"
+    assert doc["items"][0]["quantity"] == item["quantity"]  # not changed: the shop checks stock
+    messages = [e["message_vi"] for e in doc["timeline"]]
+    assert any(m.startswith("Buyer asked on the call to change items:") for m in messages)
+    assert any("address" in m and "→ Số 42 ngõ 59, Hà Nội" in m for m in messages)
 
 
 def test_a_failed_call_leaves_the_order_waiting(calls):

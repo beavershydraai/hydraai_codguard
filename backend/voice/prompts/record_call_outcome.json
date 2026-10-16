@@ -29,6 +29,14 @@
               "type": "STRING",
               "description": "The item's name from ORDER CONTEXT. Required for item_variant and item_quantity."
             },
+            "item_variant": {
+              "type": "STRING",
+              "description": "When the order has the same item in several variants (sizes, colours): the current variant of the item the change is about, from ORDER CONTEXT."
+            },
+            "quantity": {
+              "type": "INTEGER",
+              "description": "For item_quantity: the new quantity as a whole number. 0 removes the item."
+            },
             "new_value": {
               "type": "STRING",
               "description": "The new value as read back and confirmed by the buyer. For cancel_order, write \"cancel\"."

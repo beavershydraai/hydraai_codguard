@@ -363,9 +363,12 @@ def _edit(
     staff = doc.get("decision") and doc["decision"]["decided_by"] == "staff"
     if deposit_paid:
         _record_intervention(doc, "deposit")
+    described = _changes_text(doc, changed)
     doc.update(changed)
     doc["cod_amount_vnd"] = cod_amount(doc)
-    _event(doc, "edited", now, "Order edited.", actor)
+    _event(
+        doc, "edited", now, f"Order edited: {described}." if described else "Order edited.", actor
+    )
     scored = _score(store, doc, now, settings=settings, policy=policy)
     if not scored:
         if doc.get("scoring"):
@@ -391,6 +394,44 @@ def _edit(
             _move(doc, "rescored", DecisionAction.SHIP_NOW)
             _release(doc, now)
     return True
+
+
+_EDIT_LABELS = {
+    "recipient_name": "Recipient",
+    "note": "Note",
+    "buyer_name": "Buyer",
+    "prepaid_vnd": "Prepaid",
+    "discount_vnd": "Discount",
+    "shipping_fee_vnd": "Shipping fee",
+}
+
+
+def _changes_text(doc: dict, changed: dict) -> str:
+    """What an edit changes, from → to, for the timeline. Phones are never written there."""
+    parts = []
+    for key, new in changed.items():
+        old = doc.get(key)
+        if key == "address":
+            parts.append(f"address {(old or {}).get('raw')} → {new.get('raw')}")
+        elif key == "items":
+
+            def counts(items):
+                return {
+                    (f"{i['name']} ({i['variant']})" if i.get("variant") else i["name"]): i[
+                        "quantity"
+                    ]
+                    for i in items or []
+                }
+
+            before, after = counts(old), counts(new)
+            for name in [*before, *(n for n in after if n not in before)]:
+                if before.get(name) != after.get(name):
+                    parts.append(f"{name} {before.get(name, 0)} → {after.get(name, 0)}")
+        elif key == "buyer_phone":
+            parts.append("buyer phone changed")
+        elif key in _EDIT_LABELS:
+            parts.append(f"{_EDIT_LABELS[key].lower()} {old if old is not None else '—'} → {new}")
+    return "; ".join(parts)
 
 
 def edit_order(
@@ -687,14 +728,19 @@ def apply_call_outcome(
     now: datetime,
     *,
     update: OrderUpdate | None = None,
+    requested: list[str] | None = None,
     call_attempts: int | None = None,
     settings: Settings = None,
     policy: Policy | None = None,
 ) -> dict:
-    """Apply one validated call outcome; corrected fields must have been read back."""
+    """Apply one validated call outcome; corrected fields must have been read back.
+
+    An edited call applies the delivery details in `update`. When the buyer also asked to change
+    items (`requested`, e.g. "Jacket (S): quantity 2 → 5"), the order is not confirmed: it goes
+    to review with the request listed, because the shop checks stock before changing items."""
     outcome = CallOutcome(outcome)
-    if outcome == CallOutcome.EDITED and update is None:
-        raise ValueError("update is required for an edited call")
+    if outcome == CallOutcome.EDITED and update is None and not requested:
+        raise ValueError("an edited call needs an update or requested item changes")
 
     def apply(doc):
         if doc["status"] in EDITABLE and not doc.get("confirmation"):
@@ -703,7 +749,31 @@ def apply_call_outcome(
             if doc.get("confirmation"):
                 return doc
             _editable(doc)
-            if outcome == CallOutcome.EDITED:
+            if requested:
+                if update is not None:
+                    _edit(store, doc, update, now, settings=settings, policy=policy, actor="buyer")
+                _move(doc, "call_needs_review")
+                _set_decision(
+                    doc,
+                    decisions.decide(
+                        RiskTier(doc.get("tier") or RiskTier.LOW),
+                        (doc.get("scoring") or {}).get("expected_loss_vnd", 0),
+                        now,
+                        settings=settings_for(doc, settings),
+                        policy=policy,
+                        action=DecisionAction.HOLD_FOR_REVIEW,
+                    ),
+                )
+                _event(
+                    doc,
+                    "buyer_responded",
+                    now,
+                    "Buyer asked on the call to change items: "
+                    + "; ".join(requested)
+                    + ". Check stock, then edit the order.",
+                    "buyer",
+                )
+            elif outcome == CallOutcome.EDITED:
                 doc["confirmation"] = {"at": now, "via": "call"}
                 _edit(store, doc, update, now, settings=settings, policy=policy, actor="buyer")
                 _move(doc, "buyer_confirmed")

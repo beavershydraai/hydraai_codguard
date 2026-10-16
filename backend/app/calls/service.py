@@ -136,7 +136,8 @@ def _quantity(value: str) -> tuple[int, str]:
 
 def _item_for(items: list[dict], name: str, hint: str) -> dict:
     """The one item the change is about: by name, and when several items share the name (one
-    jacket in three sizes), by the variant the agent named alongside the value."""
+    jacket in three sizes), by its variant: `item_variant` from the call, or the variant the
+    agent wrote alongside the value ("5 (size S)")."""
     same = [item for item in items if item["name"].casefold() == name.casefold()]
     if len(same) > 1:
         words = set(re.findall(r"\w+", hint.casefold()))
@@ -148,13 +149,41 @@ def _item_for(items: list[dict], name: str, hint: str) -> dict:
     return same[0]
 
 
+def _label(item: dict) -> str:
+    return f"{item['name']} ({item['variant']})" if item.get("variant") else item["name"]
+
+
+def requested_items(doc: dict, changes: list[dict]) -> list[str]:
+    """The item changes the buyer asked for on a call, as "Jacket (S): quantity 2 → 5". They
+    are not applied: the shop checks stock first. A change that cannot be read with certainty
+    is shown as the agent wrote it."""
+    requested = []
+    for change in changes:
+        field = CallChangeField(change["field"])
+        if field not in {CallChangeField.ITEM_QUANTITY, CallChangeField.ITEM_VARIANT}:
+            continue
+        name, value = change.get("item_name") or "", change["new_value"]
+        try:
+            hint = change.get("item_variant") or ""
+            if field == CallChangeField.ITEM_QUANTITY:
+                quantity = change.get("quantity")
+                if quantity is None:
+                    quantity, rest = _quantity(value)
+                    hint = hint or rest
+                item = _item_for(doc["items"], name, hint)
+                requested.append(f"{_label(item)}: quantity {item['quantity']} → {quantity}")
+            else:
+                item = _item_for(doc["items"], name, hint)
+                requested.append(f"{_label(item)}: variant → {value}")
+        except UnclearChange:
+            requested.append(f"{name}: {value}")
+    return requested
+
+
 def order_update(doc: dict, changes: list[dict]) -> OrderUpdate | None:
-    """The order edit a call confirmed, from its read-back changes. None when nothing changed.
-    The voice agent writes `new_value` as free text ("5 (size S)"); a change that cannot be
-    applied with certainty raises UnclearChange, and the order goes to review instead."""
+    """The delivery details a call confirmed (address, recipient, note), applied to the order.
+    None when none changed. Item changes are not applied here: see requested_items."""
     fields: dict = {}
-    items = [dict(item) for item in doc["items"]]
-    items_changed = False
     for change in changes:
         field, value = CallChangeField(change["field"]), change["new_value"]
         if field == CallChangeField.DELIVERY_ADDRESS:
@@ -163,17 +192,6 @@ def order_update(doc: dict, changes: list[dict]) -> OrderUpdate | None:
             fields["recipient_name"] = value
         elif field == CallChangeField.DELIVERY_NOTE:
             fields["note"] = value
-        elif field == CallChangeField.ITEM_QUANTITY:
-            quantity, hint = _quantity(value)
-            _item_for(items, change.get("item_name") or "", hint)["quantity"] = quantity
-            items_changed = True
-        elif field == CallChangeField.ITEM_VARIANT:
-            _item_for(items, change.get("item_name") or "", "")["variant"] = value
-            items_changed = True
-    if items_changed:
-        kept = [item for item in items if item["quantity"] > 0]
-        if kept:
-            fields["items"] = kept
     return OrderUpdate(**fields) if fields else None
 
 
@@ -458,24 +476,20 @@ class CallService:
             if any(c["field"] == CallChangeField.CANCEL_ORDER for c in changes):
                 outcome = CallOutcome.CANCELLED
             order = self.orders.get(order_id)
-            update = None
+            update, requested = None, []
             if outcome == CallOutcome.EDITED:
-                try:
-                    update = order_update(order, changes)
-                except UnclearChange as reason:
-                    # The buyer changed the order but the change cannot be applied with
-                    # certainty: a person applies it from the call summary.
-                    log.warning(
-                        "Call %s: %s; order %s goes to review", doc["call_id"], reason, order_id
-                    )
-                    outcome = CallOutcome.UNCLEAR
-            if outcome == CallOutcome.EDITED and update is None:
+                # Delivery details apply at once; a change of items waits for the shop, which
+                # checks stock first (the order goes to review with the change listed).
+                update = order_update(order, changes)
+                requested = requested_items(order, changes)
+            if outcome == CallOutcome.EDITED and update is None and not requested:
                 outcome = CallOutcome.CONFIRMED  # the only change was to another order
             event = {
                 "order_id": order_id,
                 "type": "call_outcome",
                 "outcome": outcome.value,
                 "update": update.model_dump(mode="json", exclude_none=True) if update else None,
+                "requested": requested,
             }
             self.run_event(event, doc["shop_id"])
 

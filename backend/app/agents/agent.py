@@ -244,6 +244,7 @@ def _apply(pipe: Pipeline, event: dict) -> dict:
             CallOutcome(event["outcome"]),
             now,
             update=OrderUpdate.model_validate(update) if update else None,
+            requested=event.get("requested") or [],
             settings=pipe.settings,
             policy=pipe.policy,
         )

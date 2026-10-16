@@ -16,6 +16,7 @@ HELD = {"status": "pending_review", "decision": {"action": "hold_for_review"}}
         ({"decision": {"block_reasons": ["attempts_exhausted"]}}, "attempts_used"),
         ({"calls": [{"outcome": "unclear"}], "attempts": {"ai_call": 1}}, "call_unclear"),
         ({"calls": [{"outcome": "wrong_person"}]}, "wrong_person"),
+        ({"calls": [{"outcome": "edited"}], "attempts": {"ai_call": 1}}, "items_changed"),
         ({"calls": [{"outcome": "no_answer"}], "attempts": {"ai_call": 2}}, "no_answer_call"),
         (
             {"attempts": {"ai_call": 1}, "intervention": {"contact_action": "link"}},

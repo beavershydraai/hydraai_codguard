@@ -67,17 +67,33 @@ def validate_outcome(args: dict, job: CallJob) -> Decision:
         if not new_value:
             raise OutcomeError("new_value is empty. Use the value the buyer confirmed.")
         item_name = _text(raw.get("item_name")) or None
+        item_variant = _text(raw.get("item_variant")) or None
+        quantity = None
         if change_field in ITEM_FIELDS:
             names = [item.name for item in order.items]
             if item_name not in names:
                 raise OutcomeError(
                     f"item_name must name an item of order {order.ref}: {', '.join(names)}."
                 )
+            variants = [item.variant for item in order.items if item.name == item_name]
+            if len(variants) > 1 and item_variant not in variants:
+                raise OutcomeError(
+                    f"Order {order.ref} has {item_name} in several variants: set item_variant "
+                    f"to one of {', '.join(variants)}."
+                )
+        if change_field == CallChangeField.ITEM_QUANTITY:
+            quantity = raw.get("quantity")
+            if isinstance(quantity, float) and quantity.is_integer():
+                quantity = int(quantity)
+            if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity < 0:
+                raise OutcomeError("quantity must be the new quantity as a whole number.")
         changes.append(
             CallChange(
                 order_id=order.order_id,
                 field=change_field,
                 item_name=item_name,
+                item_variant=item_variant,
+                quantity=quantity,
                 new_value=new_value,
             )
         )

@@ -172,6 +172,7 @@ These rules come from the README and the epics. Code and tests must enforce them
 
 ### AI call and confirmation page
 
+- What the buyer changes on a call: delivery details (address, recipient, note) apply at once and the order is confirmed; a change of items (quantity, variant) is not applied: the order goes to Pending review with the request listed ("Jacket (S): quantity 2 → 5"), because the shop checks stock first. The voice tool sends `quantity` as an integer and `item_variant` when the order has the same item in several variants; the controller asks the model again when they are missing. Every edit writes what changed, from → to, in the timeline.
 - The AI call discloses that it is an automated assistant and names the shop. It reads the order summary, reads any changes back before ending, and records exactly one of 7 outcomes: Confirmed, Edited, Cancelled, Not ordered, No answer, Wrong person, Unclear.
 - The call's system instruction and its one tool, `record_call_outcome`, live in `backend/voice/prompts/`. The model reports the outcome through the tool. The backend validates it, sets *No answer* itself, and commits *Unclear* when a call that the buyer spoke on ends without a valid outcome.
 - During a call, the assistant gives no order details until the person confirms they are the buyer. It never mentions risk, scores or tiers, and never asks for money, OTP codes or bank details.
