@@ -54,7 +54,8 @@ scripts/        Demo reset, abuse simulation, call test runner
 ## Stack
 
 - Backend: Python 3.11+, ASGI app served by uvicorn (`app.main:app`)
-- Frontend: Node.js 20+, pnpm, React 19 + TypeScript on Vite, Tailwind CSS v4, shadcn/ui and ReUI components, TanStack Router (file-based) and TanStack Query, Zustand for client state, Hey API for the API client
+- Frontend: Node.js 20+, pnpm, React 19 + TypeScript on Vite, Tailwind CSS v4, shadcn/ui and ReUI components (style `base-nova`, on Base UI rather than Radix), TanStack Router (file-based) and TanStack Query, Zustand for client state, Hey API for the API client
+- Base UI uses `render` instead of `asChild`, `onClick` on menu items instead of `onSelect`, and `items` on a `Select` so it shows labels. Read "Base UI in our code" in `frontend/README.md` before changing UI code.
 - Use ReUI's `data-grid` for data tables, not a hand-rolled `<table>`. Install registry components with the shadcn CLI rather than writing or editing them by hand (see `frontend/README.md`).
 - Server state lives in TanStack Query through the generated `*Options` helpers; Zustand only holds client state (auth token, theme).
 - The login page calls `POST /api/v1/auth/login` (`src/lib/auth.ts`) and keeps the token in the Zustand auth store; a 401 from any call signs the user out.

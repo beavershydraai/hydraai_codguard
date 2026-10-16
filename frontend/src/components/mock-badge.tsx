@@ -12,11 +12,11 @@ export function MockBadge() {
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Badge variant="warning-light" className="cursor-default gap-1" tabIndex={0}>
-          <DatabaseIcon aria-hidden="true" className="size-3" />
-          Sample data
-        </Badge>
+      <TooltipTrigger
+        render={<Badge variant="warning-light" className="cursor-default gap-1" tabIndex={0} />}
+      >
+        <DatabaseIcon aria-hidden="true" className="size-3" />
+        Sample data
       </TooltipTrigger>
       <TooltipContent side="bottom" align="end" className="max-w-xs">
         {mockMode === 'all' ? (

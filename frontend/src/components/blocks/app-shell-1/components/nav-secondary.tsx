@@ -12,13 +12,11 @@ function SecondaryNavItem({ item }: { item: NavItem }) {
         size="sm"
         tooltip={item.label}
         isActive={Boolean(matchRoute({ to: item.to, fuzzy: true }))}
-        asChild
+        render={<Link to={item.to} />}
         className="[&_svg]:size-3.5"
       >
-        <Link to={item.to}>
-          {item.icon}
-          <span>{item.label}</span>
-        </Link>
+        {item.icon}
+        <span>{item.label}</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
   )

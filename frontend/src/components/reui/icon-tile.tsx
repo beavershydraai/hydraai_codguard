@@ -1,7 +1,8 @@
+import { mergeProps } from "@base-ui/react/merge-props"
+import { useRender } from "@base-ui/react/use-render"
 import { cva, type VariantProps } from "class-variance-authority"
-import { Slot } from "radix-ui"
 
-import { cn } from "@/lib/utils"
+import { cn } from "cn"
 
 /**
  * CSS variable architecture:
@@ -17,7 +18,7 @@ import { cn } from "@/lib/utils"
  * The `frame` and `soft` variants paint their inner card with an `::after`
  * pseudo element instead of a wrapper node. `isolate` makes the root a stacking
  * context, so the negative z-index pseudo paints above the root background but
- * below the in-flow icon - no extra DOM, and `asChild` composition keeps working.
+ * below the in-flow icon - no extra DOM, and `render` composition keeps working.
  *
  * Tone: `soft` and `solid` derive every fill and border from `currentColor`, so
  * a single text color class (e.g. `text-success`) retints the whole tile. They
@@ -26,7 +27,7 @@ import { cn } from "@/lib/utils"
 const iconTileVariants = cva(
   [
     "relative inline-flex shrink-0 items-center justify-center align-middle",
-    "size-(--icon-tile-size) rounded-(--icon-tile-radius)",
+    "size-(--icon-tile-size) rounded-[var(--icon-tile-radius,min(var(--radius-md),calc(var(--icon-tile-size)/3)))]",
     "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=size-])]:size-(--icon-tile-icon-size)",
   ],
   {
@@ -45,7 +46,7 @@ const iconTileVariants = cva(
         soft: [
           "isolate p-(--icon-tile-inset) text-primary bg-current/10",
           "after:absolute after:-z-10 after:inset-(--icon-tile-inset)",
-          "after:rounded-[calc(var(--icon-tile-radius)-var(--icon-tile-inset))]",
+          "after:rounded-[calc(var(--icon-tile-radius,min(var(--radius-md),calc(var(--icon-tile-size)/3)))-var(--icon-tile-inset))]",
           "after:border after:border-current/20 after:bg-current/5",
         ],
         /** Filled tone with a contrasting glyph. Retint with `bg-*` + a text color. */
@@ -54,7 +55,7 @@ const iconTileVariants = cva(
         frame: [
           "isolate border border-border bg-muted/50 p-(--icon-tile-inset)",
           "after:absolute after:-z-10 after:inset-(--icon-tile-inset)",
-          "after:rounded-[calc(var(--icon-tile-radius)-var(--icon-tile-inset))]",
+          "after:rounded-[calc(var(--icon-tile-radius,min(var(--radius-md),calc(var(--icon-tile-size)/3)))-var(--icon-tile-inset))]",
           "after:border after:border-border after:bg-card after:shadow-xs",
         ],
       },
@@ -68,9 +69,10 @@ const iconTileVariants = cva(
       },
       /**
        * `default`: active style radius. `full`: circular.
-       * The plain value is the fallback outside a style scope; the `style-*`
-       * tokens win by specificity inside one, and survive the registry
-       * transform as the single resolved value per generated style.
+       * No bare rung beside the ladder: the registry transform writes the
+       * installed style's rung bare, and a second bare rung would leave class
+       * order to pick the winner. The no-style fallback lives in the var()
+       * that reads the radius instead.
        *
        * Each style token is clamped to a fraction of the tile. A flat radius
        * is a circle once it reaches half the box, so the soft styles used to
@@ -81,7 +83,7 @@ const iconTileVariants = cva(
        */
       radius: {
         default:
-          "[--icon-tile-radius:min(var(--radius-md),calc(var(--icon-tile-size)/3))] [--icon-tile-radius:min(var(--radius-md),calc(var(--icon-tile-size)/3))]",
+          "[--icon-tile-radius:min(var(--radius-md),calc(var(--icon-tile-size)/3))]",
         full: "[--icon-tile-radius:calc(infinity*1px)]",
       },
     },
@@ -93,9 +95,10 @@ const iconTileVariants = cva(
   }
 )
 
-interface IconTileProps
-  extends React.ComponentProps<"span">, VariantProps<typeof iconTileVariants> {
-  asChild?: boolean
+interface IconTileProps extends useRender.ComponentProps<"span"> {
+  variant?: VariantProps<typeof iconTileVariants>["variant"]
+  size?: VariantProps<typeof iconTileVariants>["size"]
+  radius?: VariantProps<typeof iconTileVariants>["radius"]
 }
 
 function IconTile({
@@ -103,20 +106,21 @@ function IconTile({
   variant = "outline",
   size = "default",
   radius = "default",
-  asChild = false,
+  render,
   ...props
 }: IconTileProps) {
-  const Comp = asChild ? Slot.Root : "span"
+  const defaultProps = {
+    "data-slot": "icon-tile",
+    "data-variant": variant,
+    "data-size": size,
+    className: cn(iconTileVariants({ variant, size, radius, className })),
+  }
 
-  return (
-    <Comp
-      data-slot="icon-tile"
-      data-variant={variant}
-      data-size={size}
-      className={cn(iconTileVariants({ variant, size, radius, className }))}
-      {...props}
-    />
-  )
+  return useRender({
+    defaultTagName: "span",
+    render,
+    props: mergeProps<"span">(defaultProps, props),
+  })
 }
 
 export { IconTile, iconTileVariants, type IconTileProps }

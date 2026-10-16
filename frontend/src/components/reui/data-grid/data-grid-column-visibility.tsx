@@ -1,5 +1,8 @@
 import type { ReactElement } from "react"
-import { getColumnHeaderLabel } from "@/components/reui/data-grid/data-grid"
+import {
+  getColumnHeaderLabel,
+  useDataGrid,
+} from "@/components/reui/data-grid/data-grid"
 import type { DataGridFeatures } from "@/components/reui/data-grid/data-grid"
 import type { Table } from "@tanstack/react-table"
 
@@ -19,13 +22,15 @@ function DataGridColumnVisibility<TData extends object>({
   table: Table<DataGridFeatures, TData>
   trigger: ReactElement<Record<string, unknown>>
 }) {
+  const { i18n } = useDataGrid()
+
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      <DropdownMenuTrigger render={trigger} />
       <DropdownMenuContent align="end" className="min-w-[150px]">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="font-medium">
-            Toggle Columns
+            {i18n.labels.toggleColumns}
           </DropdownMenuLabel>
           {table
             .getAllColumns()
@@ -34,7 +39,13 @@ function DataGridColumnVisibility<TData extends object>({
               return (
                 <DropdownMenuCheckboxItem
                   key={column.id}
-                  className="capitalize"
+                  // Title-casing is for a raw column id only; an authored
+                  // label keeps its own casing.
+                  className={
+                    getColumnHeaderLabel(column) === column.id
+                      ? "capitalize"
+                      : undefined
+                  }
                   checked={column.getIsVisible()}
                   onSelect={(event) => event.preventDefault()}
                   onCheckedChange={(value) => column.toggleVisibility(!!value)}

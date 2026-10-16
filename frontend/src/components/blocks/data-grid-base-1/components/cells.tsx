@@ -56,10 +56,12 @@ export const BuyerCell = memo(function BuyerCell({ row }: { row: OrderRow }) {
           <span className="line-clamp-1 font-medium text-foreground">{o.buyer_name}</span>
           {o.is_gift && (
             <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex shrink-0 text-muted-foreground" aria-label="Gift order">
-                  <GiftIcon className="size-3.5" aria-hidden="true" />
-                </span>
+              <TooltipTrigger
+                render={
+                  <span className="inline-flex shrink-0 text-muted-foreground" aria-label="Gift order" />
+                }
+              >
+                <GiftIcon className="size-3.5" aria-hidden="true" />
               </TooltipTrigger>
               <TooltipContent side="top">Gift order: verify with the buyer only</TooltipContent>
             </Tooltip>
@@ -113,10 +115,12 @@ export function ActionsCell({ row }: { row: OrderRow }) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button size="icon" variant="ghost" className="size-7" aria-label={`Actions for order ${code}`}>
-          <MoreHorizontalIcon aria-hidden="true" />
-        </Button>
+      <DropdownMenuTrigger
+        render={
+          <Button size="icon" variant="ghost" className="size-7" aria-label={`Actions for order ${code}`} />
+        }
+      >
+        <MoreHorizontalIcon aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="bottom" align="end" className="w-44">
         <DropdownMenuGroup>

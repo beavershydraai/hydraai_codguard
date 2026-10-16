@@ -98,7 +98,7 @@ export function OverrideDialog({
               <Label
                 key={value}
                 htmlFor={`override-${value}`}
-                className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 font-normal has-data-[state=checked]:border-primary has-data-[state=checked]:bg-primary/5"
+                className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 font-normal has-data-checked:border-primary has-data-checked:bg-primary/5"
               >
                 <RadioGroupItem id={`override-${value}`} value={value} className="mt-0.5" />
                 <span className="flex flex-col gap-0.5">

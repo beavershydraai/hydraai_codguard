@@ -21,11 +21,13 @@ function ResourceDot({ color }: { color: string }) {
 function ResourceItem({ shortcut, isActive }: { shortcut: TierShortcut; isActive: boolean }) {
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton tooltip={`${shortcut.name} risk`} isActive={isActive} asChild>
-        <Link to="/orders" search={{ tier: [shortcut.tier] }}>
-          <ResourceDot color={shortcut.color} />
-          <span className="min-w-0 truncate">{shortcut.name}</span>
-        </Link>
+      <SidebarMenuButton
+        tooltip={`${shortcut.name} risk`}
+        isActive={isActive}
+        render={<Link to="/orders" search={{ tier: [shortcut.tier] }} />}
+      >
+        <ResourceDot color={shortcut.color} />
+        <span className="min-w-0 truncate">{shortcut.name}</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
   )
@@ -53,23 +55,24 @@ export function NavResources() {
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
       <SidebarGroupLabel
-        asChild
+        render={
+          <button
+            type="button"
+            onClick={() => setOpen((prev) => !prev)}
+            aria-expanded={open}
+            aria-controls="tier-shortcuts-list"
+          />
+        }
         className="w-full cursor-pointer focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
       >
-        <button
-          onClick={() => setOpen((prev) => !prev)}
-          aria-expanded={open}
-          aria-controls="tier-shortcuts-list"
-        >
-          Orders by risk tier
-          <ChevronDownIcon
-            className={cn(
-              'ml-auto size-4 shrink-0 opacity-60 transition-transform duration-200',
-              !open && '-rotate-90',
-            )}
-            aria-hidden="true"
-          />
-        </button>
+        Orders by risk tier
+        <ChevronDownIcon
+          className={cn(
+            'ml-auto size-4 shrink-0 opacity-60 transition-transform duration-200',
+            !open && '-rotate-90',
+          )}
+          aria-hidden="true"
+        />
       </SidebarGroupLabel>
       {open && <ResourceList />}
     </SidebarGroup>

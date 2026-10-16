@@ -138,15 +138,17 @@ export function createReviewColumns({
         <div className="flex items-center justify-end gap-1">
           {REVIEW_DECISIONS.map(({ action, label, icon: Icon }) => (
             <Tooltip key={action}>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon-sm"
-                  variant={action === 'cancel' ? 'ghost' : 'outline'}
-                  aria-label={`${label}: ${row.original.external_id ?? row.original.id}`}
-                  onClick={() => onDecide(row.original, action)}
-                >
-                  <Icon aria-hidden="true" />
-                </Button>
+              <TooltipTrigger
+                render={
+                  <Button
+                    size="icon-sm"
+                    variant={action === 'cancel' ? 'ghost' : 'outline'}
+                    aria-label={`${label}: ${row.original.external_id ?? row.original.id}`}
+                    onClick={() => onDecide(row.original, action)}
+                  />
+                }
+              >
+                <Icon aria-hidden="true" />
               </TooltipTrigger>
               <TooltipContent>{label}</TooltipContent>
             </Tooltip>

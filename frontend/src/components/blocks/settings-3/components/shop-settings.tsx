@@ -504,17 +504,26 @@ function ActionSelect({
   allowNone?: boolean
   disabled?: boolean
 }) {
+  // Base UI's SelectValue shows the item label only when the root gets the items.
+  const items: Record<string, string> = {
+    ...(allowNone && { none: 'Do nothing more' }),
+    ...Object.fromEntries(options.map((action) => [action, DECISION_ACTION_LABELS[action]])),
+  }
   return (
-    <Select value={value} onValueChange={onChange} disabled={disabled}>
+    <Select
+      items={items}
+      value={value}
+      onValueChange={(next) => next !== null && onChange(next)}
+      disabled={disabled}
+    >
       <SelectTrigger className="w-full" aria-label={label}>
         <SelectValue placeholder={label} />
       </SelectTrigger>
       <SelectContent>
         <SelectGroup>
-          {allowNone && <SelectItem value="none">Do nothing more</SelectItem>}
-          {options.map((action) => (
-            <SelectItem key={action} value={action}>
-              {DECISION_ACTION_LABELS[action]}
+          {Object.entries(items).map(([itemValue, itemLabel]) => (
+            <SelectItem key={itemValue} value={itemValue}>
+              {itemLabel}
             </SelectItem>
           ))}
         </SelectGroup>
@@ -538,6 +547,11 @@ const CURRENCIES = ['VND', 'SGD', 'PHP'] as const
 const CHANNELS = Object.keys(SALES_CHANNEL_LABELS) as SalesChannel[]
 const WEEKDAYS = Object.keys(WEEKDAY_LABELS) as Weekday[]
 const AUTO_TIERS: RiskTier[] = ['medium', 'high', 'very_high']
+const MIN_TIER_ITEMS: Record<string, string> = {
+  all: 'Every tier',
+  ...Object.fromEntries(AUTO_TIERS.map((tier) => [tier, `${RISK_TIER_LABELS[tier]} risk and above`])),
+}
+const ATTEMPT_ITEMS: Record<string, string> = { '1': '1 call', '2': '2 calls' }
 
 function AutomationForm({ policy, canEdit }: { policy: Policy; canEdit: boolean }) {
   const queryClient = useQueryClient()
@@ -629,18 +643,20 @@ function AutomationForm({ policy, canEdit }: { policy: Policy; canEdit: boolean 
                 description="Calls for lower risk tiers are only suggested. Which tiers get a call at all is set in Policy by risk tier."
               >
                 <Select
+                  items={MIN_TIER_ITEMS}
                   value={auto.min_tier ?? 'all'}
-                  onValueChange={(tier) => update({ min_tier: tier === 'all' ? null : (tier as RiskTier) })}
+                  onValueChange={(tier) =>
+                    tier !== null && update({ min_tier: tier === 'all' ? null : (tier as RiskTier) })
+                  }
                 >
                   <SelectTrigger className="w-full" aria-label="Call automatically from">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      <SelectItem value="all">Every tier</SelectItem>
-                      {AUTO_TIERS.map((tier) => (
+                      {Object.entries(MIN_TIER_ITEMS).map(([tier, label]) => (
                         <SelectItem key={tier} value={tier}>
-                          {RISK_TIER_LABELS[tier]} risk and above
+                          {label}
                         </SelectItem>
                       ))}
                     </SelectGroup>
@@ -740,7 +756,7 @@ function AutomationForm({ policy, canEdit }: { policy: Policy; canEdit: boolean 
                         />
                       </div>
                       <ToggleGroup
-                        type="multiple"
+                        multiple
                         variant="outline"
                         size="sm"
                         value={callWindow.days ?? WEEKDAYS}
@@ -766,16 +782,20 @@ function AutomationForm({ policy, canEdit }: { policy: Policy; canEdit: boolean 
               </SettingField>
               <SettingField title="AI calls per order" description="At most 2, by contact protection.">
                 <Select
+                  items={ATTEMPT_ITEMS}
                   value={String(auto.max_attempts)}
-                  onValueChange={(value) => update({ max_attempts: Number(value) })}
+                  onValueChange={(value) => value !== null && update({ max_attempts: Number(value) })}
                 >
                   <SelectTrigger className="w-full" aria-label="AI calls per order">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      <SelectItem value="1">1 call</SelectItem>
-                      <SelectItem value="2">2 calls</SelectItem>
+                      {Object.entries(ATTEMPT_ITEMS).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
                     </SelectGroup>
                   </SelectContent>
                 </Select>

@@ -124,8 +124,9 @@ export function CreateOrderSheet({
               <Field>
                 <FieldLabel htmlFor="new-channel">Sales channel</FieldLabel>
                 <Select
+                  items={SALES_CHANNEL_LABELS}
                   value={form.channel}
-                  onValueChange={(value) => setForm((f) => ({ ...f, channel: value as SalesChannel }))}
+                  onValueChange={(value) => value !== null && setForm((f) => ({ ...f, channel: value }))}
                 >
                   <SelectTrigger id="new-channel" className="w-full">
                     <SelectValue />
