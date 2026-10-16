@@ -110,11 +110,9 @@ function UserMenuHeader() {
 function UserMenuAccount() {
   return (
     <DropdownMenuGroup>
-      <DropdownMenuItem asChild>
-        <Link to="/settings">
-          <SettingsIcon aria-hidden="true" />
-          Shop settings
-        </Link>
+      <DropdownMenuItem render={<Link to="/settings" />}>
+        <SettingsIcon aria-hidden="true" />
+        Shop settings
       </DropdownMenuItem>
     </DropdownMenuGroup>
   )
@@ -123,7 +121,7 @@ function UserMenuAccount() {
 function UserMenuTheme() {
   return (
     <DropdownMenuGroup>
-      <DropdownMenuItem className="cursor-default focus:bg-transparent!" onSelect={(e) => e.preventDefault()}>
+      <DropdownMenuItem className="cursor-default focus:bg-transparent!" closeOnClick={false}>
         <PaletteIcon aria-hidden="true" />
         Theme
         <div className="ml-auto">
@@ -154,7 +152,7 @@ function UserMenuContent() {
         <DropdownMenuSeparator />
         <UserMenuTheme />
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={handleSignOut}>
+        <DropdownMenuItem onClick={handleSignOut}>
           <LogOutIcon aria-hidden="true" />
           Sign out
         </DropdownMenuItem>
@@ -172,21 +170,24 @@ export function NavUser() {
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger
-            className="h-auto shrink-0 border border-border bg-background p-1.5 text-sm shadow-sm shadow-black/5 group-data-[collapsible=icon]:justify-center"
-            asChild
-          >
-            <SidebarMenuButton size="lg" aria-label="Open account menu">
-              <Avatar className="size-6 transition-all duration-300 ease-in-out in-data-[state=collapsed]:size-7!">
-                <AvatarFallback className="rounded-md">{user.initials}</AvatarFallback>
-              </Avatar>
-              <div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                <span className="truncate font-semibold">{user.name}</span>
-              </div>
-              <MoreHorizontalIcon
-                className="mr-1 ml-auto size-4 shrink-0 opacity-50 group-data-[collapsible=icon]:hidden"
-                aria-hidden="true"
+            render={
+              <SidebarMenuButton
+                size="lg"
+                aria-label="Open account menu"
+                className="h-auto shrink-0 border border-border bg-background p-1.5 text-sm shadow-sm shadow-black/5 group-data-[collapsible=icon]:justify-center"
               />
-            </SidebarMenuButton>
+            }
+          >
+            <Avatar className="size-6 transition-all duration-300 ease-in-out in-data-[state=collapsed]:size-7!">
+              <AvatarFallback className="rounded-md">{user.initials}</AvatarFallback>
+            </Avatar>
+            <div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+              <span className="truncate font-semibold">{user.name}</span>
+            </div>
+            <MoreHorizontalIcon
+              className="mr-1 ml-auto size-4 shrink-0 opacity-50 group-data-[collapsible=icon]:hidden"
+              aria-hidden="true"
+            />
           </DropdownMenuTrigger>
 
           <UserMenuContent />

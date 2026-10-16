@@ -196,20 +196,20 @@ export function ConfirmationPage({
               <Item
                 key={action}
                 variant="outline"
-                asChild
+                render={
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => (action === 'confirm' ? onRespond('confirm') : setStep(action))}
+                  />
+                }
                 className="flex flex-col items-center gap-2 p-4 text-center transition-colors hover:bg-muted/60"
               >
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => (action === 'confirm' ? onRespond('confirm') : setStep(action))}
-                >
-                  <Icon className={`size-5 ${tone ?? 'text-foreground'}`} aria-hidden="true" />
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-sm leading-snug font-medium">{BUYER_ACTION_LABELS[action]}</span>
-                    <span className="text-xs leading-snug text-muted-foreground">{description}</span>
-                  </div>
-                </button>
+                <Icon className={`size-5 ${tone ?? 'text-foreground'}`} aria-hidden="true" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm leading-snug font-medium">{BUYER_ACTION_LABELS[action]}</span>
+                  <span className="text-xs leading-snug text-muted-foreground">{description}</span>
+                </div>
               </Item>
             ),
           )}

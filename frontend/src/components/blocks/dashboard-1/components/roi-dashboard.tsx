@@ -17,7 +17,7 @@ import type { DashboardSummary } from '@/api/gen'
 import { getShopOptions } from '@/api/gen/@tanstack/react-query.gen'
 import { Badge } from '@/components/reui/badge'
 import { Frame, FramePanel } from '@/components/ui/frame'
-import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { Item, ItemMedia } from '@/components/ui/item'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -61,7 +61,7 @@ export function RoiDashboard({
   const empty = !isLoading && summary && summary.orders_screened === 0
 
   return (
-    <TooltipProvider delayDuration={150}>
+    <TooltipProvider delay={150}>
       <div className="@container mx-auto flex w-full max-w-7xl flex-col gap-3">
         {/* Header */}
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -204,14 +204,11 @@ function KpiCard({ kpi }: { kpi: Kpi }) {
         <div className="flex min-w-0 items-center gap-1">
           <h3 className="text-sm leading-tight font-medium">{kpi.title}</h3>
           <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className="inline-flex shrink-0 rounded-full p-0.5 text-muted-foreground/70 hover:text-foreground"
-                aria-label={`Explain: ${kpi.title}`}
-              >
-                <InfoIcon className="size-3.5" aria-hidden="true" />
-              </button>
+            <TooltipTrigger
+              className="inline-flex shrink-0 rounded-full p-0.5 text-muted-foreground/70 hover:text-foreground"
+              aria-label={`Explain: ${kpi.title}`}
+            >
+              <InfoIcon className="size-3.5" aria-hidden="true" />
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-60 text-xs leading-5">
               {kpi.help}
@@ -281,9 +278,9 @@ function OutcomesCard({ summary, isLoading }: { summary?: DashboardSummary; isLo
       <FramePanel className="flex h-full flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-medium">Final order outcomes</h2>
-          <Button variant="link" size="sm" className="h-auto p-0" asChild>
-            <Link to="/backtest">View model backtest</Link>
-          </Button>
+          <Link to="/backtest" className={cn(buttonVariants({ variant: 'link', size: 'sm' }), 'h-auto p-0')}>
+            View model backtest
+          </Link>
         </div>
         {isLoading || !summary ? (
           <Skeleton className="h-40 w-full" />
@@ -344,9 +341,9 @@ function EmptyDashboard() {
             scored.
           </p>
         </div>
-        <Button asChild>
-          <Link to="/orders">Go to Orders</Link>
-        </Button>
+        <Link to="/orders" className={buttonVariants()}>
+          Go to Orders
+        </Link>
       </FramePanel>
     </Frame>
   )
@@ -369,9 +366,9 @@ function SetupBanner() {
             </p>
           </div>
         </div>
-        <Button size="sm" asChild>
-          <Link to="/onboarding">Get started</Link>
-        </Button>
+        <Link to="/onboarding" className={buttonVariants({ size: 'sm' })}>
+          Get started
+        </Link>
       </FramePanel>
     </Frame>
   )

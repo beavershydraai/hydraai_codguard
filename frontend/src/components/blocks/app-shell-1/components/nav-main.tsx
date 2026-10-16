@@ -25,18 +25,16 @@ function LeafNavItem({ item, badge }: { item: NavItem; badge?: number }) {
   const isActive = Boolean(matchRoute({ to: item.to, fuzzy: !item.exact }))
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton tooltip={item.label} isActive={isActive} asChild>
-        <Link to={item.to}>
-          {item.icon}
-          <span>{item.label}</span>
-          {badge !== undefined && badge > 0 && (
-            <SidebarMenuBadge>
-              <Badge variant="warning-light" size="sm">
-                {badge}
-              </Badge>
-            </SidebarMenuBadge>
-          )}
-        </Link>
+      <SidebarMenuButton tooltip={item.label} isActive={isActive} render={<Link to={item.to} />}>
+        {item.icon}
+        <span>{item.label}</span>
+        {badge !== undefined && badge > 0 && (
+          <SidebarMenuBadge>
+            <Badge variant="warning-light" size="sm">
+              {badge}
+            </Badge>
+          </SidebarMenuBadge>
+        )}
       </SidebarMenuButton>
     </SidebarMenuItem>
   )

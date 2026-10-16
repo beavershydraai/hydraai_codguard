@@ -109,7 +109,7 @@ export function ReviewInbox({
   }
 
   return (
-    <TooltipProvider delayDuration={200}>
+    <TooltipProvider delay={200}>
       <div className="@container w-full">
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-3">

@@ -10,9 +10,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
-// Radix Tooltip needs a TooltipProvider ancestor (Base UI does not); the sidebar
-// button tooltips render a Radix Tooltip. This invisible adapter at the block root
-// supplies it: a mechanism-only port detail, no design change. (radix port skill)
+// One provider for the sidebar button tooltips, so moving between them skips the delay.
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
@@ -41,9 +39,7 @@ function RouteBreadcrumb() {
                 {isLast ? (
                   <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
                 ) : (
-                  <BreadcrumbLink asChild>
-                    <Link to={crumb.pathname}>{crumb.label}</Link>
-                  </BreadcrumbLink>
+                  <BreadcrumbLink render={<Link to={crumb.pathname} />}>{crumb.label}</BreadcrumbLink>
                 )}
               </BreadcrumbItem>
             </Fragment>
@@ -56,7 +52,7 @@ function RouteBreadcrumb() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <TooltipProvider delayDuration={0}>
+    <TooltipProvider delay={0}>
       <SidebarProvider
         className={cn(
           '[--sidebar:color-mix(in_oklab,var(--color-sidebar)_60%,transparent)]',

@@ -1,16 +1,17 @@
 "use client"
 
-import { memo, useMemo } from "react"
+import { memo, useLayoutEffect, useMemo, useRef } from "react"
 import type { HTMLAttributes, ReactNode } from "react"
 import {
   getColumnHeaderLabel,
+  getDataGridHeaderSpans,
   useDataGrid,
 } from "@/components/reui/data-grid/data-grid"
 import type { DataGridFeatures } from "@/components/reui/data-grid/data-grid"
 import { Subscribe } from "@tanstack/react-table"
 import type { Column } from "@tanstack/react-table"
 
-import { cn } from "@/lib/utils"
+import { cn } from "cn"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -41,6 +42,11 @@ interface DataGridColumnHeaderProps<
   visibility?: boolean
 }
 
+// Unpinning moves a column into another header list (pinned, windowed center),
+// which remounts its header, so the focus request outlives the button: the next
+// header rendered for that column takes it. `column` is a stable reference.
+const pendingUnpinFocus = new WeakSet<object>()
+
 function DataGridColumnHeaderInner<TData extends object, TValue>({
   column,
   title,
@@ -49,31 +55,106 @@ function DataGridColumnHeaderInner<TData extends object, TValue>({
   filter,
   visibility = false,
 }: DataGridColumnHeaderProps<TData, TValue>) {
-  const { isLoading, table, props } = useDataGrid()
+  const { i18n, isLoading, table, props } = useDataGrid()
   const resolvedTitle = title ?? getColumnHeaderLabel(column)
 
-  // TanStack's columnOrder defaults to [] until a consumer seeds it; fall
-  // back to the definition order so Move Left/Right work out of the box.
+  // The order a move rewrites: the consumer's columnOrder (TanStack defaults it
+  // to []), then every leaf it leaves out, in definition order - the same
+  // completion TanStack applies when rendering, so a rendered neighbour is
+  // always present to re-seat beside, even after columns are added later.
   const columnOrderState = table.state.columnOrder
-  const columnOrder =
-    columnOrderState.length > 0
-      ? columnOrderState
-      : table.getAllLeafColumns().map((leafColumn) => leafColumn.id)
+  const definitionOrder = table
+    .getAllColumns()
+    .flatMap((topColumn) => topColumn.getLeafColumns())
+    .map((leafColumn) => leafColumn.id)
+  const columnOrder = [
+    ...columnOrderState,
+    ...definitionOrder.filter((id) => !columnOrderState.includes(id)),
+  ]
   const columnVisibilityKey =
     props.tableLayout?.columnsVisibility && visibility
       ? JSON.stringify(table.state.columnVisibility)
       : ""
   const isSorted = column.getIsSorted()
   const isPinned = column.getIsPinned()
+  const menuTriggerRef = useRef<HTMLButtonElement>(null)
+  useLayoutEffect(() => {
+    if (pendingUnpinFocus.delete(column)) menuTriggerRef.current?.focus()
+  })
   const canSort = column.getCanSort()
   const canPin = column.getCanPin()
   const canResize = column.getCanResize()
 
-  const columnIndex = columnOrder.indexOf(column.id)
-  const canMoveLeft = columnIndex > 0
-  const canMoveRight = columnIndex < columnOrder.length - 1
+  // Move neighbours come from what is RENDERED: the column's own pin bucket,
+  // visible columns only. Stepping through the raw columnOrder would trade
+  // places with a hidden or pinned column - an enabled click that moves nothing.
+  // With grouping in TanStack's default "reorder" mode, grouped columns render
+  // first whatever columnOrder says: they neither move nor serve as a target.
+  const groupedColumnMode = (
+    table.options as { groupedColumnMode?: false | "reorder" | "remove" }
+  ).groupedColumnMode
+  const isHoistedByGrouping = (target: object) =>
+    groupedColumnMode !== false &&
+    typeof (target as { getIsGrouped?: unknown }).getIsGrouped === "function" &&
+    (target as { getIsGrouped: () => boolean }).getIsGrouped()
+  const renderedLeaves = (
+    isPinned === "start"
+      ? table.getStartVisibleLeafColumns()
+      : isPinned === "end"
+        ? table.getEndVisibleLeafColumns()
+        : table.getCenterVisibleLeafColumns()
+  )
+    .filter((leafColumn) => !isHoistedByGrouping(leafColumn))
+    .map((leafColumn) => leafColumn.id)
+  const renderedOrder = new Map(renderedLeaves.map((id, index) => [id, index]))
+  const byRenderedOrder = (a: string, b: string) =>
+    renderedOrder.get(a)! - renderedOrder.get(b)!
+  // A peer is a sibling at this column's header level with its rendered
+  // leaves, so a group or a meta.headerColSpan span moves as one.
+  const headerSpans = getDataGridHeaderSpans(table)
+  const coveredIds = new Set(
+    [...headerSpans.values()].flat().map((leafColumn) => leafColumn.id)
+  )
+  // Siblings only: a leaf stepping out of its group would split its header.
+  const renderedPeers = (column.parent?.columns ?? table.getAllColumns())
+    .filter((sibling) => !coveredIds.has(sibling.id))
+    .map((sibling) =>
+      [...sibling.getLeafColumns(), ...(headerSpans.get(sibling.id) ?? [])]
+        .map((leafColumn) => leafColumn.id)
+        .filter((id) => renderedOrder.has(id))
+        .sort(byRenderedOrder)
+    )
+    .filter((leaves) => leaves.length > 0)
+    .sort((a, b) => byRenderedOrder(a[0]!, b[0]!))
+  const renderedIndex = column.columns.length
+    ? -1
+    : renderedPeers.findIndex((leaves) => leaves[0] === column.id)
+  const leftNeighbour =
+    renderedIndex > 0 ? renderedPeers[renderedIndex - 1] : undefined
+  const rightNeighbour =
+    renderedIndex !== -1 && renderedIndex < renderedPeers.length - 1
+      ? renderedPeers[renderedIndex + 1]
+      : undefined
+  const canMoveLeft = leftNeighbour !== undefined
+  const canMoveRight = rightNeighbour !== undefined
 
+  /** Re-seats this column, with the leaves its header spans, beside a rendered
+   * neighbour; every other column, hidden or pinned, keeps its place. */
+  const moveBeside = (neighbour: string[], side: "before" | "after") => {
+    const moving = renderedPeers[renderedIndex] ?? [column.id]
+    const newOrder = columnOrder.filter((id) => !moving.includes(id))
+    const anchor =
+      side === "before" ? neighbour[0] : neighbour[neighbour.length - 1]
+    const at = anchor === undefined ? -1 : newOrder.indexOf(anchor)
+    if (at === -1) return
+    newOrder.splice(side === "before" ? at : at + 1, 0, ...moving)
+    table.setColumnOrder(newOrder)
+  }
+
+  // column.toggleSorting has no getCanSort() guard of its own, and the
+  // direct button also renders for columns that are only resizable.
   const handleSort = () => {
+    if (!canSort) return
     if (isSorted === "asc") {
       column.toggleSorting(true)
     } else if (isSorted === "desc") {
@@ -102,6 +183,22 @@ function DataGridColumnHeaderInner<TData extends object, TValue>({
     ) : (
       <ChevronsUpDownIcon className="mt-px size-3.25" aria-hidden="true" />
     ))
+
+  // A start-pinned column's resize handle covers the last 20px of its cell
+  // (the column that renders last already reserves it with pe-8, and a
+  // start-pinned one renders last only when nothing follows its group), so
+  // the unpin button steps in until it clears the handle in both densities.
+  // The step is padding on a wrapper that shrinks first: a column too narrow
+  // for label, button and clearance gives the clearance back, never the label.
+  const unpinClearsResizeHandle =
+    props.tableLayout?.columnsResizable &&
+    canResize &&
+    isPinned === "start" &&
+    !(
+      column.getIsLastColumn("start") &&
+      table.getCenterVisibleLeafColumns().length === 0 &&
+      table.getEndVisibleLeafColumns().length === 0
+    )
 
   const hasControls =
     props.tableLayout?.columnsMovable ||
@@ -141,7 +238,7 @@ function DataGridColumnHeaderInner<TData extends object, TValue>({
           disabled={!canSort}
         >
           <ArrowUpIcon className="size-3.5!" />
-          <span className="grow">Asc</span>
+          <span className="grow">{i18n.labels.sortAscending}</span>
           {isSorted === "asc" && (
             <CheckIcon className="text-primary size-4 opacity-100!" />
           )}
@@ -158,7 +255,7 @@ function DataGridColumnHeaderInner<TData extends object, TValue>({
           disabled={!canSort}
         >
           <ArrowDownIcon className="size-3.5!" />
-          <span className="grow">Desc</span>
+          <span className="grow">{i18n.labels.sortDescending}</span>
           {isSorted === "desc" && (
             <CheckIcon className="text-primary size-4 opacity-100!" />
           )}
@@ -178,7 +275,7 @@ function DataGridColumnHeaderInner<TData extends object, TValue>({
           onClick={() => column.pin(isPinned === "start" ? false : "start")}
         >
           <ArrowLeftToLineIcon className="size-3.5!" aria-hidden="true" />
-          <span className="grow">Pin to left</span>
+          <span className="grow">{i18n.labels.pinColumnStart}</span>
           {isPinned === "start" && (
             <CheckIcon className="text-primary size-4 opacity-100!" />
           )}
@@ -188,7 +285,7 @@ function DataGridColumnHeaderInner<TData extends object, TValue>({
           onClick={() => column.pin(isPinned === "end" ? false : "end")}
         >
           <ArrowRightToLineIcon className="size-3.5!" aria-hidden="true" />
-          <span className="grow">Pin to right</span>
+          <span className="grow">{i18n.labels.pinColumnEnd}</span>
           {isPinned === "end" && (
             <CheckIcon className="text-primary size-4 opacity-100!" />
           )}
@@ -206,32 +303,22 @@ function DataGridColumnHeaderInner<TData extends object, TValue>({
         <DropdownMenuItem
           key="move-left"
           onClick={() => {
-            if (columnIndex > 0) {
-              const newOrder = [...columnOrder]
-              const [movedColumn] = newOrder.splice(columnIndex, 1)
-              newOrder.splice(columnIndex - 1, 0, movedColumn)
-              table.setColumnOrder(newOrder)
-            }
+            if (leftNeighbour) moveBeside(leftNeighbour, "before")
           }}
           disabled={!canMoveLeft || isPinned !== false}
         >
           <ArrowLeftIcon className="size-3.5!" aria-hidden="true" />
-          <span>Move to Left</span>
+          <span>{i18n.labels.moveColumnStart}</span>
         </DropdownMenuItem>,
         <DropdownMenuItem
           key="move-right"
           onClick={() => {
-            if (columnIndex < columnOrder.length - 1) {
-              const newOrder = [...columnOrder]
-              const [movedColumn] = newOrder.splice(columnIndex, 1)
-              newOrder.splice(columnIndex + 1, 0, movedColumn)
-              table.setColumnOrder(newOrder)
-            }
+            if (rightNeighbour) moveBeside(rightNeighbour, "after")
           }}
           disabled={!canMoveRight || isPinned !== false}
         >
           <ArrowRightIcon className="size-3.5!" aria-hidden="true" />
-          <span>Move to Right</span>
+          <span>{i18n.labels.moveColumnEnd}</span>
         </DropdownMenuItem>
       )
       hasPreviousSection = true
@@ -246,9 +333,9 @@ function DataGridColumnHeaderInner<TData extends object, TValue>({
         <DropdownMenuSub key="visibility">
           <DropdownMenuSubTrigger>
             <Settings2Icon className="size-3.5!" />
-            <span>Columns</span>
+            <span>{i18n.labels.columnsMenu}</span>
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent>
+          <DropdownMenuSubContent side="right">
             {table
               .getAllColumns()
               .filter((col) => col.getCanHide())
@@ -258,7 +345,11 @@ function DataGridColumnHeaderInner<TData extends object, TValue>({
                   checked={col.getIsVisible()}
                   onSelect={(event) => event.preventDefault()}
                   onCheckedChange={(value) => col.toggleVisibility(!!value)}
-                  className="capitalize"
+                  className={
+                    getColumnHeaderLabel(col) === col.id
+                      ? "capitalize"
+                      : undefined
+                  }
                 >
                   {getColumnHeaderLabel(col)}
                 </DropdownMenuCheckboxItem>
@@ -284,7 +375,8 @@ function DataGridColumnHeaderInner<TData extends object, TValue>({
     canMoveRight,
     visibility,
     table,
-    columnIndex,
+    leftNeighbour,
+    rightNeighbour,
     columnOrder,
     columnVisibilityKey, // Needed to update checkbox states when visibility changes
   ])
@@ -293,32 +385,53 @@ function DataGridColumnHeaderInner<TData extends object, TValue>({
     return (
       <div className="-ms-2 flex h-full items-center justify-between gap-1.5">
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className={headerButtonClassName}
-              disabled={isLoading}
-            >
-              {icon && icon}
-              {resolvedTitle}
-              {sortIcon}
-            </Button>
-          </DropdownMenuTrigger>
+          <DropdownMenuTrigger
+            ref={menuTriggerRef}
+            render={
+              <Button
+                variant="ghost"
+                className={headerButtonClassName}
+                disabled={isLoading}
+              >
+                {icon && icon}
+                {resolvedTitle}
+                {sortIcon}
+              </Button>
+            }
+          />
           <DropdownMenuContent className="w-40" align="start">
             {menuItems}
           </DropdownMenuContent>
         </DropdownMenu>
         {props.tableLayout?.columnsPinnable && canPin && isPinned && (
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            className="rounded-lg -me-1 size-7"
-            onClick={() => column.pin(false)}
-            aria-label={`Unpin ${resolvedTitle} column`}
-            title={`Unpin ${resolvedTitle} column`}
+          <span
+            className={cn(
+              "-me-1 flex min-w-7 shrink-[999]",
+              unpinClearsResizeHandle && "pe-4"
+            )}
           >
-            <PinOffIcon className="size-3.5! opacity-50!" aria-hidden="true" />
-          </Button>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              className="rounded-lg size-7"
+              onClick={(event) => {
+                const scrollArea = event.currentTarget.closest<HTMLElement>(
+                  '[data-slot="scroll-area-viewport"]'
+                )
+                pendingUnpinFocus.add(column)
+                column.pin(false)
+                // A column the virtual window leaves unmounted claims nothing,
+                // so the grid's scroll area takes focus instead of the page.
+                requestAnimationFrame(() => {
+                  if (pendingUnpinFocus.delete(column)) scrollArea?.focus()
+                })
+              }}
+              aria-label={i18n.labels.unpinColumn(resolvedTitle)}
+              title={i18n.labels.unpinColumn(resolvedTitle)}
+            >
+              <PinOffIcon className="size-3.5! opacity-50!" aria-hidden="true" />
+            </Button>
+          </span>
         )}
       </div>
     )

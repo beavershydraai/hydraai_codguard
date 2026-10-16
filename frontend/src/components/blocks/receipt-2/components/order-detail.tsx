@@ -23,7 +23,7 @@ import {
 } from '@/components/reui/timeline'
 import { Frame, FrameHeader, FramePanel, FrameTitle } from '@/components/ui/frame'
 import { TierBadge } from '@/components/tier-badge'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Item, ItemMedia } from '@/components/ui/item'
 import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
@@ -81,12 +81,13 @@ export function OrderDetailView({ order, actions }: { order: OrderDetail; action
     <section aria-labelledby="order-heading" className="mx-auto w-full max-w-6xl">
       {/* Page header */}
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <Button variant="ghost" size="sm" asChild className="-ms-2 text-muted-foreground">
-          <Link to="/orders">
-            <ArrowLeftIcon aria-hidden="true" />
-            Orders
-          </Link>
-        </Button>
+        <Link
+          to="/orders"
+          className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), '-ms-2 text-muted-foreground')}
+        >
+          <ArrowLeftIcon aria-hidden="true" />
+          Orders
+        </Link>
 
         <div className="flex flex-wrap items-center gap-2">
           <Button

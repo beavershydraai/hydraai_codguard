@@ -13,7 +13,7 @@ import {
 import { SettingField } from '@/components/blocks/settings-3/components/setting-field'
 import { Badge } from '@/components/reui/badge'
 import { Frame, FrameDescription, FrameHeader, FramePanel, FrameTitle } from '@/components/ui/frame'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { FieldGroup } from '@/components/ui/field'
 import {
   Select,
@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { problemMessage } from '@/lib/api'
+import { cn } from '@/lib/utils'
 import { mockMode } from '@/mocks/fetch'
 
 // Demo controls for the hackathon (E1.3 reset, E9.4 spam simulation), laid out with the
@@ -109,11 +110,16 @@ export function DemoControls() {
                   value={spam.phone_blocked ? 'Blocked' : 'Not blocked'}
                   highlight
                 />
-                <Button variant="link" size="sm" className="col-span-full justify-start p-0" asChild>
-                  <Link to="/orders" search={{ status: ['pending_review'] }}>
-                    View the spam orders in the review queue
-                  </Link>
-                </Button>
+                <Link
+                  to="/orders"
+                  search={{ status: ['pending_review'] }}
+                  className={cn(
+                    buttonVariants({ variant: 'link', size: 'sm' }),
+                    'col-span-full justify-start p-0',
+                  )}
+                >
+                  View the spam orders in the review queue
+                </Link>
               </div>
             )}
             <RoleSwitch />
@@ -144,6 +150,8 @@ function Stat({
   )
 }
 
+const ROLE_ITEMS: Record<string, string> = { owner: 'Shop owner', staff: 'Staff' }
+
 /** Mock only: view the app as a staff member to see the read-only settings (E7.7). */
 function RoleSwitch() {
   const queryClient = useQueryClient()
@@ -156,8 +164,10 @@ function RoleSwitch() {
       badge={{ label: 'mock', variant: 'warning-light' }}
     >
       <Select
+        items={ROLE_ITEMS}
         value={me?.role ?? 'owner'}
         onValueChange={async (role) => {
+          if (role === null) return
           const { mockDb } = await import('@/mocks/db')
           mockDb.role = role as 'owner' | 'staff'
           await queryClient.invalidateQueries()
@@ -169,8 +179,11 @@ function RoleSwitch() {
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
-            <SelectItem value="owner">Shop owner</SelectItem>
-            <SelectItem value="staff">Staff</SelectItem>
+            {Object.entries(ROLE_ITEMS).map(([role, label]) => (
+              <SelectItem key={role} value={role}>
+                {label}
+              </SelectItem>
+            ))}
           </SelectGroup>
         </SelectContent>
       </Select>

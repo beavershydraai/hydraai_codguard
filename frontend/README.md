@@ -92,18 +92,36 @@ shortcuts into the inbox, breadcrumbs and the user menu with theme and sign-out.
 
 ## Adding components
 
+- The style is `base-nova` (`components.json`): components are built on Base UI
+  (`@base-ui/react`), not Radix.
 - shadcn: `pnpm dlx shadcn@latest add <name>`.
 - ReUI: `components.json` points the `@reui` registry at a local mirror on port 4000. Start it
-  with `reui serve`, then `REGISTRY_URL=http://localhost:4000/r/styles/radix-nova pnpm dlx shadcn@latest add @reui/<name> --yes`.
-  Without the mirror, change the `@reui` entry to `https://reui.io/r/{style}/{name}.json`.
+  with `reui serve`, then `REGISTRY_URL=http://localhost:4000/r pnpm dlx shadcn@latest add @reui/<name> --yes`
+  (the CLI adds `/styles/base-nova` itself). Without the mirror, change the `@reui` entry to
+  `https://reui.io/r/{style}/{name}.json`.
 - `src/components/ui/` holds every shadcn primitive ReUI depends on (`reui primitives` lists
   them), so ReUI components and blocks install without pulling in new base components. The one
-  exception is `toast`: it exists only for the Base UI styles, not for `radix-nova`.
+  exception is `toast`: nothing uses it, toasts go through sonner.
 - Files under `src/components/ui/` and `src/components/reui/` come from the registries. Prefer
   reinstalling over editing them; ReUI files are skipped by oxlint and Prettier.
 - Blocks under `src/components/blocks/` are installed once and then adapted (real data, routes,
   English copy), so they are linted and formatted like our own code. Do not reinstall them over
   the adapted files.
+
+### Base UI in our code
+
+Most Radix habits still type-check under Base UI but do nothing at run time. Use these instead:
+
+- `render={<Element />}` instead of `asChild`; the children go on the component, not the element.
+- A link that looks like a button is a `<Link className={buttonVariants(…)}>`. `<Button render={<Link />}>`
+  turns it into `role="button"`.
+- Menu items take `onClick`; `onSelect` is the DOM text-selection event and never fires. Keep a
+  menu open on click with `closeOnClick={false}`.
+- `Select` needs `items` (value → label) or `SelectValue` shows the raw value. `onValueChange`
+  can pass `null`.
+- `ToggleGroup` takes `multiple` instead of `type`; `TooltipProvider` takes `delay` instead of
+  `delayDuration`.
+- State attributes are `data-checked`, `data-open`, `data-active`… instead of `data-[state=…]`.
 
 ## Deploy
 

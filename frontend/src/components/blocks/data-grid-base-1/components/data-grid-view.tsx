@@ -83,16 +83,14 @@ function FilterPopover<T extends string>({
 }) {
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" aria-label={heading}>
-          <FilterIcon aria-hidden="true" />
-          {label}
-          {selected.length > 0 && (
-            <Badge size="sm" variant="info-outline">
-              {selected.length}
-            </Badge>
-          )}
-        </Button>
+      <PopoverTrigger render={<Button variant="outline" aria-label={heading} />}>
+        <FilterIcon aria-hidden="true" />
+        {label}
+        {selected.length > 0 && (
+          <Badge size="sm" variant="info-outline">
+            {selected.length}
+          </Badge>
+        )}
       </PopoverTrigger>
       <PopoverContent align="start" className="flex w-52 flex-col gap-2.5 p-3">
         <span className="text-xs font-medium text-muted-foreground">{heading}</span>
@@ -219,11 +217,9 @@ function Toolbar({ search, onSearchChange, filters, onFiltersChange, onRefresh, 
       </div>
 
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" aria-label="Table actions">
-            <MoreHorizontalIcon aria-hidden="true" />
-            Actions
-          </Button>
+        <DropdownMenuTrigger render={<Button variant="outline" aria-label="Table actions" />}>
+          <MoreHorizontalIcon aria-hidden="true" />
+          Actions
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuGroup>
@@ -328,7 +324,7 @@ export function OrdersDataGrid({
     filters.branches.length > 0
 
   return (
-    <TooltipProvider delayDuration={200}>
+    <TooltipProvider delay={200}>
       <ReuiDataGrid
         table={table}
         recordCount={orders.length}

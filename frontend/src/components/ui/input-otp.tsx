@@ -1,7 +1,8 @@
-import * as React from "react"
-import { OTPInput, OTPInputContext } from "input-otp"
+"use client"
 
-import { cn } from "@/lib/utils"
+import * as React from "react"
+import { cn } from "cn"
+import { OTPInput, OTPInputContext } from "input-otp"
 import { MinusIcon } from "lucide-react"
 
 function InputOTP({
