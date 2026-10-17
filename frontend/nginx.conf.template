@@ -27,6 +27,9 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
         proxy_read_timeout 300s;
+        # Uploads: an order history CSV may be 20 MB (POST /api/v1/shop/history). nginx's default
+        # of 1 MB answered 413 before the request reached the backend.
+        client_max_body_size 25m;
     }
 
     # Hashed build files never change.
