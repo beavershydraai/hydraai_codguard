@@ -46,6 +46,11 @@ asset=$(grep -oE '/assets/[^"]+\.js' <<<"$index" | head -1)
 curl -fsSI "http://127.0.0.1:8080$asset" | grep -qi '^cache-control: public, max-age=31536000, immutable' \
   || fail "$asset is not served with a long cache"
 [ "$(curl -fsS http://127.0.0.1:8080/api/v1/ping)" = pong ] || fail "/api was not forwarded to API_ORIGIN"
+# A 3 MB upload (an order history) must reach the backend, not stop at nginx with 413.
+big="$stub_dir/upload.bin"
+head -c 3000000 /dev/zero >"$big"
+code=$(curl -s -o /dev/null -w '%{http_code}' -X POST --data-binary @"$big" http://127.0.0.1:8080/api/v1/ping)
+[ "$code" != 413 ] || fail "nginx refused a 3 MB upload to /api (client_max_body_size)"
 uid=$(docker exec web id -u)
 [ "$uid" != "0" ] || fail "Container runs as root"
 
@@ -53,4 +58,4 @@ uid=$(docker exec web id -u)
 docker run -d --name web-port -e PORT=9090 -e API_ORIGIN=http://127.0.0.1:1 -p 9090:9090 "$IMAGE" >/dev/null
 wait_up 9090 || fail "Container ignored PORT=9090"
 
-echo "Smoke test passed: app, client-side routes, asset caching, /api forwarding, non-root user, PORT override."
+echo "Smoke test passed: app, client-side routes, asset caching, /api forwarding, 3 MB uploads, non-root user, PORT override."

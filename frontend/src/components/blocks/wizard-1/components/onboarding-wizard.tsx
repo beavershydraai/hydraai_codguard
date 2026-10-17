@@ -254,6 +254,11 @@ export function OnboardingWizard({
                   onDone={(result) => {
                     setHistory(result)
                     setErrors((e) => ({ ...e, history: undefined }))
+                    if (result === null) {
+                      // Skipped: nothing to learn from yet, go straight to the review.
+                      setUnlocked((u) => Math.max(u, 5))
+                      setCurrent(5)
+                    }
                   }}
                 />
                 {errors.history && <FieldError className="mt-3">{errors.history}</FieldError>}
