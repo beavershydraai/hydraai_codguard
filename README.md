@@ -12,6 +12,7 @@ COD Guard is an AI assistant for online sellers in Vietnam. It scores every new 
 
 - [The Problem](#the-problem)
 - [How It Works](#how-it-works)
+- [Demo](#demo)
 - [Key Features](#key-features)
 - [Architecture](#architecture)
 - [Risk Scoring](#risk-scoring)
@@ -56,6 +57,13 @@ COD Guard targets **social-commerce and website sellers** (Facebook, TikTok live
 
 ---
 
+## Demo
+
+- Live app: <https://codguard-web-186430269525.asia-southeast1.run.app> (shop app sign-in; the demo shop has branches in Vietnam, Singapore and the Philippines).
+- **Phone numbers in the demo are simulation data.** The demo shop's orders, buyers and phone numbers are synthetic (numbers start with `+84000`, `+65000` or `+63000`). The buyer in the recorded demo call uses a team member's test phone on the call allowlist (`CALL_ALLOWED_PHONES`); every other call in the demo rings a softphone. No real customer is called.
+
+---
+
 ## Key Features
 
 - **Risk score and tier** (0–100; Low / Medium / High / Very High) for every COD order, with plain-language reasons
@@ -75,34 +83,9 @@ COD Guard targets **social-commerce and website sellers** (Facebook, TikTok live
 
 ## Architecture
 
-> Planned architecture for the prototype. Details may change during development.
+![COD Guard on Google Cloud](docs/diagrams/architecture.png)
 
-```mermaid
-flowchart LR
-    subgraph Sources
-        A[File import] --> API
-        B[Order intake API] --> API
-        G[GHN staging<br/>delivery status] --> API
-    end
-
-    subgraph GCP [Google Cloud]
-        API[COD Guard API<br/>Cloud Run]
-        SCORE[Risk scoring<br/>scikit-learn model in the API]
-        LLM[Signals & reasons<br/>Gemini]
-        DEC[Decision engine<br/>ADK agents]
-        VOICE[AI call<br/>Gemini Live API]
-        DB[(App data<br/>Firestore)]
-        TRAIN[Training & monitoring<br/>Cloud Run jobs]
-        GCS[(Models<br/>Cloud Storage)]
-    end
-
-    API --> LLM --> SCORE --> DEC
-    DEC --> VOICE
-    DEC --> PAGE[Confirmation page]
-    API <--> DB
-    DB --> TRAIN --> GCS --> SCORE
-    WEB[Shop web app<br/>Cloud Run] <--> API
-```
+The real-time path runs on Cloud Run (`codguard-api`: FastAPI and the Agent Development Kit pipeline *score → explain → decide → act*); the models are trained and monitored by Cloud Run jobs and stored in Cloud Storage; AI calls go through Pub/Sub to the call controller and Asterisk on Compute Engine, which talks to the Gemini Live API. The flows in detail: [new order](docs/diagrams/agentic-new-order.png), [the Gemini agents](docs/diagrams/agentic-assessment.png), [after a contact](docs/diagrams/agentic-after-contact.png), [action decision](docs/diagrams/action-decision.png), [ML pipeline](docs/diagrams/ml-pipeline.png).
 
 ### Tech Stack
 
