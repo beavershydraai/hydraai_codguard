@@ -66,6 +66,17 @@ def test_an_update_starts_once_and_shows_as_running(models):
     assert not health.country_health("VN", later, health.requested_at()).updating  # gave up
 
 
+def test_an_update_that_keeps_the_current_model_still_ends(models):
+    put, _ = models
+    put("VN", "latest/metrics.json", metrics())
+    assert health.request_update(NOW)[0].updating
+    kept = {"version": "v20261016080500", "rows": 9000, "promoted": False}
+    put("VN", "latest/run.json", kept)
+    after = health.country_health("VN", NOW + timedelta(minutes=6), health.requested_at())
+    assert not after.updating and after.training_orders == 8000  # the model in use
+    assert after.last_update.orders == 9000 and not after.last_update.replaced
+
+
 def test_only_the_owner_updates_the_model(models, monkeypatch):
     app = create_app()
     staff = User("u2", "staff", "staff@example.com", "Staff", Role.STAFF, "shop_a")

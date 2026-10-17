@@ -83,3 +83,5 @@ def test_the_api_returns_the_stored_backtest(api, monkeypatch):  # noqa: F811
 def test_the_api_reports_no_backtest_before_a_training_run(api, monkeypatch):  # noqa: F811
     monkeypatch.setattr(artifacts, "read", lambda path, country="VN": None)
     assert api.get("/api/v1/dashboard/backtest").status_code == 404
+    del api.headers["Authorization"]
+    assert api.get("/api/v1/dashboard/backtest").status_code == 401

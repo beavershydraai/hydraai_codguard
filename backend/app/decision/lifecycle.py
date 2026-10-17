@@ -543,11 +543,13 @@ def accept_suggestion(
     *,
     settings: Settings = None,
     policy: Policy | None = None,
+    attempt: int | None = None,
 ) -> dict:
     """The shop accepts the contact the engine suggested (`suggest` mode, or an AI call outside
     the automation rules): the order then waits for the buyer as after an automatic contact,
     with the same no-response timer, and the timeline records who accepted it. An order without
-    that suggestion is left alone."""
+    that suggestion is left alone. `attempt`: the AI call already placed and recorded for it,
+    which the count of calls made then includes."""
 
     def apply(doc):
         if suggested(doc) != action:
@@ -555,7 +557,7 @@ def accept_suggestion(
         previous = doc["decision"]
         current = policy or decisions.default_policy()
         rule = decisions.tier_rule(current, RiskTier(doc.get("tier") or RiskTier.LOW))
-        calls = calls_made(doc) + (action == DecisionAction.AI_CALL)
+        calls = attempt or calls_made(doc) + (action == DecisionAction.AI_CALL)
         next_action, wait = decisions.follow_up(rule, action, calls, current.automation)
         _move(doc, "suggestion_accepted", action)
         _set_decision(

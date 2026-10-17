@@ -18,8 +18,8 @@ import { DataGridTable } from '@/components/reui/data-grid/data-grid-table'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { useFileUpload } from '@/hooks/use-file-upload'
-import { problemMessage } from '@/lib/api'
-import { COUNTRY_LABELS, formatDateTime, formatPercent } from '@/lib/labels'
+import { isProblem, problemMessage } from '@/lib/api'
+import { COUNTRY_LABELS, formatPercent } from '@/lib/labels'
 
 // Onboarding steps 3 and 4: the shop uploads its past orders with their delivery results
 // (POST /shop/history, checked row by row), then the risk models learn from them
@@ -149,26 +149,31 @@ function HistoryReport({ result }: { result: HistoryImportResult }) {
   )
 }
 
-export function TrainStep({ onDone }: { onDone: () => void }) {
-  const [startedAt, setStartedAt] = useState<string | null>(null)
+export function TrainStep({ trained, onDone }: { trained: boolean; onDone: () => void }) {
+  const [started, setStarted] = useState(trained)
   const queryClient = useQueryClient()
+  // The server says when an update runs (`updating`) and how the last one ended (`last_update`),
+  // also when it kept the current model because the new one was not better.
   const health = useQuery({
     ...getModelHealthOptions(),
-    refetchInterval: (q) => (startedAt && (q.state.data?.some((m) => m.updating) ?? true) ? 5_000 : false),
+    refetchInterval: (q) => (q.state.data?.some((m) => m.updating) ? 5_000 : false),
   })
+  const models = health.data ?? []
+  const running = models.some((m) => m.updating)
+  // An update already running (started here before going back, or by another shop) is followed.
+  if (running && !started) setStarted(true)
   const train = useMutation({
     ...updateModelsMutation(),
     onSuccess: (next) => {
-      // The answer says the models are updating, which starts the polling above.
       queryClient.setQueryData(getModelHealthOptions().queryKey, next)
-      setStartedAt(new Date().toISOString())
+      setStarted(true)
     },
-    onError: (error) => toast.error('Could not start learning', { description: problemMessage(error) }),
+    onError: (error) => {
+      if (isProblem(error) && error.status === 409) void health.refetch()
+      else toast.error('Could not start learning', { description: problemMessage(error) })
+    },
   })
-  const models = health.data ?? []
-  const learned = (m: ModelHealth) =>
-    !!startedAt && !m.updating && !!m.trained_at && m.trained_at >= startedAt
-  const done = models.length > 0 && models.every(learned)
+  const done = started && !running && models.length > 0
   useEffect(() => {
     if (done) onDone()
   }, [done, onDone])
@@ -179,7 +184,7 @@ export function TrainStep({ onDone }: { onDone: () => void }) {
         COD Guard trains one risk model per country, on your history together with the orders it already
         knows. It takes about 2 to 3 minutes; you can keep this page open.
       </p>
-      {!startedAt ? (
+      {!started ? (
         <Button type="button" onClick={() => train.mutate({})} disabled={train.isPending} className="w-fit">
           {train.isPending ? <Spinner data-icon="inline-start" /> : <SparklesIcon aria-hidden="true" />}
           Train my risk model
@@ -189,20 +194,13 @@ export function TrainStep({ onDone }: { onDone: () => void }) {
           {models.map((m) => (
             <li key={m.country} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
               <span className="font-medium">{COUNTRY_LABELS[m.country] ?? m.country}</span>
-              {learned(m) ? (
-                <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                  <Badge variant="success-light">
-                    <CheckCircle2Icon aria-hidden="true" />
-                    Learned
-                  </Badge>
-                  from {number(m.training_orders ?? 0)} orders
-                  {m.lift_top20 != null && ` · finds ${m.lift_top20.toFixed(1)}× more failed deliveries`}
-                </span>
-              ) : (
+              {m.updating ? (
                 <Badge variant="info-light">
                   <Spinner className="size-3" />
                   Learning…
                 </Badge>
+              ) : (
+                <ModelResult model={m} />
               )}
             </li>
           ))}
@@ -212,11 +210,26 @@ export function TrainStep({ onDone }: { onDone: () => void }) {
         <Alert variant="success" role="status">
           <PartyPopperIcon />
           <AlertTitle>You're all set</AlertTitle>
-          <AlertDescription>
-            New orders are scored with your models from now on ({formatDateTime(models[0]!.trained_at!)}).
-          </AlertDescription>
+          <AlertDescription>New orders are scored with these models from now on.</AlertDescription>
         </Alert>
       )}
     </div>
+  )
+}
+
+function ModelResult({ model: m }: { model: ModelHealth }) {
+  const finds = m.lift_top20 != null ? `finds ${m.lift_top20.toFixed(1)}× more failed deliveries` : null
+  if (!m.last_update)
+    return <span className="text-xs text-muted-foreground">No orders to learn from yet</span>
+  return (
+    <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+      <Badge variant="success-light">
+        <CheckCircle2Icon aria-hidden="true" />
+        {m.last_update.replaced ? 'Learned' : 'Checked'}
+      </Badge>
+      {m.last_update.replaced
+        ? `from ${number(m.last_update.orders)} orders, yours included${finds ? ` · ${finds}` : ''}`
+        : `on ${number(m.last_update.orders)} orders, yours included · the model in use stays: the new one was not better${finds ? ` (${finds})` : ''}`}
+    </span>
   )
 }

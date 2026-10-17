@@ -614,6 +614,7 @@ def get_dashboard_summary(
     summary="Latest backtest of a country's model: lift curves and policy comparison",
 )
 def get_backtest(
+    user: CurrentUser,
     country: Annotated[
         Literal["VN", "SG", "PH"], Query(description="Country of the model (one per country).")
     ] = "VN",
@@ -644,8 +645,8 @@ def get_model_health(user: CurrentUser) -> list[ModelHealth]:
     responses=problem_responses(401, 403, 409),
     summary="Update the risk models (owner only)",
     description="Starts codguard-train: every country's model learns again from all orders with a "
-    "delivery result, in about two minutes. A new model replaces the current one only if it is at "
-    "least as good; the current one keeps scoring meanwhile. 409 while an update is running.",
+    "delivery result, in about two minutes. A new model replaces the current one only if it is "
+    "better; the current one keeps scoring meanwhile. 409 while an update is running.",
 )
 def update_models(user: CurrentUser) -> list[ModelHealth]:
     if user.role != Role.OWNER:

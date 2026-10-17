@@ -16,6 +16,7 @@ import { CsvImportDialog } from '@/components/orders/csv-import-dialog'
 import { QueryError } from '@/components/query-error'
 import { Button } from '@/components/ui/button'
 import { invalidate } from '@/lib/api'
+import { mockMode } from '@/mocks/fetch'
 import { BRANCH_LABELS, ORDER_STATUS_LABELS, RISK_TIER_LABELS } from '@/lib/labels'
 
 type OrdersSearch = {
@@ -168,10 +169,12 @@ function OrdersPage() {
       <OrdersDataGrid
         headerActions={
           <>
-            <Button variant="outline" size="sm" onClick={() => setPanel('delivery')}>
-              <TruckIcon aria-hidden="true" />
-              Import delivery results
-            </Button>
+            {mockMode === 'all' && ( // the backend does not take delivery results yet
+              <Button variant="outline" size="sm" onClick={() => setPanel('delivery')}>
+                <TruckIcon aria-hidden="true" />
+                Import delivery results
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => setPanel('import')}>
               <UploadIcon aria-hidden="true" />
               Import orders

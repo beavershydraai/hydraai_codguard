@@ -252,6 +252,7 @@ class CallService:
                 now,
                 settings=self.settings(shop_id),
                 policy=self.policy(shop_id),
+                attempt=attempt,
             )
         return call
 
@@ -386,7 +387,8 @@ class CallService:
 
     def record_result(self, call_id: str, result: CallResult) -> Call:
         """Store the final result once and apply it to the orders. An identical repeat returns
-        the call again; a different result is 409. A call the backend gave up on (no report in
+        the call again, and applies it again if applying it failed (the controller retries from
+        its outbox); a different result is 409. A call the backend gave up on (no report in
         time) still takes the controller's late result."""
         payload = result.model_dump(mode="json")
         fresh = []
@@ -395,6 +397,8 @@ class CallService:
             fresh.clear()
             if CallStatus(doc["status"]) in FINISHED and not doc.get("expired"):
                 if doc.get("result") == payload:
+                    if doc.get("applied") is False:  # applying it failed last time
+                        fresh.append(True)
                     return doc
                 raise ApiError(
                     409, ErrorCode.CONFLICT, "Conflict", f"Call {call_id} has a different result."
@@ -417,11 +421,13 @@ class CallService:
                 "recording_uri": result.recording_uri,
                 "result": payload,
                 "expired": False,
+                "applied": False,
             }
 
         doc = self._transact(call_id, apply)
         if fresh:
             self._apply_to_orders(doc, result)
+            doc = self._transact(call_id, lambda current: current | {"applied": True})
             doc = self._review(call_id, doc) or doc
         return call_view(doc)
 

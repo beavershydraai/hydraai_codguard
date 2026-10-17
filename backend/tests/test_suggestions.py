@@ -11,7 +11,7 @@ from app.agents.log import get_decision_log
 from app.data.policies import get_policy_store
 from app.data.shops import get_shop_store
 from app.data.store import get_store
-from app.decision import timers
+from app.decision import lifecycle, timers
 from app.main import create_app
 from app.risk import engine
 from tests.test_pipeline import pipe, run, scorer  # noqa: F401 (pytest fixture)
@@ -91,6 +91,16 @@ async def test_a_due_timer_moves_an_unanswered_link_on(pipe, shop, monkeypatch):
     # The link went unanswered: the policy's AI call follows, suggested since automation is off.
     assert doc["status"] == "pending_review" and doc["decision"]["suggested_action"] == "ai_call"
     assert await run_due(due_at + timedelta(hours=1)) == 0  # nothing waits any more
+
+
+async def test_an_accepted_call_keeps_its_second_attempt(pipe, monkeypatch):  # noqa: F811
+    monkeypatch.setattr(engine, "score", scorer("high", "call"))
+    await run(pipe)
+    now = pipe.store.get("ord_test")["decision"]["decided_at"]
+    # CallService.start_for_shop: the call is placed and recorded on the order, then accepted.
+    lifecycle.record_call_attempt(pipe.store, "ord_test", 1, now)
+    doc = lifecycle.accept_suggestion(pipe.store, "ord_test", "ai_call", "admin", now, attempt=1)
+    assert doc["decision"]["next_action"] == "ai_call"  # not review: one call of two was made
 
 
 def test_the_timer_endpoint_needs_the_scheduler_identity(shop, monkeypatch):

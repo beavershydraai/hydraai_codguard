@@ -195,6 +195,16 @@ def test_valid_outcome_maps_refs_to_order_ids():
             },
             "quantity must be the new quantity as a whole number",
         ),
+        (
+            {
+                "outcome": "EDITED",
+                "summary": "x",
+                "changes": [
+                    {"order_ref": "4721", "field": "recipient_name", "new_value": "N" * 101},
+                ],
+            },
+            "recipient_name must be 1 to 100 characters",
+        ),
     ],
 )
 def test_invalid_outcomes_tell_the_model_what_to_fix(args, message):

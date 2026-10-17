@@ -140,6 +140,7 @@ const MODEL_HEALTH = (['VN', 'SG', 'PH'] as const).map((country) => ({
   checked_at: '2026-10-16T19:00:30Z',
   new_outcomes: 120,
   updating: false,
+  last_update: { at: '2026-10-15T17:34:50Z', orders: 7677, replaced: true },
 }))
 on('GET', '/api/v1/dashboard/model-health', () => MODEL_HEALTH)
 on('POST', '/api/v1/dashboard/model-health/update', () => {
@@ -148,7 +149,14 @@ on('POST', '/api/v1/dashboard/model-health/update', () => {
   MODEL_HEALTH.forEach((m) => (m.updating = true))
   setTimeout(() => {
     const trainedAt = new Date().toISOString()
-    MODEL_HEALTH.forEach((m) => Object.assign(m, { updating: false, trained_at: trainedAt }))
+    MODEL_HEALTH.forEach((m, i) =>
+      // The second country keeps its model, as when the new one is not better.
+      Object.assign(m, {
+        updating: false,
+        ...(i !== 1 && { trained_at: trainedAt }),
+        last_update: { at: trainedAt, orders: m.training_orders + 2400, replaced: i !== 1 },
+      }),
+    )
   }, 8_000)
   return MODEL_HEALTH
 })

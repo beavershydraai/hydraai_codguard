@@ -1399,8 +1399,8 @@ paths:
       - dashboard
       summary: Update the risk models (owner only)
       description: 'Starts codguard-train: every country''s model learns again from all orders with a
-        delivery result, in about two minutes. A new model replaces the current one only if it is at least
-        as good; the current one keeps scoring meanwhile. 409 while an update is running.'
+        delivery result, in about two minutes. A new model replaces the current one only if it is better;
+        the current one keeps scoring meanwhile. 409 while an update is running.'
       operationId: update_models
       responses:
         '200':
@@ -4053,6 +4053,11 @@ components:
           title: Updating
           description: An update is running.
           default: false
+        last_update:
+          anyOf:
+          - $ref: '#/components/schemas/ModelUpdate'
+          - type: 'null'
+          description: The last update.
       additionalProperties: false
       type: object
       required:
@@ -4065,6 +4070,10 @@ components:
       examples:
       - checked_at: '2026-10-16T19:00:30Z'
         country: VN
+        last_update:
+          at: '2026-10-15T17:34:50Z'
+          orders: 7677
+          replaced: true
         lift_top20: 3.33
         new_outcomes: 1240
         reasons:
@@ -4073,6 +4082,31 @@ components:
         trained_at: '2026-10-15T17:34:50Z'
         training_orders: 7677
         updating: false
+    ModelUpdate:
+      properties:
+        at:
+          type: string
+          format: date-time
+          title: At
+          description: When the update finished.
+        orders:
+          type: integer
+          minimum: 0.0
+          title: Orders
+          description: Orders with a delivery result it learned from.
+        replaced:
+          type: boolean
+          title: Replaced
+          description: 'The new model replaced the current one: only when it is better.'
+      additionalProperties: false
+      type: object
+      required:
+      - at
+      - orders
+      - replaced
+      title: ModelUpdate
+      description: The last update of a country's model (`codguard-train`), whether or not it replaced
+        it.
     OrderCreate:
       properties:
         external_id:
