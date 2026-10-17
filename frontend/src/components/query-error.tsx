@@ -11,11 +11,14 @@ function isProblem(error: unknown): error is ProblemDetail {
 
 export function QueryError({ error }: { error: unknown }) {
   const notBuilt = isProblem(error) && error.code === 'not_implemented'
+  // An error answer without a problem+json body (an empty 404, a proxy page) has nothing to show.
   const message = isProblem(error)
     ? (error.detail ?? error.title)
     : error instanceof Error
       ? error.message
-      : String(error)
+      : typeof error === 'string' && error
+        ? error
+        : 'The server answered with an error and no details. Try again in a moment.'
   return (
     <Alert variant="destructive">
       <AlertCircle />

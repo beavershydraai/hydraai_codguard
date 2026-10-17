@@ -9,7 +9,6 @@ import {
 } from '@/api/gen/@tanstack/react-query.gen'
 import { type Period, PERIODS } from '@/components/blocks/dashboard-1/components/data'
 import { RoiDashboard } from '@/components/blocks/dashboard-1/components/roi-dashboard'
-import { QueryError } from '@/components/query-error'
 import { useOnboardingStore } from '@/stores/onboarding'
 
 type DashboardSearch = { period?: Period; country?: Country }
@@ -58,10 +57,11 @@ function DashboardPage() {
     if (empty) void navigate({ to: '/onboarding' })
   }, [empty, navigate])
 
-  if (error) return <QueryError error={error} />
+  // An error keeps the page: its figures and charts show empty, with the error above them.
   return (
     <RoiDashboard
       summary={data}
+      error={error}
       previous={previous.data}
       isLoading={isPending}
       period={period}

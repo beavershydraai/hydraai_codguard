@@ -20,6 +20,7 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 import type { DashboardSummary } from '@/api/gen'
 import { getShopOptions } from '@/api/gen/@tanstack/react-query.gen'
 import { EmptyState } from '@/components/empty-state'
+import { QueryError } from '@/components/query-error'
 import { Badge, type BadgeProps } from '@/components/reui/badge'
 import { Frame, FramePanel } from '@/components/ui/frame'
 import { buttonVariants } from '@/components/ui/button'
@@ -51,6 +52,7 @@ type Kpi = {
 
 export function RoiDashboard({
   summary,
+  error,
   previous,
   isLoading,
   period,
@@ -59,6 +61,8 @@ export function RoiDashboard({
   onCountryChange,
 }: {
   summary: DashboardSummary | undefined
+  /** Why the figures could not load; the page still shows, empty. */
+  error?: unknown
   /** The same figures for the period before, for the trend badges. */
   previous?: DashboardSummary
   isLoading: boolean
@@ -81,27 +85,32 @@ export function RoiDashboard({
               {PERIODS.find((p) => p.value === period)!.label}.
             </p>
           </div>
-          <Tabs value={country} onValueChange={onCountryChange}>
-            <TabsList>
-              {Object.entries(COUNTRY_LABELS).map(([code, label]) => (
-                <TabsTrigger key={code} value={code}>
-                  {label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-          <Tabs value={period} onValueChange={(value) => onPeriodChange(value as Period)}>
-            <TabsList>
-              {PERIODS.map((p) => (
-                <TabsTrigger key={p.value} value={p.value}>
-                  {p.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+          {/* Country and period sit together on the right. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Tabs value={country} onValueChange={onCountryChange}>
+              <TabsList>
+                {Object.entries(COUNTRY_LABELS).map(([code, label]) => (
+                  <TabsTrigger key={code} value={code}>
+                    {label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+            <Tabs value={period} onValueChange={(value) => onPeriodChange(value as Period)}>
+              <TabsList>
+                {PERIODS.map((p) => (
+                  <TabsTrigger key={p.value} value={p.value}>
+                    {p.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
         </div>
 
         <SetupBanner />
+
+        {error != null && <QueryError error={error} />}
 
         {empty ? (
           <EmptyDashboard />
@@ -152,6 +161,20 @@ function trendOf(
   }
 }
 
+const NO_SUMMARY: DashboardSummary = {
+  period_from: '',
+  period_to: '',
+  country: 'VN',
+  currency: 'VND',
+  orders_screened: 0,
+  actions: [],
+  cancelled_before_ship: 0,
+  delivered: 0,
+  delivery_failed: 0,
+  estimated_savings_vnd: 0,
+  good_orders_contacted_rate: 0,
+}
+
 function KpiCards({
   summary,
   previous,
@@ -163,11 +186,14 @@ function KpiCards({
   periodLabel: string
   isLoading: boolean
 }) {
+  // Without figures (an error) the cards keep their titles and show a dash.
+  const loaded = !!summary
+  summary ??= NO_SUMMARY
   const contacted = summary?.actions
     .filter((a) => a.action !== 'ship_now' && a.action !== 'hold_for_review')
     .reduce((sum, a) => sum + a.count, 0)
   const finished = summary ? summary.delivered + summary.delivery_failed : 0
-  const kpis: Kpi[] = summary
+  const built: Kpi[] = summary
     ? [
         {
           title: 'Orders screened',
@@ -225,11 +251,14 @@ function KpiCards({
         },
       ]
     : []
+  const kpis = loaded
+    ? built
+    : built.map((kpi) => ({ ...kpi, value: '—', note: 'No data', trend: undefined, estimated: false }))
 
   return (
     <Frame className="@container w-full">
       <div className="grid gap-1 @2xl:grid-cols-2 @3xl:grid-cols-3 @6xl:grid-cols-5">
-        {isLoading || !summary
+        {isLoading
           ? Array.from({ length: 5 }, (_, i) => (
               <FramePanel key={i}>
                 <Skeleton className="h-10 w-32" />
@@ -314,7 +343,7 @@ function ActionsChart({ summary, isLoading }: { summary?: DashboardSummary; isLo
         {isLoading ? (
           <Skeleton className="h-56 w-full" />
         ) : (
-          <ChartContainer config={actionsConfig} className="h-56 w-full">
+          <ChartContainer config={actionsConfig} className="relative h-56 w-full">
             <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16 }}>
               <CartesianGrid horizontal={false} />
               <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
@@ -322,6 +351,7 @@ function ActionsChart({ summary, isLoading }: { summary?: DashboardSummary; isLo
               <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
               <Bar dataKey="count" fill="var(--color-count)" radius={4} />
             </BarChart>
+            {data.length === 0 && <NoData />}
           </ChartContainer>
         )}
       </FramePanel>
@@ -330,13 +360,12 @@ function ActionsChart({ summary, isLoading }: { summary?: DashboardSummary; isLo
 }
 
 function OutcomesCard({ summary, isLoading }: { summary?: DashboardSummary; isLoading: boolean }) {
-  const rows = summary
-    ? [
-        { label: 'Delivered', value: summary.delivered, tone: 'bg-success' },
-        { label: 'Cancelled before shipping', value: summary.cancelled_before_ship, tone: 'bg-warning' },
-        { label: 'Delivery failed', value: summary.delivery_failed, tone: 'bg-destructive' },
-      ]
-    : []
+  // Without figures the rows still show, at zero, so the card keeps its shape.
+  const rows = [
+    { label: 'Delivered', value: summary?.delivered ?? 0, tone: 'bg-success' },
+    { label: 'Cancelled before shipping', value: summary?.cancelled_before_ship ?? 0, tone: 'bg-warning' },
+    { label: 'Delivery failed', value: summary?.delivery_failed ?? 0, tone: 'bg-destructive' },
+  ]
   const total = rows.reduce((sum, r) => sum + r.value, 0)
 
   return (
@@ -348,7 +377,7 @@ function OutcomesCard({ summary, isLoading }: { summary?: DashboardSummary; isLo
             View model backtest
           </Link>
         </div>
-        {isLoading || !summary ? (
+        {isLoading ? (
           <Skeleton className="h-40 w-full" />
         ) : (
           <>
@@ -373,10 +402,12 @@ function OutcomesCard({ summary, isLoading }: { summary?: DashboardSummary; isLo
                     {r.label}
                   </span>
                   <span className="tabular-nums">
-                    {r.value.toLocaleString('en-US')}
-                    <span className="ms-2 text-xs text-muted-foreground">
-                      {total ? formatPercent(r.value / total) : '—'}
-                    </span>
+                    {summary ? r.value.toLocaleString('en-US') : '—'}
+                    {summary && (
+                      <span className="ms-2 text-xs text-muted-foreground">
+                        {total ? formatPercent(r.value / total) : '—'}
+                      </span>
+                    )}
                   </span>
                 </li>
               ))}
@@ -388,6 +419,14 @@ function OutcomesCard({ summary, isLoading }: { summary?: DashboardSummary; isLo
         )}
       </FramePanel>
     </Frame>
+  )
+}
+
+function NoData() {
+  return (
+    <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
+      No data for this period
+    </div>
   )
 }
 
