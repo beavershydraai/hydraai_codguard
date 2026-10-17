@@ -73,6 +73,9 @@ def test_the_agents_switch_picks_each_branch_s_normal_or_noagents_key():
     # A key without a branch is the default branch's (branch_VN_HCM).
     assert branch_keys(env, agents=True) == {"branch_SG": "k1", "branch_VN_HCM": "k3"}
     assert branch_keys(env, agents=False) == {"branch_SG": "k2"}
+    assert branch_keys("k9:shop_new:branch_PH:noagents," + env, False, "shop_new") == {
+        "branch_PH": "k9"
+    }
 
 
 def test_each_country_gets_exactly_its_orders_within_the_window():

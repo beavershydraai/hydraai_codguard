@@ -32,12 +32,13 @@ from app.data import branches
 from app.demo.world import ORDERS_PER_DAY, SHOP_ID, World
 
 
-def branch_keys(env: str, agents: bool) -> dict[str, str]:
-    """{branch: key} of the demo shop: the normal keys, or the `noagents` test keys."""
+def branch_keys(env: str, agents: bool, shop: str = SHOP_ID) -> dict[str, str]:
+    """{branch: key} of the shop (default the demo shop): the normal keys, or the `noagents`
+    test keys."""
     keys = {}
     for entry in env.split(","):
         key, *rest = entry.split(":")
-        if rest[:1] != [SHOP_ID] or ("noagents" in rest[1:]) == agents:
+        if rest[:1] != [shop] or ("noagents" in rest[1:]) == agents:
             continue
         branch = next((t for t in rest[1:] if t != "noagents"), branches.default_branch())
         keys[branch] = key
@@ -76,9 +77,10 @@ def main() -> None:
     parser.add_argument("--countries", default="VN,SG,PH", help="comma-separated")
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--agents", action="store_true", help="run the Gemini agents (uses quota)")
+    parser.add_argument("--shop", default=SHOP_ID, help="shop whose intake keys send the orders")
     args = parser.parse_args()
     url = os.environ["INTAKE_URL"].rstrip("/")
-    keys = branch_keys(os.environ["INTAKE_API_KEYS"], args.agents)
+    keys = branch_keys(os.environ["INTAKE_API_KEYS"], args.agents, args.shop)
     rng = random.Random(args.seed)
     plan = schedule(args.countries.split(","), keys, args.orders, args.minutes, rng)
     world = World()  # the history's seed: the same buyers
