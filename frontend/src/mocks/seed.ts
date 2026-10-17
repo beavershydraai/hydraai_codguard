@@ -90,6 +90,7 @@ export function defaultPolicy(effectiveFrom: string): Policy {
       max_attempts: 2,
       retry_after_minutes: 30,
     },
+    random_tests: true,
   }
 }
 
@@ -923,6 +924,10 @@ export function seedData(seed = 2026, now = Date.now()): SeedResult {
       tier: score?.tier ?? null,
       risk_score: score?.risk_score ?? null,
       current_action: decision?.action ?? null,
+      // About 12 % of orders whose tier allows more than one action are random tests. A separate
+      // generator, so the flag does not shift the rest of the seed.
+      random_test:
+        !!score?.tier && score.tier !== 'low' && !hardRules.length && rng(seed + index * 7919).next() < 0.12,
       placed_at: iso(placed),
       updated_at: lastAt,
       address,

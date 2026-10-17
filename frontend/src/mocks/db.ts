@@ -13,6 +13,8 @@ import type {
   CallOutcome,
   DecisionAction,
   DeliveryImportResult,
+  HistoryCountry,
+  HistoryImportResult,
   ImportResult,
   ImportRowError,
   ListOrdersData,
@@ -21,6 +23,7 @@ import type {
   OrderEvent,
   OrderPage,
   OrderStatus,
+  ReviewReason,
   OrderSummary,
   OrderUpdate,
   Policy,
@@ -82,6 +85,29 @@ export function matchesExactly(order: OrderSummary, q: string): boolean {
   )
 }
 
+const NO_ANSWER: Record<string, ReviewReason> = {
+  confirmation_link: 'no_answer_link',
+  ai_call: 'no_answer_call',
+  deposit_request: 'deposit_unpaid',
+}
+
+/** Why an order waits in review, the way the backend reads it (`views.review_reason`). */
+function reviewReason(order: OrderDetail): ReviewReason | null {
+  if (order.status !== 'pending_review') return null
+  const decision = order.decision
+  if (decision?.suggested_action) return 'suggested'
+  if (decision?.decided_by === 'staff') return 'staff'
+  if (order.current_score?.hard_rules?.includes('invalid_phone')) return 'invalid_phone'
+  if (decision?.block_reasons?.includes('attempts_exhausted')) return 'attempts_used'
+  const outcome = order.calls?.at(-1)?.outcome
+  if (outcome === 'unclear') return 'call_unclear'
+  if (outcome === 'edited') return 'items_changed'
+  if (outcome === 'wrong_person') return 'wrong_person'
+  if (order.calls?.length) return 'no_answer_call'
+  const first = [...(order.contacts ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at))[0]
+  return (first && NO_ANSWER[first.channel]) || 'other'
+}
+
 export function summary(order: OrderDetail): OrderSummary {
   return {
     id: order.id,
@@ -97,15 +123,9 @@ export function summary(order: OrderDetail): OrderSummary {
     risk_score: order.risk_score,
     current_action: order.current_action,
     suggested_action: order.decision?.suggested_action ?? null,
-    review_reason:
-      order.status !== 'pending_review'
-        ? null
-        : order.decision?.suggested_action
-          ? 'suggested'
-          : order.decision?.decided_by === 'staff'
-            ? 'staff'
-            : 'other',
+    review_reason: reviewReason(order),
     hard_rules: order.current_score?.hard_rules ?? [],
+    random_test: order.random_test ?? false,
     contact_summary: order.calls?.findLast((c) => c.summary_vi)?.summary_vi ?? null,
     placed_at: order.placed_at,
     updated_at: order.updated_at,
@@ -177,6 +197,7 @@ export class MockDb {
       updated_by: by,
       tiers: update.tiers,
       automation: update.automation ?? this.policies[0]!.automation,
+      random_tests: update.random_tests ?? this.policy.random_tests ?? true,
     }
     this.policies.push(next)
     return next
@@ -724,6 +745,58 @@ export class MockDb {
       applied++
     })
     return { received: applied + unknown + rejected.length, applied, unknown_orders: unknown, rejected }
+  }
+
+  // ── Order history (onboarding) ──
+
+  /** Checks each row like POST /shop/history does; the mock keeps the counts, not the orders. */
+  importHistory(csv: string): HistoryImportResult {
+    const rows = parseCsv(csv)
+    const header = rows.shift()?.map((h) => h.trim().toLowerCase()) ?? []
+    const branchCol = header.indexOf('branch_id')
+    const resultCol = header.indexOf('delivery_result')
+    if (branchCol < 0 || resultCol < 0) {
+      throw new MockError(400, 'validation_error', 'CSV needs branch_id and delivery_result columns.')
+    }
+    const countryOf: Record<string, string> = {
+      branch_VN_HCM: 'VN',
+      branch_VN_HN: 'VN',
+      branch_SG: 'SG',
+      branch_PH: 'PH',
+    }
+    const results = ['delivered', 'refused', 'unreachable', 'carrier_issue', 'shop_issue', 'cancelled']
+    const countries = new Map<string, HistoryCountry>()
+    const rejected: ImportRowError[] = []
+    let received = 0
+    rows.forEach((row, index) => {
+      if (row.every((cell) => !cell.trim())) return
+      received++
+      const country = countryOf[row[branchCol]?.trim() ?? '']
+      const result = row[resultCol]?.trim() ?? ''
+      if (!country)
+        return void rejected.push({ row: index + 1, field: 'branch_id', message: 'Unknown branch.' })
+      if (!results.includes(result)) {
+        return void rejected.push({
+          row: index + 1,
+          field: 'delivery_result',
+          message: 'Invalid delivery result.',
+        })
+      }
+      const c = countries.get(country) ?? { country, orders: 0, delivered: 0, failed: 0, cancelled: 0 }
+      c.orders++
+      if (result === 'delivered') c.delivered++
+      // Failed counts the buyer's failures only (refused, unreachable), like the training label.
+      if (result === 'refused' || result === 'unreachable') c.failed++
+      if (result === 'cancelled') c.cancelled++
+      countries.set(country, c)
+    })
+    return {
+      received,
+      imported: received - rejected.length,
+      rejected_count: rejected.length,
+      rejected: rejected.slice(0, 50),
+      countries: [...countries.values()],
+    }
   }
 
   // ── Dashboard ──

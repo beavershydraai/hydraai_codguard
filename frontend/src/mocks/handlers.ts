@@ -121,6 +121,14 @@ on('POST', '/api/v1/delivery-outcomes/import', async ({ request }) => {
   return mockDb.importDelivery(await file.text())
 })
 
+on('POST', '/api/v1/shop/history', async ({ request }) => {
+  ownerOnly()
+  const form = await request.formData()
+  const file = form.get('file')
+  if (!(file instanceof Blob)) throw new MockError(400, 'validation_error', 'Missing file.')
+  return mockDb.importHistory(await file.text())
+})
+
 on('GET', '/api/v1/dashboard/backtest', () => mockDb.backtest())
 const MODEL_HEALTH = (['VN', 'SG', 'PH'] as const).map((country) => ({
   country,
@@ -136,7 +144,13 @@ const MODEL_HEALTH = (['VN', 'SG', 'PH'] as const).map((country) => ({
 on('GET', '/api/v1/dashboard/model-health', () => MODEL_HEALTH)
 on('POST', '/api/v1/dashboard/model-health/update', () => {
   ownerOnly()
-  return MODEL_HEALTH.map((m) => ({ ...m, updating: true }))
+  // Training takes 2 to 3 minutes in the cloud; the mock finishes after a few seconds.
+  MODEL_HEALTH.forEach((m) => (m.updating = true))
+  setTimeout(() => {
+    const trainedAt = new Date().toISOString()
+    MODEL_HEALTH.forEach((m) => Object.assign(m, { updating: false, trained_at: trainedAt }))
+  }, 8_000)
+  return MODEL_HEALTH
 })
 
 on('GET', '/api/v1/public/confirmations/{token}', ({ params }) => mockDb.confirmation(params.token!))

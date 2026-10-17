@@ -1,10 +1,18 @@
 import { type ColumnVisibilityState, type SortingState, useTable } from '@tanstack/react-table'
-import { FileDownIcon, FilterIcon, MoreHorizontalIcon, RefreshCwIcon, SearchIcon, XIcon } from 'lucide-react'
+import {
+  FileDownIcon,
+  HistoryIcon,
+  MoreHorizontalIcon,
+  RefreshCwIcon,
+  SearchIcon,
+  SettingsIcon,
+  XIcon,
+} from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { toast } from 'sonner'
 
-import type { ListOrdersData, OrderStatus, OrderSummary, RiskTier } from '@/api/gen'
-import { Badge } from '@/components/reui/badge'
+import type { ListOrdersData, OrderSummary } from '@/api/gen'
+import { EmptyState } from '@/components/empty-state'
 import { DataGrid as ReuiDataGrid, dataGridFeatures } from '@/components/reui/data-grid/data-grid'
 import { DataGridScrollArea } from '@/components/reui/data-grid/data-grid-scroll-area'
 import { DataGridTable } from '@/components/reui/data-grid/data-grid-table'
@@ -16,10 +24,7 @@ import {
   FramePanel,
   FrameTitle,
 } from '@/components/ui/frame'
-import { OrderStatusBadge } from '@/components/order-status-badge'
-import { TierBadge } from '@/components/tier-badge'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,28 +33,19 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
-import { Label } from '@/components/ui/label'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ordersToCsv } from '@/lib/orders-csv'
-import { BRANCH_LABELS, ORDER_STATUS_LABELS, RISK_TIER_LABELS } from '@/lib/labels'
 
 import { columns } from './columns'
+import { OrderFilterBar, type OrderFilters } from './order-filters'
+
+export type { OrderFilters }
 
 // The inbox is served page by page by the API (E7.2): filters, search and sort run on the server,
 // and each page holds 50 orders, with previous and next. Nothing is filtered or sorted here.
 
-const TIER_ORDER = Object.keys(RISK_TIER_LABELS) as RiskTier[]
-const STATUS_ORDER = Object.keys(ORDER_STATUS_LABELS) as OrderStatus[]
-const BRANCH_ORDER = Object.keys(BRANCH_LABELS)
-
-export type OrderFilters = {
-  tiers: RiskTier[]
-  statuses: OrderStatus[]
-  branches: string[]
-}
 export type OrderSort = NonNullable<NonNullable<ListOrdersData['query']>['sort']>
 
 /** The table's sort state for an API sort, and back. Only these columns sort on the server. */
@@ -62,58 +58,6 @@ function toSort(sorting: SortingState): OrderSort {
   if (first?.id === 'risk_score') return '-risk_score'
   if (first?.id === 'cod_amount_vnd') return '-cod_amount_vnd'
   return '-placed_at'
-}
-
-// ── Filter popover (the block's status filter, reused for tier and status) ──
-
-function FilterPopover<T extends string>({
-  label,
-  heading,
-  options,
-  selected,
-  renderOption,
-  onChange,
-}: {
-  label: string
-  heading: string
-  options: T[]
-  selected: T[]
-  renderOption: (value: T) => ReactNode
-  onChange: (next: T[]) => void
-}) {
-  return (
-    <Popover>
-      <PopoverTrigger render={<Button variant="outline" aria-label={heading} />}>
-        <FilterIcon aria-hidden="true" />
-        {label}
-        {selected.length > 0 && (
-          <Badge size="sm" variant="info-outline">
-            {selected.length}
-          </Badge>
-        )}
-      </PopoverTrigger>
-      <PopoverContent align="start" className="flex w-52 flex-col gap-2.5 p-3">
-        <span className="text-xs font-medium text-muted-foreground">{heading}</span>
-        {options.map((value) => (
-          <div key={value} className="flex items-center gap-2.5">
-            <Checkbox
-              id={`filter-${label}-${value}`}
-              checked={selected.includes(value)}
-              onCheckedChange={(checked) =>
-                onChange(checked === true ? [...selected, value] : selected.filter((v) => v !== value))
-              }
-            />
-            <Label
-              htmlFor={`filter-${label}-${value}`}
-              className="flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-2 font-normal"
-            >
-              {renderOption(value)}
-            </Label>
-          </div>
-        ))}
-      </PopoverContent>
-    </Popover>
-  )
 }
 
 // ── Toolbar ──
@@ -134,7 +78,8 @@ function Toolbar({ search, onSearchChange, filters, onFiltersChange, onRefresh, 
     search.length > 0 ||
     filters.tiers.length > 0 ||
     filters.statuses.length > 0 ||
-    filters.branches.length > 0
+    filters.branches.length > 0 ||
+    !!filters.placedFrom
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -172,32 +117,7 @@ function Toolbar({ search, onSearchChange, filters, onFiltersChange, onRefresh, 
           </InputGroup>
         </form>
 
-        <FilterPopover
-          label="Branch"
-          heading="Filter by branch"
-          options={BRANCH_ORDER}
-          selected={filters.branches}
-          renderOption={(branch) => <span className="truncate text-sm">{BRANCH_LABELS[branch]}</span>}
-          onChange={(branches) => onFiltersChange({ ...filters, branches })}
-        />
-
-        <FilterPopover
-          label="Risk"
-          heading="Filter by risk tier"
-          options={TIER_ORDER}
-          selected={filters.tiers}
-          renderOption={(tier) => <TierBadge tier={tier} />}
-          onChange={(tiers) => onFiltersChange({ ...filters, tiers })}
-        />
-
-        <FilterPopover
-          label="Status"
-          heading="Filter by status"
-          options={STATUS_ORDER}
-          selected={filters.statuses}
-          renderOption={(status) => <OrderStatusBadge status={status} />}
-          onChange={(statuses) => onFiltersChange({ ...filters, statuses })}
-        />
+        <OrderFilterBar filters={filters} onFiltersChange={onFiltersChange} />
 
         {hasActiveFilters && (
           <Button
@@ -257,6 +177,7 @@ export function OrdersDataGrid({
   onNext,
   onRefresh,
   headerActions,
+  emptyActions,
 }: {
   /** The page shown, in the server's order. */
   orders: OrderSummary[]
@@ -280,6 +201,8 @@ export function OrdersDataGrid({
   onRefresh: () => void
   /** Buttons in the frame header, like the block's "Add customer" button. */
   headerActions?: ReactNode
+  /** What to do when the shop has no order at all (empty-state-1). */
+  emptyActions?: ReactNode
 }) {
   const [columnOrder, setColumnOrder] = useState<string[]>(columns.map((c) => c.id as string))
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>({})
@@ -297,6 +220,8 @@ export function OrdersDataGrid({
       columnOrder,
       columnVisibility,
     },
+    // The order and its actions stay in view when the grid scrolls sideways (ReUI c-data-grid-16).
+    initialState: { columnPinning: { start: ['order'], end: ['actions'] } },
     manualSorting: true,
     manualPagination: true,
     pageCount: 1,
@@ -321,7 +246,8 @@ export function OrdersDataGrid({
     search.length > 0 ||
     filters.tiers.length > 0 ||
     filters.statuses.length > 0 ||
-    filters.branches.length > 0
+    filters.branches.length > 0 ||
+    !!filters.placedFrom
 
   return (
     <TooltipProvider delay={200}>
@@ -330,9 +256,19 @@ export function OrdersDataGrid({
         recordCount={orders.length}
         isLoading={isLoading}
         emptyMessage={
-          filtered
-            ? 'No orders match the search or filters. Clear the filters to see all orders.'
-            : 'No orders yet.'
+          filtered ? (
+            'No orders match the search or filters. Clear the filters to see all orders.'
+          ) : (
+            <EmptyState
+              title="No orders yet"
+              description="Each order gets a risk score and an action as soon as it arrives: from a CSV file, your sales tool or by hand."
+              actions={emptyActions}
+              guides={[
+                { label: 'Upload your past orders', icon: HistoryIcon, to: '/onboarding' },
+                { label: 'Set costs and contact hours', icon: SettingsIcon, to: '/settings' },
+              ]}
+            />
+          )
         }
         tableLayout={{
           columnsPinnable: true,

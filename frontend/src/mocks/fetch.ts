@@ -26,11 +26,26 @@ async function fromMock(request: Request): Promise<Response | null> {
 // Looked up on each call, so tests can stub the global fetch after the client is created.
 const globalFetch: typeof fetch = (input, init) => globalThis.fetch(input, init)
 
+/** What the mock answers for a route it does not cover: a problem+json 404, like the backend. */
+function notMocked() {
+  return new Response(
+    JSON.stringify({
+      type: 'about:blank',
+      title: 'Not found',
+      status: 404,
+      code: 'not_found',
+      detail:
+        'The in-browser mock does not answer this request. Run with the backend (make dev API=backend).',
+    }),
+    { status: 404, headers: { 'Content-Type': 'application/problem+json' } },
+  )
+}
+
 export function createMockAwareFetch(realFetch: typeof fetch = globalFetch): typeof fetch {
   return async (input, init) => {
     const request = new Request(input, init)
     if (mockMode === 'all') {
-      return (await fromMock(request)) ?? new Response(null, { status: 404 })
+      return (await fromMock(request)) ?? notMocked()
     }
     const response = await realFetch(request.clone())
     if (mockMode === 'fallback' && response.status === 501) {

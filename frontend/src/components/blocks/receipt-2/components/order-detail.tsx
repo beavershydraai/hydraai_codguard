@@ -9,11 +9,12 @@ import {
   ScaleIcon,
   ShieldAlertIcon,
 } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { type ReactNode, useRef } from 'react'
 
 import type { Call, ContactAttempt, OrderDetail, OrderEvent, RiskScore, Signal } from '@/api/gen'
 import { OrderStatusBadge } from '@/components/order-status-badge'
 import { Badge } from '@/components/reui/badge'
+import { Scrollspy } from '@/components/reui/scrollspy'
 import {
   Timeline,
   TimelineContent,
@@ -26,9 +27,7 @@ import { TierBadge } from '@/components/tier-badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Item, ItemMedia } from '@/components/ui/item'
 import { Separator } from '@/components/ui/separator'
-import { Spinner } from '@/components/ui/spinner'
 import {
-  BLOCK_REASON_LABELS,
   CALL_OUTCOME_LABELS,
   CALL_STATUS_LABELS,
   CONTACT_CHANNEL_LABELS,
@@ -38,11 +37,13 @@ import {
   formatRelative,
   formatMoney,
   HARD_RULE_LABELS,
-  REVIEW_REASON_LABELS,
   SALES_CHANNEL_LABELS,
   SIGNAL_GROUP_LABELS,
 } from '@/lib/labels'
 import { cn } from '@/lib/utils'
+
+import { DecisionSteps } from './decision-steps'
+import { OrderProgress } from './order-progress'
 
 // Order page (E7.3), laid out like ReUI receipt-2: a header strip with the order actions, a hero
 // frame with status and the amount still to collect, then the order journey timeline beside the
@@ -153,6 +154,8 @@ export function OrderDetailView({ order, actions }: { order: OrderDetail; action
               </span>
             </div>
           </div>
+          <Separator className="my-4" />
+          <OrderProgress status={order.status} />
         </FramePanel>
       </Frame>
 
@@ -160,6 +163,11 @@ export function OrderDetailView({ order, actions }: { order: OrderDetail; action
         <JourneyPanel order={order} />
 
         <div className="flex min-w-0 flex-col gap-6">
+          <SectionNav
+            sections={SECTIONS.filter(
+              (x) => x.id !== 'order-history' || (order.score_history?.length ?? 0) > 0,
+            )}
+          />
           <RiskPanel score={order.current_score ?? null} currency={order.currency ?? 'VND'} />
           <DecisionPanel
             order={order}
@@ -173,6 +181,42 @@ export function OrderDetailView({ order, actions }: { order: OrderDetail; action
         </div>
       </div>
     </section>
+  )
+}
+
+// ── Section navigation ──
+
+const SECTIONS = [
+  { id: 'order-risk', label: 'Risk' },
+  { id: 'order-decision', label: 'Decision' },
+  { id: 'order-contacts', label: 'Contacts' },
+  { id: 'order-items', label: 'Items' },
+  { id: 'order-parties', label: 'Buyer & address' },
+  { id: 'order-history', label: 'Score history' },
+]
+
+/** Sticky links to the panels on the right, the one in view highlighted (ReUI scrollspy). */
+function SectionNav({ sections }: { sections: typeof SECTIONS }) {
+  const page = useRef<Document | null>(typeof document === 'undefined' ? null : document)
+  return (
+    <nav
+      aria-label="Order sections"
+      className="sticky top-0 z-10 -mx-1 -mb-2 overflow-x-auto bg-background/90 px-1 py-2 backdrop-blur supports-backdrop-filter:bg-background/70"
+    >
+      <Scrollspy targetRef={page} offset={72} history={false} className="flex min-w-max items-center gap-1">
+        {sections.map((section) => (
+          <Button
+            key={section.id}
+            variant="ghost"
+            size="sm"
+            data-scrollspy-anchor={section.id}
+            className="text-muted-foreground data-[active=true]:bg-muted data-[active=true]:text-foreground"
+          >
+            {section.label}
+          </Button>
+        ))}
+      </Scrollspy>
+    </nav>
   )
 }
 
@@ -261,14 +305,14 @@ function actorLabel(actor: string): string {
 function RiskPanel({ score, currency }: { score: RiskScore | null; currency: string }) {
   if (!score) {
     return (
-      <PanelFrame eyebrow="Delivery refusal risk" title="Not scored yet">
+      <PanelFrame id="order-risk" eyebrow="Delivery refusal risk" title="Not scored yet">
         <p className="text-sm text-muted-foreground">New order: scoring in progress.</p>
       </PanelFrame>
     )
   }
   if (score.status === 'skipped') {
     return (
-      <PanelFrame eyebrow="Delivery refusal risk" title="Scoring skipped">
+      <PanelFrame id="order-risk" eyebrow="Delivery refusal risk" title="Scoring skipped">
         <p className="text-sm text-muted-foreground">
           {score.skipped_reason ? HARD_RULE_LABELS[score.skipped_reason] : 'Order needs no scoring'}: the
           buyer is not contacted.
@@ -282,6 +326,7 @@ function RiskPanel({ score, currency }: { score: RiskScore | null; currency: str
 
   return (
     <PanelFrame
+      id="order-risk"
       eyebrow="Delivery refusal risk"
       title={
         <span className="flex flex-wrap items-center gap-2">
@@ -398,13 +443,14 @@ function DecisionPanel({
   const decision = order.decision
   if (!decision) {
     return (
-      <PanelFrame eyebrow="Decision" title="No decision yet">
+      <PanelFrame id="order-decision" eyebrow="Decision" title="No decision yet">
         <p className="text-sm text-muted-foreground">The decision is made right after scoring.</p>
       </PanelFrame>
     )
   }
   return (
     <PanelFrame
+      id="order-decision"
       eyebrow="Decision"
       title={
         <span className="flex flex-wrap items-center gap-2">
@@ -415,23 +461,12 @@ function DecisionPanel({
         </span>
       }
     >
-      {order.random_test && (
-        <p className="rounded-lg bg-info/10 p-3 text-sm">
-          <span className="font-medium">Random test:</span> this action was picked at random among the actions
-          this risk tier allows, so COD Guard can measure what each action prevents. Turn random tests off in
-          Settings → Automation.
-        </p>
-      )}
-      {order.review_reason && !decision.suggested_action && (
-        <p className="rounded-lg bg-warning/10 p-3 text-sm">
-          <span className="font-medium">Why it is in review:</span>{' '}
-          {REVIEW_REASON_LABELS[order.review_reason]}
-          {order.contact_summary && (
-            <span className="text-muted-foreground"> · AI call: {order.contact_summary}</span>
-          )}
-        </p>
-      )}
-      <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+      <DecisionSteps
+        order={order}
+        onAcceptSuggestion={onAcceptSuggestion}
+        acceptingSuggestion={acceptingSuggestion}
+      />
+      <dl className="grid grid-cols-2 gap-4 border-t pt-4 sm:grid-cols-3">
         <Metric label="Decided at" value={formatDateTime(decision.decided_at)} />
         <Metric label="Policy" value={`Version ${decision.policy_version}`} />
         <Metric
@@ -442,34 +477,6 @@ function DecisionPanel({
           estimated
         />
       </dl>
-      {decision.suggested_action && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-primary/5 p-3 text-sm">
-          <p>
-            <span className="font-medium">
-              Suggested: {DECISION_ACTION_LABELS[decision.suggested_action]}.
-            </span>{' '}
-            Automation is off for this contact, so it waits for you. Accept it, or choose another action.
-          </p>
-          {onAcceptSuggestion && (
-            <Button size="sm" onClick={onAcceptSuggestion} disabled={acceptingSuggestion}>
-              {acceptingSuggestion && <Spinner data-icon="inline-start" />}
-              Accept suggestion
-            </Button>
-          )}
-        </div>
-      )}
-      {(decision.block_reasons?.length ?? 0) > 0 && (
-        <div className="flex flex-col gap-1.5">
-          <h3 className="text-sm font-medium">Not contacted because</h3>
-          <div className="flex flex-wrap gap-2">
-            {decision.block_reasons!.map((reason) => (
-              <Badge key={reason} variant="secondary">
-                {BLOCK_REASON_LABELS[reason]}
-              </Badge>
-            ))}
-          </div>
-        </div>
-      )}
     </PanelFrame>
   )
 }
@@ -488,6 +495,7 @@ function ContactsPanel({
 
   return (
     <PanelFrame
+      id="order-contacts"
       eyebrow="Contact history"
       title={`${contacts.length} ${contacts.length === 1 ? 'contact' : 'contacts'}`}
     >
@@ -595,7 +603,7 @@ function CallSummary({ call }: { call: Call }) {
 function DetailsPanel({ order }: { order: OrderDetail }) {
   const subtotal = order.items.reduce((sum, item) => sum + item.quantity * item.unit_price_vnd, 0)
   return (
-    <Frame>
+    <Frame id="order-items" className="scroll-mt-16">
       <FrameHeader className="gap-1">
         <span className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">Items</span>
         <FrameTitle className="text-base">
@@ -660,7 +668,7 @@ function DetailsPanel({ order }: { order: OrderDetail }) {
 
 function PartiesPanel({ order }: { order: OrderDetail }) {
   return (
-    <Frame>
+    <Frame id="order-parties" className="scroll-mt-16">
       <FramePanel className="grid grid-cols-1 gap-5 sm:grid-cols-3">
         <PartyBlock label="Buyer">
           <p className="font-medium">{order.buyer_name}</p>
@@ -695,7 +703,11 @@ function PartyBlock({ label, children }: { label: string; children: ReactNode })
 function ScoreHistoryPanel({ runs }: { runs: RiskScore[] }) {
   if (runs.length === 0) return null
   return (
-    <PanelFrame eyebrow="Score history" title={`${runs.length} ${runs.length === 1 ? 'run' : 'runs'}`}>
+    <PanelFrame
+      id="order-history"
+      eyebrow="Score history"
+      title={`${runs.length} ${runs.length === 1 ? 'run' : 'runs'}`}
+    >
       <ul className="flex flex-col divide-y text-sm">
         {runs.map((run) => (
           <li key={run.id} className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
@@ -720,16 +732,18 @@ function ScoreHistoryPanel({ runs }: { runs: RiskScore[] }) {
 // ── Shared ──
 
 function PanelFrame({
+  id,
   eyebrow,
   title,
   children,
 }: {
+  id?: string
   eyebrow: string
   title: ReactNode
   children: ReactNode
 }) {
   return (
-    <Frame>
+    <Frame id={id} className="scroll-mt-16">
       <FrameHeader className="gap-1">
         <span className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
           {eyebrow}

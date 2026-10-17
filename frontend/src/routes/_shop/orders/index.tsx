@@ -2,6 +2,7 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { PlusIcon, TruckIcon, UploadIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 
 import { importDeliveryOutcomes, importOrders, type OrderStatus, type RiskTier } from '@/api/gen'
 import { lastOrdersChangeOptions, listOrdersOptions } from '@/api/gen/@tanstack/react-query.gen'
@@ -21,9 +22,15 @@ type OrdersSearch = {
   tier?: RiskTier[]
   status?: OrderStatus[]
   branch?: string[]
+  /** Placing-time range, `yyyy-MM-dd`, both ends included. */
+  from?: string
+  to?: string
   q?: string
   sort?: OrderSort
 }
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/
+const day = (value: unknown) => (typeof value === 'string' && DAY.test(value) ? value : undefined)
 
 /** Keeps only known values; accepts a single value or a list. */
 function pick<T extends string>(value: unknown, allowed: readonly T[]): T[] | undefined {
@@ -82,6 +89,8 @@ export const Route = createFileRoute('/_shop/orders/')({
     tier: pick(search.tier, TIERS),
     status: pick(search.status, STATUSES),
     branch: pick(search.branch, BRANCHES),
+    from: day(search.from),
+    to: day(search.to),
     q: typeof search.q === 'string' && search.q.trim() ? search.q.trim() : undefined,
     sort: pick(search.sort, SORTS)?.[0],
   }),
@@ -92,12 +101,17 @@ function OrdersPage() {
   const search = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
   const sort = search.sort ?? '-placed_at'
+  // Local days, from the start of the first to the end of the last.
+  const placedFrom = search.from && search.to ? new Date(`${search.from}T00:00:00`).toISOString() : undefined
+  const placedTo = search.from && search.to ? new Date(`${search.to}T23:59:59.999`).toISOString() : undefined
   const query = {
     sort,
     limit: PAGE_SIZE,
     status: search.status,
     tier: search.tier,
     branch: search.branch,
+    placed_from: placedFrom,
+    placed_to: placedTo,
     q: search.q,
   }
   // The cursor of each page visited so far: back is the previous one, next the page's own.
@@ -131,14 +145,20 @@ function OrdersPage() {
     tiers: search.tier ?? [],
     statuses: search.status ?? [],
     branches: search.branch ?? [],
+    placedFrom: search.from,
+    placedTo: search.to,
   }
   const setSearch = (next: OrdersSearch) =>
     navigate({ search: (current) => ({ ...current, ...next }), replace: true })
-  const setFilters = ({ tiers, statuses, branches }: OrderFilters) =>
+  const setFilters = ({ tiers, statuses, branches, placedFrom, placedTo }: OrderFilters) =>
     setSearch({
       tier: tiers.length ? tiers : undefined,
       status: statuses.length ? statuses : undefined,
       branch: branches.length ? branches : undefined,
+      from: placedFrom,
+      to: placedTo,
+      // The server filters on a placing-time range only when sorting by placing time.
+      ...(placedFrom && !sort.endsWith('placed_at') ? { sort: undefined } : {}),
     })
 
   if (error) return <QueryError error={error} />
@@ -162,6 +182,18 @@ function OrdersPage() {
             </Button>
           </>
         }
+        emptyActions={
+          <>
+            <Button onClick={() => setPanel('import')}>
+              <UploadIcon aria-hidden="true" />
+              Import orders
+            </Button>
+            <Button variant="outline" onClick={() => setPanel('create')}>
+              <PlusIcon aria-hidden="true" />
+              Create order
+            </Button>
+          </>
+        }
         orders={orders}
         total={Math.max(data?.total ?? 0, orders.length)}
         isLoading={isPending}
@@ -170,7 +202,18 @@ function OrdersPage() {
         search={search.q ?? ''}
         onSearchChange={(q) => setSearch({ q: q || undefined })}
         sort={sort}
-        onSortChange={(next) => setSearch({ sort: next === '-placed_at' ? undefined : next })}
+        onSortChange={(next) => {
+          const keepsRange = next.endsWith('placed_at')
+          if (search.from && !keepsRange) {
+            toast.info('Date filter removed', {
+              description: 'A placing-time range works only with sorting by placing time.',
+            })
+          }
+          setSearch({
+            sort: next === '-placed_at' ? undefined : next,
+            ...(keepsRange ? {} : { from: undefined, to: undefined }),
+          })
+        }}
         page={pageIndex}
         pageSize={PAGE_SIZE}
         isFetching={isFetching}

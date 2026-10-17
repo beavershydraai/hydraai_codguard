@@ -33,6 +33,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { invalidate, problemMessage } from '@/lib/api'
 import { formatVnd, SALES_CHANNEL_LABELS } from '@/lib/labels'
 
+import { PhoneField } from './phone-field'
+
 type Line = { name: string; variant: string; quantity: string; price: string }
 const EMPTY_LINE: Line = { name: '', variant: '', quantity: '1', price: '' }
 
@@ -158,12 +160,10 @@ export function CreateOrderSheet({
             </Field>
             <Field>
               <FieldLabel htmlFor="new-phone">Phone number</FieldLabel>
-              <Input
+              <PhoneField
                 id="new-phone"
                 value={form.buyerPhone}
-                onChange={set('buyerPhone')}
-                inputMode="tel"
-                placeholder="09…"
+                onChange={(value) => set('buyerPhone')({ target: { value } })}
                 required
               />
             </Field>

@@ -15,6 +15,7 @@ import {
   StepperTrigger,
 } from '@/components/reui/stepper'
 import { TierBadge } from '@/components/tier-badge'
+import { TimeField } from '@/components/time-field'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -226,22 +227,16 @@ export function OnboardingWizard({
                         <Field data-invalid={!!errors[`${c.country}.hours`]}>
                           <FieldLabel htmlFor={`${id}-start`}>Hours when buyers may be contacted</FieldLabel>
                           <div className="flex items-center gap-2">
-                            <Input
+                            <TimeField
                               id={`${id}-start`}
-                              type="time"
                               value={c.start}
                               onChange={setCountry(c.country, 'start', 'hours')}
-                              min="08:00"
-                              max="21:00"
                             />
                             <span className="text-muted-foreground">–</span>
-                            <Input
+                            <TimeField
                               aria-label={`Until, ${COUNTRY_LABELS[c.country] ?? c.country}`}
-                              type="time"
                               value={c.end}
                               onChange={setCountry(c.country, 'end', 'hours')}
-                              min="08:00"
-                              max="21:00"
                             />
                           </div>
                           {errors[`${c.country}.hours`] && (

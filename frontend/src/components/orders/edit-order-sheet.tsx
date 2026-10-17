@@ -19,6 +19,9 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { invalidate, problemMessage } from '@/lib/api'
+import { toInternational } from '@/lib/phone'
+
+import { PhoneField } from './phone-field'
 
 /** Edits an order before it ships; the backend rescores it (E4.1). */
 export function EditOrderSheet({
@@ -69,7 +72,8 @@ export function EditOrderSheet({
               path: { order_id: order.id },
               body: {
                 buyer_name: form.buyer_name.trim(),
-                buyer_phone: form.buyer_phone.trim(),
+                // Sent only when changed: the field rewrites a stored number in international form.
+                ...(form.buyer_phone !== initial(order).buyer_phone ? { buyer_phone: form.buyer_phone } : {}),
                 recipient_name: form.recipient_name.trim() || null,
                 address: { raw: form.address.trim() },
                 prepaid_vnd: Number(form.prepaid) || 0,
@@ -85,11 +89,10 @@ export function EditOrderSheet({
             </Field>
             <Field>
               <FieldLabel htmlFor="edit-phone">Phone number</FieldLabel>
-              <Input
+              <PhoneField
                 id="edit-phone"
                 value={form.buyer_phone}
-                onChange={set('buyer_phone')}
-                inputMode="tel"
+                onChange={(value) => set('buyer_phone')({ target: { value } })}
                 required
               />
             </Field>
@@ -143,7 +146,7 @@ export function EditOrderSheet({
 function initial(order: OrderDetail) {
   return {
     buyer_name: order.buyer_name,
-    buyer_phone: order.buyer_phone,
+    buyer_phone: toInternational(order.buyer_phone),
     recipient_name: order.recipient_name ?? '',
     address: order.address.raw,
     prepaid: String(order.prepaid_vnd),
