@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { InfoIcon, LockIcon } from 'lucide-react'
+import { InfoIcon, LockIcon, RotateCcwIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -37,8 +37,18 @@ import { MinutesField } from '@/components/minutes-field'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { FieldGroup } from '@/components/ui/field'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group'
 import {
   Select,
@@ -349,9 +359,53 @@ const ACTIONS: DecisionAction[] = [
 // Only the buyer or the shop cancels an order, so no escalation cancels (the backend rejects it).
 const ESCALATIONS: DecisionAction[] = ['ai_call', 'hold_for_review']
 
+// The default policy (AGENTS.md "Decisions"), for Reset to default.
+const DEFAULT_TIERS: TierPolicy[] = [
+  { tier: 'low', action: 'ship_now', if_no_response: null, no_response_after_minutes: null },
+  {
+    tier: 'medium',
+    action: 'send_confirmation_link',
+    if_no_response: 'ai_call',
+    no_response_after_minutes: 120,
+  },
+  { tier: 'high', action: 'ai_call', if_no_response: 'hold_for_review', no_response_after_minutes: 30 },
+  {
+    tier: 'very_high',
+    action: 'require_deposit',
+    if_no_response: 'hold_for_review',
+    no_response_after_minutes: 1440,
+  },
+]
+
+function formatWait(minutes: number | null | undefined): string {
+  if (!minutes) return ''
+  if (minutes % 1440 === 0) return `${minutes / 1440} ${minutes === 1440 ? 'day' : 'days'}`
+  if (minutes % 60 === 0) return `${minutes / 60} h`
+  return `${minutes} min`
+}
+
+/** What happens to an order of this tier, in one line. */
+function tierSummary(t: TierPolicy): string {
+  const first = DECISION_ACTION_LABELS[t.action]
+  if (!t.if_no_response) return first
+  const then = DECISION_ACTION_LABELS[t.if_no_response]
+  // Lower-case the first word, but not an acronym ("AI call").
+  const thenText = /^[A-Z]{2}/.test(then) ? then : then[0]!.toLowerCase() + then.slice(1)
+  return `${first}; ${thenText} after ${formatWait(t.no_response_after_minutes)} without an answer`
+}
+
+const sameTier = (a: TierPolicy, b: TierPolicy) =>
+  a.action === b.action &&
+  (a.if_no_response ?? null) === (b.if_no_response ?? null) &&
+  (a.no_response_after_minutes ?? null) === (b.no_response_after_minutes ?? null)
+
+// Policy by risk tier, laid out like ReUI solution-ai-ops-5 (risk-tiered routing rules): one card
+// per tier with what happens in one line and its controls, a header with the version, and a reset
+// to the default policy that lists what it changes before it does.
 function PolicyForm({ policy, canEdit }: { policy: Policy; canEdit: boolean }) {
   const queryClient = useQueryClient()
   const [tiers, setTiers] = useState<TierPolicy[]>(() => policy.tiers.map((t) => ({ ...t })))
+  const [resetOpen, setResetOpen] = useState(false)
   const mutation = useMutation({
     ...updatePolicyMutation(),
     onSuccess: (next) => {
@@ -365,6 +419,10 @@ function PolicyForm({ policy, canEdit }: { policy: Policy; canEdit: boolean }) {
   const update = (tier: RiskTier, patch: Partial<TierPolicy>) =>
     setTiers((current) => current.map((t) => (t.tier === tier ? { ...t, ...patch } : t)))
   const changed = JSON.stringify(tiers) !== JSON.stringify(policy.tiers)
+  const resetChanges = DEFAULT_TIERS.filter((d) => {
+    const current = tiers.find((t) => t.tier === d.tier)
+    return current && !sameTier(current, d)
+  })
 
   return (
     <form
@@ -374,75 +432,106 @@ function PolicyForm({ policy, canEdit }: { policy: Policy; canEdit: boolean }) {
       }}
     >
       <Frame className="w-full">
-        <FrameHeader className="px-2! py-2.5!">
-          <FrameTitle className="flex flex-wrap items-center gap-2">
-            Policy by risk tier
-            <Badge variant="outline" size="sm">
-              Version {policy.version}
-            </Badge>
-          </FrameTitle>
-          <FrameDescription>
-            In effect since {formatDateTime(policy.effective_from)}. Buyers are contacted only when the
-            expected loss is higher than the contact cost (costs per country in Shop &amp; costs).
-          </FrameDescription>
+        <FrameHeader className="flex-col items-start justify-between gap-3 px-2! py-2.5! sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-0.5">
+            <FrameTitle className="flex flex-wrap items-center gap-2">
+              Policy by risk tier
+              <Badge variant="outline" size="sm">
+                Version {policy.version}
+              </Badge>
+            </FrameTitle>
+            <FrameDescription>
+              In effect since {formatDateTime(policy.effective_from)}. Buyers are contacted only when the
+              expected loss is higher than the contact cost (costs per country in Shop &amp; costs).
+            </FrameDescription>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!canEdit || resetChanges.length === 0}
+            onClick={() => setResetOpen(true)}
+          >
+            <RotateCcwIcon aria-hidden="true" />
+            Reset to default
+          </Button>
         </FrameHeader>
-        <FramePanel className="p-0">
-          <fieldset disabled={!canEdit}>
-            <FieldGroup className="gap-0">
-              {tiers.map((t, i) => (
-                <SettingField
-                  key={t.tier}
-                  title={`${RISK_TIER_LABELS[t.tier]} risk`}
-                  description={<TierBadge tier={t.tier} />}
-                  last={i === tiers.length - 1}
-                  contentClassName="@md/field-group:w-[26rem]"
-                >
-                  <div className="grid gap-2 sm:grid-cols-[1fr_1fr]">
-                    <ActionSelect
-                      label="Action"
-                      value={t.action}
-                      options={ACTIONS}
-                      onChange={(next) => {
-                        const action = next as DecisionAction
-                        update(t.tier, {
-                          action,
-                          if_no_response: action === 'ship_now' ? null : t.if_no_response,
-                          no_response_after_minutes:
-                            action === 'ship_now' ? null : t.no_response_after_minutes,
-                        })
-                      }}
-                    />
-                    <ActionSelect
-                      label="If no response"
-                      value={t.if_no_response ?? 'none'}
-                      options={ESCALATIONS}
-                      allowNone
-                      disabled={t.action === 'ship_now' || t.action === 'hold_for_review'}
-                      onChange={(value) =>
-                        update(t.tier, {
-                          if_no_response: value === 'none' ? null : (value as DecisionAction),
-                          no_response_after_minutes:
-                            value === 'none' ? null : (t.no_response_after_minutes ?? 120),
-                        })
-                      }
-                    />
-                    {t.if_no_response && (
-                      <div className="flex items-center gap-2 sm:col-span-2">
-                        <span className="text-sm text-muted-foreground">After</span>
-                        <MinutesField
-                          aria-label={`Wait for a response, ${RISK_TIER_LABELS[t.tier].toLowerCase()} risk`}
-                          min={1}
-                          max={2880}
-                          step={15}
-                          value={t.no_response_after_minutes ?? null}
-                          onChange={(minutes) => update(t.tier, { no_response_after_minutes: minutes })}
-                        />
+        <FramePanel className="p-3!">
+          <fieldset disabled={!canEdit} className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {tiers.map((t) => {
+              const edited = !sameTier(t, policy.tiers.find((p) => p.tier === t.tier) ?? t)
+              return (
+                <Item key={t.tier} variant="outline" className="items-start gap-4 bg-card">
+                  <ItemContent className="gap-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex flex-col gap-0.5">
+                        <ItemTitle className="flex items-center gap-2">
+                          {RISK_TIER_LABELS[t.tier]} risk
+                          {edited && (
+                            <Badge variant="warning-light" size="sm">
+                              Unsaved
+                            </Badge>
+                          )}
+                        </ItemTitle>
+                        <ItemDescription className="line-clamp-none">{tierSummary(t)}</ItemDescription>
                       </div>
-                    )}
-                  </div>
-                </SettingField>
-              ))}
-            </FieldGroup>
+                      <TierBadge tier={t.tier} />
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field className="gap-1.5">
+                        <FieldLabel className="text-xs text-muted-foreground">Action</FieldLabel>
+                        <ActionSelect
+                          label={`Action, ${RISK_TIER_LABELS[t.tier].toLowerCase()} risk`}
+                          value={t.action}
+                          options={ACTIONS}
+                          onChange={(next) => {
+                            const action = next as DecisionAction
+                            update(t.tier, {
+                              action,
+                              if_no_response: action === 'ship_now' ? null : t.if_no_response,
+                              no_response_after_minutes:
+                                action === 'ship_now' ? null : t.no_response_after_minutes,
+                            })
+                          }}
+                        />
+                      </Field>
+                      <Field className="gap-1.5">
+                        <FieldLabel className="text-xs text-muted-foreground">If no response</FieldLabel>
+                        <ActionSelect
+                          label={`If no response, ${RISK_TIER_LABELS[t.tier].toLowerCase()} risk`}
+                          value={t.if_no_response ?? 'none'}
+                          options={ESCALATIONS}
+                          allowNone
+                          disabled={t.action === 'ship_now' || t.action === 'hold_for_review'}
+                          onChange={(value) =>
+                            update(t.tier, {
+                              if_no_response: value === 'none' ? null : (value as DecisionAction),
+                              no_response_after_minutes:
+                                value === 'none' ? null : (t.no_response_after_minutes ?? 120),
+                            })
+                          }
+                        />
+                      </Field>
+                      {t.if_no_response && (
+                        <Field className="gap-1.5 sm:col-span-2">
+                          <FieldLabel className="text-xs text-muted-foreground">
+                            Wait for an answer
+                          </FieldLabel>
+                          <MinutesField
+                            aria-label={`Wait for a response, ${RISK_TIER_LABELS[t.tier].toLowerCase()} risk`}
+                            min={1}
+                            max={2880}
+                            step={15}
+                            value={t.no_response_after_minutes ?? null}
+                            onChange={(minutes) => update(t.tier, { no_response_after_minutes: minutes })}
+                          />
+                        </Field>
+                      )}
+                    </div>
+                  </ItemContent>
+                </Item>
+              )
+            })}
           </fieldset>
         </FramePanel>
         <FrameFooter className="flex-row items-center justify-between gap-3 px-2! py-2.5!">
@@ -466,6 +555,47 @@ function PolicyForm({ policy, canEdit }: { policy: Policy; canEdit: boolean }) {
           </div>
         </FrameFooter>
       </Frame>
+
+      <Dialog open={resetOpen} onOpenChange={setResetOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Reset to the default policy?</DialogTitle>
+            <DialogDescription>
+              These tiers go back to the default. Nothing is saved until you press Save new version.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            {resetChanges.map((d) => (
+              <Item key={d.tier} variant="outline" className="items-start gap-3">
+                <ItemContent className="gap-1">
+                  <ItemTitle>{RISK_TIER_LABELS[d.tier]} risk</ItemTitle>
+                  <ItemDescription className="line-clamp-none">
+                    <span className="line-through">{tierSummary(tiers.find((t) => t.tier === d.tier)!)}</span>
+                    <br />
+                    {tierSummary(d)}
+                  </ItemDescription>
+                </ItemContent>
+                <ItemActions className="ml-auto self-center">
+                  <TierBadge tier={d.tier} />
+                </ItemActions>
+              </Item>
+            ))}
+          </div>
+          <DialogFooter>
+            <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
+            <Button
+              type="button"
+              onClick={() => {
+                setTiers(DEFAULT_TIERS.map((t) => ({ ...t })))
+                setResetOpen(false)
+              }}
+            >
+              <RotateCcwIcon aria-hidden="true" />
+              Reset
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </form>
   )
 }
