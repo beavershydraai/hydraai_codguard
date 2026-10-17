@@ -1,6 +1,7 @@
 import { type ColumnDef } from '@tanstack/react-table'
 
 import type { OrderSummary } from '@/api/gen'
+import { Badge } from '@/components/reui/badge'
 import { type DataGridFeatures } from '@/components/reui/data-grid/data-grid'
 import { DataGridColumnHeader } from '@/components/reui/data-grid/data-grid-column-header'
 import { OrderStatusBadge } from '@/components/order-status-badge'
@@ -62,12 +63,14 @@ export const columns: ColumnDef<DataGridFeatures, OrderSummary>[] = [
       <span className="flex flex-col gap-0.5">
         <span className="text-foreground">{(getValue() as string) || '—'}</span>
         {row.original.random_test && (
-          <span
-            className="w-fit rounded bg-info/10 px-1.5 text-xs text-info"
+          <Badge
+            variant="info-light"
+            size="sm"
+            className="w-fit"
             title="Picked at random among the actions this tier allows (random test, Settings → Automation)"
           >
             Random test
-          </span>
+          </Badge>
         )}
       </span>
     ),

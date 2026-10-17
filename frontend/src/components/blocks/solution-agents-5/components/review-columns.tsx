@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { type ColumnDef } from '@tanstack/react-table'
-import { BanIcon, CheckIcon, WalletIcon } from 'lucide-react'
+import { BanIcon, CheckIcon, PhoneCallIcon, WalletIcon } from 'lucide-react'
 
 import type { DecisionAction, OrderSummary } from '@/api/gen'
 import { type DataGridFeatures } from '@/components/reui/data-grid/data-grid'
@@ -11,6 +11,7 @@ import {
 } from '@/components/reui/data-grid/data-grid-table'
 import { TierBadge } from '@/components/tier-badge'
 import { Button } from '@/components/ui/button'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Badge } from '@/components/reui/badge'
 import {
@@ -125,9 +126,26 @@ export function createReviewColumns({
               </Badge>
             ))}
             {o.contact_summary && (
-              <p className="line-clamp-2 text-xs text-muted-foreground" title={o.contact_summary}>
-                AI call: {o.contact_summary}
-              </p>
+              <HoverCard>
+                <HoverCardTrigger
+                  delay={200}
+                  render={
+                    <button
+                      type="button"
+                      className="line-clamp-2 cursor-help text-left text-xs text-muted-foreground"
+                    />
+                  }
+                >
+                  AI call: {o.contact_summary}
+                </HoverCardTrigger>
+                <HoverCardContent side="bottom" align="start" className="w-80">
+                  <p className="mb-1 flex items-center gap-1.5 font-medium">
+                    <PhoneCallIcon className="size-3.5" aria-hidden="true" />
+                    Summary of the last AI call
+                  </p>
+                  <p className="text-muted-foreground">{o.contact_summary}</p>
+                </HoverCardContent>
+              </HoverCard>
             )}
           </div>
         )

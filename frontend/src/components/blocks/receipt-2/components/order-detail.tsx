@@ -2,17 +2,21 @@ import { Link } from '@tanstack/react-router'
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  ClockAlertIcon,
   GiftIcon,
   MessageSquareTextIcon,
   PencilIcon,
   PhoneCallIcon,
   ScaleIcon,
   ShieldAlertIcon,
+  ShuffleIcon,
+  SparklesIcon,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import type { Call, ContactAttempt, OrderDetail, OrderEvent, RiskScore, Signal } from '@/api/gen'
 import { OrderStatusBadge } from '@/components/order-status-badge'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/reui/alert'
 import { Badge } from '@/components/reui/badge'
 import {
   Timeline,
@@ -416,20 +420,21 @@ function DecisionPanel({
       }
     >
       {order.random_test && (
-        <p className="rounded-lg bg-info/10 p-3 text-sm">
-          <span className="font-medium">Random test:</span> this action was picked at random among the actions
-          this risk tier allows, so COD Guard can measure what each action prevents. Turn random tests off in
-          Settings → Automation.
-        </p>
+        <Alert variant="info" role="status">
+          <ShuffleIcon />
+          <AlertTitle>Random test</AlertTitle>
+          <AlertDescription>
+            This action was picked at random among the actions this risk tier allows, so COD Guard can measure
+            what each action prevents. Turn random tests off in Settings → Automation.
+          </AlertDescription>
+        </Alert>
       )}
       {order.review_reason && !decision.suggested_action && (
-        <p className="rounded-lg bg-warning/10 p-3 text-sm">
-          <span className="font-medium">Why it is in review:</span>{' '}
-          {REVIEW_REASON_LABELS[order.review_reason]}
-          {order.contact_summary && (
-            <span className="text-muted-foreground"> · AI call: {order.contact_summary}</span>
-          )}
-        </p>
+        <Alert variant="warning" role="status">
+          <ClockAlertIcon />
+          <AlertTitle>Why it is in review: {REVIEW_REASON_LABELS[order.review_reason]}</AlertTitle>
+          {order.contact_summary && <AlertDescription>AI call: {order.contact_summary}</AlertDescription>}
+        </Alert>
       )}
       <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         <Metric label="Decided at" value={formatDateTime(decision.decided_at)} />
@@ -443,20 +448,21 @@ function DecisionPanel({
         />
       </dl>
       {decision.suggested_action && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-primary/5 p-3 text-sm">
-          <p>
-            <span className="font-medium">
-              Suggested: {DECISION_ACTION_LABELS[decision.suggested_action]}.
-            </span>{' '}
+        <Alert role="status" className="border-primary/30 bg-primary/4 [&>svg]:text-primary">
+          <SparklesIcon />
+          <AlertTitle>Suggested: {DECISION_ACTION_LABELS[decision.suggested_action]}</AlertTitle>
+          <AlertDescription>
             Automation is off for this contact, so it waits for you. Accept it, or choose another action.
-          </p>
+          </AlertDescription>
           {onAcceptSuggestion && (
-            <Button size="sm" onClick={onAcceptSuggestion} disabled={acceptingSuggestion}>
-              {acceptingSuggestion && <Spinner data-icon="inline-start" />}
-              Accept suggestion
-            </Button>
+            <AlertAction>
+              <Button size="sm" onClick={onAcceptSuggestion} disabled={acceptingSuggestion}>
+                {acceptingSuggestion && <Spinner data-icon="inline-start" />}
+                Accept suggestion
+              </Button>
+            </AlertAction>
           )}
-        </div>
+        </Alert>
       )}
       {(decision.block_reasons?.length ?? 0) > 0 && (
         <div className="flex flex-col gap-1.5">

@@ -1,4 +1,4 @@
-import { CircleAlertIcon, DownloadIcon, FileSpreadsheetIcon, UploadIcon, XIcon } from 'lucide-react'
+import { CircleAlertIcon, DownloadIcon } from 'lucide-react'
 import { useState } from 'react'
 
 import type { ImportRowError } from '@/api/gen'
@@ -13,9 +13,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
-import { formatBytes, useFileUpload } from '@/hooks/use-file-upload'
+import { useFileUpload } from '@/hooks/use-file-upload'
 import { problemMessage } from '@/lib/api'
-import { cn } from '@/lib/utils'
+
+import { CsvDropzone } from './csv-dropzone'
 
 export type ImportSummary = {
   /** Label and count pairs, e.g. ["Imported", 120]. */
@@ -24,7 +25,7 @@ export type ImportSummary = {
 }
 
 /**
- * CSV import with the drag-and-drop area of ReUI c-file-upload-3: pick or drop one file,
+ * CSV import with the drag-and-drop area of ReUI c-file-upload-3 (`CsvDropzone`): pick or drop one file,
  * download a template, import, then see what was imported and which rows were rejected.
  */
 export function CsvImportDialog({
@@ -48,12 +49,13 @@ export function CsvImportDialog({
   const [summary, setSummary] = useState<ImportSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
-  const [{ files, isDragging, errors }, actions] = useFileUpload({
+  const [upload, actions] = useFileUpload({
     maxFiles: 1,
     maxSize: 10 * 1024 * 1024,
     accept: '.csv,text/csv',
     multiple: false,
   })
+  const { files, errors } = upload
   const file = files[0]?.file instanceof File ? files[0].file : null
 
   const reset = () => {
@@ -121,41 +123,7 @@ export function CsvImportDialog({
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            <div
-              className={cn(
-                'flex flex-col items-center gap-3 rounded-lg border border-dashed p-6 text-center transition-colors',
-                isDragging
-                  ? 'border-primary bg-primary/5'
-                  : 'border-muted-foreground/25 hover:border-muted-foreground/50',
-              )}
-              onDragEnter={actions.handleDragEnter}
-              onDragLeave={actions.handleDragLeave}
-              onDragOver={actions.handleDragOver}
-              onDrop={actions.handleDrop}
-            >
-              <input {...actions.getInputProps()} className="sr-only" aria-label="Choose a CSV file" />
-              <FileSpreadsheetIcon className="size-8 text-muted-foreground" aria-hidden="true" />
-              {file ? (
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="font-medium">{file.name}</span>
-                  <span className="text-muted-foreground">{formatBytes(file.size)}</span>
-                  <Button
-                    size="icon-xs"
-                    variant="ghost"
-                    aria-label="Remove file"
-                    onClick={() => actions.clearFiles()}
-                  >
-                    <XIcon />
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">Drag and drop a CSV file here, or</p>
-              )}
-              <Button size="sm" variant={file ? 'outline' : 'default'} onClick={actions.openFileDialog}>
-                <UploadIcon aria-hidden="true" />
-                {file ? 'Choose another file' : 'Choose file'}
-              </Button>
-            </div>
+            <CsvDropzone state={upload} actions={actions} />
             <Button variant="link" size="sm" className="self-start p-0" onClick={downloadTemplate}>
               <DownloadIcon aria-hidden="true" />
               Download template ({template[0]!.length} columns)
