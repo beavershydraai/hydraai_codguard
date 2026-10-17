@@ -10,6 +10,7 @@ import {
 import { useState } from 'react'
 
 import type { BuyerAction, BuyerOrderView, BuyerResponseResult } from '@/api/gen'
+import { type ProgressStage, ProgressSteps } from '@/components/progress-steps'
 import { Badge } from '@/components/reui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -41,6 +42,22 @@ const TILES: { action: BuyerAction; icon: LucideIcon; description: string; tone?
     tone: 'text-destructive',
   },
 ]
+
+/** Where the order is from the buyer's side: placed, their answer, then delivery. */
+function buyerStages(answered: BuyerAction | null): ProgressStage[] {
+  if (answered === 'cancel' || answered === 'not_ordered') {
+    return [
+      { title: 'Order placed', state: 'done' },
+      { title: answered === 'cancel' ? 'Cancelled' : 'Reported as not yours', state: 'failed' },
+    ]
+  }
+  return [
+    { title: 'Order placed', state: 'done' },
+    answered ? { title: 'Confirmed', state: 'done' } : { title: 'Your confirmation', state: 'waiting' },
+    { title: 'Shipping', state: answered ? 'current' : 'todo' },
+    { title: 'Delivered', state: 'todo' },
+  ]
+}
 
 export function ConfirmationPage({
   view,
@@ -79,6 +96,8 @@ export function ConfirmationPage({
               {formatVnd(view.cod_amount_vnd)}
             </span>
           </div>
+          <Separator />
+          <ProgressSteps stages={buyerStages(answered)} label="Your order" />
         </CardContent>
       </Card>
 
