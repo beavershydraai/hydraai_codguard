@@ -1,7 +1,8 @@
 """ROI dashboard (E9.2): one country's orders placed in a period, counted from Firestore.
 
 - orders_screened: orders the decision engine decided (seeded history orders were never screened).
-- actions: the decision in force on each screened order.
+- actions: per screened order, the first contact it got (a link that went unanswered and then led
+  to review still counts as the link), else the decision in force.
 - delivered / delivery_failed: delivery results; failures are buyer-caused only.
 - good_orders_contacted_rate: among screened orders that were delivered, the share contacted.
 - estimated_savings_vnd: per contacted order, the share of failed deliveries its action prevents
@@ -21,13 +22,25 @@ from app.schemas.dashboard import ActionCount, DashboardSummary
 from app.schemas.enums import DecisionAction, OrderStatus
 from app.schemas.shops import ShopSettings
 
-FIELDS = ("status", "decision.action", "scoring.expected_loss_vnd", "delivery.result")
+FIELDS = (
+    "status",
+    "decision.action",
+    "intervention.contact_action",
+    "scoring.expected_loss_vnd",
+    "delivery.result",
+)
 
 # Contact action -> (PREVENTS key, cost field of ShopSettings).
 CONTACTS = {
     DecisionAction.SEND_CONFIRMATION_LINK: ("link", "confirmation_link_cost_vnd"),
     DecisionAction.AI_CALL: ("call", "ai_call_cost_vnd"),
     DecisionAction.REQUIRE_DEPOSIT: ("deposit", "deposit_request_cost_vnd"),
+}
+# intervention.contact_action (the first contact made, lifecycle._record_intervention) -> action
+FIRST_CONTACT = {
+    "link": DecisionAction.SEND_CONFIRMATION_LINK,
+    "call": DecisionAction.AI_CALL,
+    "deposit": DecisionAction.REQUIRE_DEPOSIT,
 }
 
 
@@ -49,6 +62,9 @@ def summarize(
     savings = 0.0
     for doc in docs:
         action = (doc.get("decision") or {}).get("action")
+        first = FIRST_CONTACT.get((doc.get("intervention") or {}).get("contact_action"))
+        if action is not None and first is not None:
+            action = first.value  # the contact made, not where the order ended up
         result = training_label((doc.get("delivery") or {}).get("result"))
         delivered += result == 0
         failed += result == 1
