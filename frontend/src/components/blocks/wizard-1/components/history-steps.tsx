@@ -1,14 +1,24 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
+import { type ColumnDef, useTable } from '@tanstack/react-table'
 import { CheckCircle2Icon, SparklesIcon, UploadIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
-import type { HistoryImportResult, ModelHealth } from '@/api/gen'
+import type { HistoryCountry, HistoryImportResult, ModelHealth } from '@/api/gen'
 import {
   getModelHealthOptions,
   importHistoryMutation,
   updateModelsMutation,
 } from '@/api/gen/@tanstack/react-query.gen'
+import { Alert, AlertDescription, AlertTitle } from '@/components/reui/alert'
+import {
+  DataGrid,
+  DataGridContainer,
+  dataGridFeatures,
+  type DataGridFeatures,
+} from '@/components/reui/data-grid/data-grid'
+import { DataGridScrollArea } from '@/components/reui/data-grid/data-grid-scroll-area'
+import { DataGridTable } from '@/components/reui/data-grid/data-grid-table'
 import { Button } from '@/components/ui/button'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -70,38 +80,19 @@ export function HistoryStep({ onDone }: { onDone: (result: HistoryImportResult |
 
 function HistoryReport({ result }: { result: HistoryImportResult }) {
   return (
-    <div className="flex flex-col gap-3 rounded-lg border p-3">
-      <p className="flex items-center gap-2 font-medium">
-        <CheckCircle2Icon className="size-4 text-success" aria-hidden="true" />
-        {result.imported.toLocaleString('en-US')} of {result.received.toLocaleString('en-US')} orders imported
-        {result.rejected_count > 0 && `, ${result.rejected_count.toLocaleString('en-US')} rows rejected`}
-      </p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs tabular-nums">
-          <thead className="text-muted-foreground">
-            <tr>
-              <th className="py-1 text-left font-normal">Country</th>
-              <th className="py-1 text-right font-normal">Orders</th>
-              <th className="py-1 text-right font-normal">Delivered</th>
-              <th className="py-1 text-right font-normal">Failed</th>
-              <th className="py-1 text-right font-normal">Failure rate</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.countries.map((c) => (
-              <tr key={c.country} className="border-t">
-                <td className="py-1">{COUNTRY_LABELS[c.country] ?? c.country}</td>
-                <td className="py-1 text-right">{c.orders.toLocaleString('en-US')}</td>
-                <td className="py-1 text-right">{c.delivered.toLocaleString('en-US')}</td>
-                <td className="py-1 text-right">{c.failed.toLocaleString('en-US')}</td>
-                <td className="py-1 text-right">
-                  {c.delivered + c.failed ? formatPercent(c.failed / (c.delivered + c.failed), 1) : '—'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div className="flex flex-col gap-3">
+      <Alert variant="success" role="status">
+        <CheckCircle2Icon aria-hidden="true" />
+        <AlertTitle>
+          {result.imported.toLocaleString('en-US')} of {result.received.toLocaleString('en-US')} orders
+          imported
+          {result.rejected_count > 0 && `, ${result.rejected_count.toLocaleString('en-US')} rows rejected`}
+        </AlertTitle>
+        <AlertDescription>
+          Failed counts refused and unreachable deliveries only: carrier and shop issues are not the buyer's.
+        </AlertDescription>
+      </Alert>
+      <HistoryGrid countries={result.countries} />
       {result.rejected.length > 0 && (
         <ul className="flex flex-col gap-0.5 text-xs text-muted-foreground">
           {result.rejected.slice(0, 5).map((r) => (
@@ -112,10 +103,48 @@ function HistoryReport({ result }: { result: HistoryImportResult }) {
           ))}
         </ul>
       )}
-      <p className="text-xs text-muted-foreground">
-        Failed counts refused and unreachable deliveries only: carrier and shop issues are not the buyer's.
-      </p>
     </div>
+  )
+}
+
+const count = (value: number) => value.toLocaleString('en-US')
+const NUMERIC = { headerClassName: 'text-right', cellClassName: 'text-right tabular-nums' }
+
+const HISTORY_COLUMNS: ColumnDef<DataGridFeatures, HistoryCountry>[] = [
+  {
+    id: 'country',
+    header: 'Country',
+    cell: ({ row }) => COUNTRY_LABELS[row.original.country] ?? row.original.country,
+  },
+  { id: 'orders', header: 'Orders', cell: ({ row }) => count(row.original.orders), meta: NUMERIC },
+  { id: 'delivered', header: 'Delivered', cell: ({ row }) => count(row.original.delivered), meta: NUMERIC },
+  { id: 'failed', header: 'Failed', cell: ({ row }) => count(row.original.failed), meta: NUMERIC },
+  {
+    id: 'failure_rate',
+    header: 'Failure rate',
+    cell: ({ row }) => {
+      const { delivered, failed } = row.original
+      return delivered + failed ? formatPercent(failed / (delivered + failed), 1) : '—'
+    },
+    meta: NUMERIC,
+  },
+]
+
+function HistoryGrid({ countries }: { countries: HistoryCountry[] }) {
+  const table = useTable({
+    features: dataGridFeatures,
+    columns: HISTORY_COLUMNS,
+    data: countries,
+    getRowId: (row) => row.country,
+  })
+  return (
+    <DataGrid table={table} recordCount={countries.length} tableLayout={{ dense: true, width: 'auto' }}>
+      <DataGridContainer>
+        <DataGridScrollArea>
+          <DataGridTable />
+        </DataGridScrollArea>
+      </DataGridContainer>
+    </DataGrid>
   )
 }
 
@@ -170,10 +199,13 @@ export function TrainStep({ onDone }: { onDone: () => void }) {
         </ul>
       )}
       {done && (
-        <p className="rounded-lg bg-success/10 p-3 text-sm">
-          <span className="font-medium">You're all set.</span> New orders are scored with your models from now
-          on ({formatDateTime(models[0]!.trained_at!)}).
-        </p>
+        <Alert variant="success" role="status">
+          <CheckCircle2Icon aria-hidden="true" />
+          <AlertTitle>You're all set</AlertTitle>
+          <AlertDescription>
+            New orders are scored with your models from now on ({formatDateTime(models[0]!.trained_at!)}).
+          </AlertDescription>
+        </Alert>
       )}
     </div>
   )

@@ -1,7 +1,8 @@
-import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, LoaderCircleIcon } from 'lucide-react'
+import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, InfoIcon, LoaderCircleIcon } from 'lucide-react'
 import { type FormEvent, useCallback, useState } from 'react'
 
 import type { HistoryImportResult, Policy, Shop } from '@/api/gen'
+import { Alert, AlertDescription } from '@/components/reui/alert'
 import { Badge } from '@/components/reui/badge'
 import {
   Stepper,
@@ -17,7 +18,15 @@ import {
 import { TierBadge } from '@/components/tier-badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group'
 import { Separator } from '@/components/ui/separator'
@@ -174,11 +183,14 @@ export function OnboardingWizard({
                     </FieldDescription>
                     {errors.name && <FieldError>{errors.name}</FieldError>}
                   </Field>
-                  <p className="rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
-                    New orders come in by CSV file, from a sales tool (API key{' '}
-                    {shop.intake_api_key_last4 ? `••••${shop.intake_api_key_last4}` : 'created later'}) or by
-                    hand. Each order gets a risk score as soon as it arrives.
-                  </p>
+                  <Alert role="status">
+                    <InfoIcon aria-hidden="true" />
+                    <AlertDescription>
+                      New orders come in by CSV file, from a sales tool (API key{' '}
+                      {shop.intake_api_key_last4 ? `••••${shop.intake_api_key_last4}` : 'created later'}) or
+                      by hand. Each order gets a risk score as soon as it arrives.
+                    </AlertDescription>
+                  </Alert>
                 </FieldGroup>
               </StepperContent>
 
@@ -192,13 +204,13 @@ export function OnboardingWizard({
                   {values.countries.map((c) => {
                     const id = `onb-${c.country}`
                     return (
-                      <fieldset key={c.country} className="flex flex-col gap-3 rounded-lg border p-3">
-                        <legend className="px-1 text-sm font-medium">
+                      <FieldSet key={c.country} className="gap-3 rounded-lg border p-3">
+                        <FieldLegend variant="label" className="mb-0 px-1">
                           {COUNTRY_LABELS[c.country] ?? c.country}{' '}
                           <Badge variant="outline" size="sm">
                             {c.currency}
                           </Badge>
-                        </legend>
+                        </FieldLegend>
                         <div className="grid gap-3 sm:grid-cols-2">
                           <Field data-invalid={!!errors[`${c.country}.failed`]}>
                             <FieldLabel htmlFor={`${id}-failed`}>Cost of one failed delivery</FieldLabel>
@@ -248,7 +260,7 @@ export function OnboardingWizard({
                             <FieldError>{errors[`${c.country}.hours`]}</FieldError>
                           )}
                         </Field>
-                      </fieldset>
+                      </FieldSet>
                     )
                   })}
                 </FieldGroup>
@@ -293,11 +305,9 @@ export function OnboardingWizard({
                       </li>
                     ))}
                   </ul>
-                  <div className="flex flex-col gap-2 rounded-lg bg-muted/60 p-3 text-xs">
-                    <p>
-                      <span className="text-muted-foreground">Shop: </span>
-                      <span className="font-medium">{values.name}</span>
-                    </p>
+                  {/* wizard-1's summary section: a bordered section with a heading and a list. */}
+                  <section className="flex min-w-0 flex-col gap-3 rounded-lg border border-border/70 p-4 text-xs">
+                    <h3 className="text-sm font-semibold">{values.name}</h3>
                     <dl className="grid grid-cols-[auto_1fr_1fr_auto] gap-x-3 gap-y-1">
                       <dt className="text-muted-foreground">Country</dt>
                       <dt className="text-muted-foreground">Failed delivery</dt>
@@ -318,7 +328,7 @@ export function OnboardingWizard({
                         </div>
                       ))}
                     </dl>
-                  </div>
+                  </section>
                 </div>
               </StepperContent>
             </StepperPanel>

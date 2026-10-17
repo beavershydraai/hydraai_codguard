@@ -2,17 +2,21 @@ import { Link } from '@tanstack/react-router'
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  ClipboardListIcon,
+  FlaskConicalIcon,
   GiftIcon,
   MessageSquareTextIcon,
   PencilIcon,
   PhoneCallIcon,
   ScaleIcon,
   ShieldAlertIcon,
+  SparklesIcon,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import type { Call, ContactAttempt, OrderDetail, OrderEvent, RiskScore, Signal } from '@/api/gen'
 import { OrderStatusBadge } from '@/components/order-status-badge'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/reui/alert'
 import { Badge } from '@/components/reui/badge'
 import {
   Timeline,
@@ -25,6 +29,7 @@ import { Frame, FrameHeader, FramePanel, FrameTitle } from '@/components/ui/fram
 import { TierBadge } from '@/components/tier-badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Item, ItemMedia } from '@/components/ui/item'
+import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -324,9 +329,9 @@ function RiskPanel({ score, currency }: { score: RiskScore | null; currency: str
           <ol className="flex flex-col gap-1.5">
             {score.reasons!.map((reason, i) => (
               <li key={reason.text_vi} className="flex gap-2 text-sm">
-                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium tabular-nums">
+                <Badge variant="secondary" radius="full" className="shrink-0 tabular-nums">
                   {i + 1}
-                </span>
+                </Badge>
                 {reason.text_vi}
               </li>
             ))}
@@ -355,7 +360,6 @@ function RiskPanel({ score, currency }: { score: RiskScore | null; currency: str
 
 function SignalRow({ signal, max, currency }: { signal: Signal; max: number; currency: string }) {
   const raises = signal.contribution > 0
-  const width = `${Math.round((Math.abs(signal.contribution) / max) * 100)}%`
   return (
     <li className="flex flex-col gap-1">
       <div className="flex items-baseline justify-between gap-3 text-sm">
@@ -367,12 +371,16 @@ function SignalRow({ signal, max, currency }: { signal: Signal; max: number; cur
           {formatSignalValue(signal, currency)}
         </span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">
-        <div
-          className={cn('h-full rounded-full', raises ? 'bg-destructive' : 'bg-success')}
-          style={{ width }}
-        />
-      </div>
+      <Progress
+        value={Math.round((Math.abs(signal.contribution) / max) * 100)}
+        aria-hidden="true"
+        className={cn(
+          '*:data-[slot=progress-track]:h-1.5',
+          raises
+            ? '[&_[data-slot=progress-indicator]]:bg-destructive'
+            : '[&_[data-slot=progress-indicator]]:bg-success',
+        )}
+      />
       <span className="sr-only">{raises ? 'Raises risk' : 'Lowers risk'}</span>
     </li>
   )
@@ -416,20 +424,24 @@ function DecisionPanel({
       }
     >
       {order.random_test && (
-        <p className="rounded-lg bg-info/10 p-3 text-sm">
-          <span className="font-medium">Random test:</span> this action was picked at random among the actions
-          this risk tier allows, so COD Guard can measure what each action prevents. Turn random tests off in
-          Settings → Automation.
-        </p>
+        <Alert variant="info" role="status">
+          <FlaskConicalIcon aria-hidden="true" />
+          <AlertTitle>Random test</AlertTitle>
+          <AlertDescription>
+            This action was picked at random among the actions this risk tier allows, so COD Guard can measure
+            what each action prevents. Turn random tests off in Settings → Automation.
+          </AlertDescription>
+        </Alert>
       )}
       {order.review_reason && !decision.suggested_action && (
-        <p className="rounded-lg bg-warning/10 p-3 text-sm">
-          <span className="font-medium">Why it is in review:</span>{' '}
-          {REVIEW_REASON_LABELS[order.review_reason]}
-          {order.contact_summary && (
-            <span className="text-muted-foreground"> · AI call: {order.contact_summary}</span>
-          )}
-        </p>
+        <Alert variant="warning" role="status">
+          <ClipboardListIcon aria-hidden="true" />
+          <AlertTitle>Why it is in review</AlertTitle>
+          <AlertDescription>
+            <p>{REVIEW_REASON_LABELS[order.review_reason]}</p>
+            {order.contact_summary && <p>AI call: {order.contact_summary}</p>}
+          </AlertDescription>
+        </Alert>
       )}
       <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         <Metric label="Decided at" value={formatDateTime(decision.decided_at)} />
@@ -443,20 +455,21 @@ function DecisionPanel({
         />
       </dl>
       {decision.suggested_action && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-primary/5 p-3 text-sm">
-          <p>
-            <span className="font-medium">
-              Suggested: {DECISION_ACTION_LABELS[decision.suggested_action]}.
-            </span>{' '}
+        <Alert role="status">
+          <SparklesIcon aria-hidden="true" />
+          <AlertTitle>Suggested: {DECISION_ACTION_LABELS[decision.suggested_action]}</AlertTitle>
+          <AlertDescription>
             Automation is off for this contact, so it waits for you. Accept it, or choose another action.
-          </p>
+          </AlertDescription>
           {onAcceptSuggestion && (
-            <Button size="sm" onClick={onAcceptSuggestion} disabled={acceptingSuggestion}>
-              {acceptingSuggestion && <Spinner data-icon="inline-start" />}
-              Accept suggestion
-            </Button>
+            <AlertAction>
+              <Button size="sm" onClick={onAcceptSuggestion} disabled={acceptingSuggestion}>
+                {acceptingSuggestion && <Spinner data-icon="inline-start" />}
+                Accept suggestion
+              </Button>
+            </AlertAction>
           )}
-        </div>
+        </Alert>
       )}
       {(decision.block_reasons?.length ?? 0) > 0 && (
         <div className="flex flex-col gap-1.5">
@@ -746,7 +759,11 @@ function Metric({ label, value, estimated = false }: { label: string; value: str
     <div className="flex min-w-0 flex-col gap-1">
       <dt className="text-xs text-muted-foreground">
         {label}
-        {estimated && <span className="ms-1 text-[10px] tracking-wide uppercase">(estimated)</span>}
+        {estimated && (
+          <Badge variant="info-light" size="sm" className="ms-1.5">
+            estimated
+          </Badge>
+        )}
       </dt>
       <dd className="text-sm font-medium tabular-nums">{value}</dd>
     </div>

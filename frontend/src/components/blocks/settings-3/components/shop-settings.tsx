@@ -35,7 +35,7 @@ import { TierBadge } from '@/components/tier-badge'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { FieldGroup } from '@/components/ui/field'
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group'
 import {
@@ -690,8 +690,9 @@ function AutomationForm({ policy, canEdit }: { policy: Policy; canEdit: boolean 
                   {CHANNELS.map((channel) => {
                     const on = auto.channels == null || auto.channels.includes(channel)
                     return (
-                      <label key={channel} className="flex items-center gap-2 text-sm">
+                      <Field key={channel} orientation="horizontal" className="w-auto">
                         <Checkbox
+                          id={`auto-channel-${channel}`}
                           checked={on}
                           onCheckedChange={(checked) => {
                             const current = auto.channels ?? CHANNELS
@@ -701,8 +702,10 @@ function AutomationForm({ policy, canEdit }: { policy: Policy; canEdit: boolean 
                             update({ channels: next.length === CHANNELS.length ? null : next })
                           }}
                         />
-                        {SALES_CHANNEL_LABELS[channel]}
-                      </label>
+                        <FieldLabel htmlFor={`auto-channel-${channel}`} className="font-normal">
+                          {SALES_CHANNEL_LABELS[channel]}
+                        </FieldLabel>
+                      </Field>
                     )
                   })}
                 </div>
@@ -732,9 +735,7 @@ function AutomationForm({ policy, canEdit }: { policy: Policy; canEdit: boolean 
                     </div>
                   ))}
                 </div>
-                {!rangesValid && (
-                  <p className="text-xs text-destructive">The minimum is above the maximum.</p>
-                )}
+                {!rangesValid && <FieldError>The minimum is above the maximum.</FieldError>}
               </SettingField>
               <SettingField
                 title="Call only at set times"
@@ -791,9 +792,7 @@ function AutomationForm({ policy, canEdit }: { policy: Policy; canEdit: boolean 
                         ))}
                       </ToggleGroup>
                       {!windowValid && (
-                        <p className="text-xs text-destructive">
-                          Pick at least one day and hours within 08:00–21:00.
-                        </p>
+                        <FieldError>Pick at least one day and hours within 08:00–21:00.</FieldError>
                       )}
                     </>
                   )}
