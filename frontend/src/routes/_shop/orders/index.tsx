@@ -182,6 +182,18 @@ function OrdersPage() {
             </Button>
           </>
         }
+        emptyActions={
+          <>
+            <Button onClick={() => setPanel('import')}>
+              <UploadIcon aria-hidden="true" />
+              Import orders
+            </Button>
+            <Button variant="outline" onClick={() => setPanel('create')}>
+              <PlusIcon aria-hidden="true" />
+              Create order
+            </Button>
+          </>
+        }
         orders={orders}
         total={Math.max(data?.total ?? 0, orders.length)}
         isLoading={isPending}

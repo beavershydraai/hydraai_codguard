@@ -17,12 +17,15 @@ type Country = 'VN' | 'SG' | 'PH'
 
 const UTC_OFFSET_HOURS: Record<Country, number> = { VN: 7, SG: 8, PH: 8 }
 
-/** The last `days` days in the country's local time, as the inclusive dates the API expects. */
-function range(days: number, country: Country): { from: string; to: string; country: Country } {
+/**
+ * The last `days` days in the country's local time, as the inclusive dates the API expects;
+ * `before` days earlier for the period to compare with.
+ */
+function range(days: number, country: Country, before = 0): { from: string; to: string; country: Country } {
   const toDate = (ms: number) =>
     new Date(ms + UTC_OFFSET_HOURS[country] * 3_600_000).toISOString().slice(0, 10)
-  const now = Date.now()
-  return { from: toDate(now - (days - 1) * 86_400_000), to: toDate(now), country }
+  const end = Date.now() - before * 86_400_000
+  return { from: toDate(end - (days - 1) * 86_400_000), to: toDate(end), country }
 }
 
 export const Route = createFileRoute('/_shop/')({
@@ -41,6 +44,11 @@ function DashboardPage() {
     ...getDashboardSummaryOptions({ query: range(Number(period), country) }),
     staleTime: 60_000,
   })
+  // The period before, for the trend on each figure.
+  const previous = useQuery({
+    ...getDashboardSummaryOptions({ query: range(Number(period), country, Number(period)) }),
+    staleTime: 5 * 60_000,
+  })
   // A shop with no order at all has just signed up: set it up first.
   const shop = useQuery(getShopOptions())
   const firstOrder = useQuery(listOrdersOptions({ query: { limit: 1 } }))
@@ -54,6 +62,7 @@ function DashboardPage() {
   return (
     <RoiDashboard
       summary={data}
+      previous={previous.data}
       isLoading={isPending}
       period={period}
       onPeriodChange={(next) =>

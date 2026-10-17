@@ -1,9 +1,18 @@
 import { type ColumnVisibilityState, type SortingState, useTable } from '@tanstack/react-table'
-import { FileDownIcon, MoreHorizontalIcon, RefreshCwIcon, SearchIcon, XIcon } from 'lucide-react'
+import {
+  FileDownIcon,
+  HistoryIcon,
+  MoreHorizontalIcon,
+  RefreshCwIcon,
+  SearchIcon,
+  SettingsIcon,
+  XIcon,
+} from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { toast } from 'sonner'
 
 import type { ListOrdersData, OrderSummary } from '@/api/gen'
+import { EmptyState } from '@/components/empty-state'
 import { DataGrid as ReuiDataGrid, dataGridFeatures } from '@/components/reui/data-grid/data-grid'
 import { DataGridScrollArea } from '@/components/reui/data-grid/data-grid-scroll-area'
 import { DataGridTable } from '@/components/reui/data-grid/data-grid-table'
@@ -168,6 +177,7 @@ export function OrdersDataGrid({
   onNext,
   onRefresh,
   headerActions,
+  emptyActions,
 }: {
   /** The page shown, in the server's order. */
   orders: OrderSummary[]
@@ -191,6 +201,8 @@ export function OrdersDataGrid({
   onRefresh: () => void
   /** Buttons in the frame header, like the block's "Add customer" button. */
   headerActions?: ReactNode
+  /** What to do when the shop has no order at all (empty-state-1). */
+  emptyActions?: ReactNode
 }) {
   const [columnOrder, setColumnOrder] = useState<string[]>(columns.map((c) => c.id as string))
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>({})
@@ -208,6 +220,8 @@ export function OrdersDataGrid({
       columnOrder,
       columnVisibility,
     },
+    // The order and its actions stay in view when the grid scrolls sideways (ReUI c-data-grid-16).
+    initialState: { columnPinning: { start: ['order'], end: ['actions'] } },
     manualSorting: true,
     manualPagination: true,
     pageCount: 1,
@@ -242,9 +256,19 @@ export function OrdersDataGrid({
         recordCount={orders.length}
         isLoading={isLoading}
         emptyMessage={
-          filtered
-            ? 'No orders match the search or filters. Clear the filters to see all orders.'
-            : 'No orders yet.'
+          filtered ? (
+            'No orders match the search or filters. Clear the filters to see all orders.'
+          ) : (
+            <EmptyState
+              title="No orders yet"
+              description="Each order gets a risk score and an action as soon as it arrives: from a CSV file, your sales tool or by hand."
+              actions={emptyActions}
+              guides={[
+                { label: 'Upload your past orders', icon: HistoryIcon, to: '/onboarding' },
+                { label: 'Set costs and contact hours', icon: SettingsIcon, to: '/settings' },
+              ]}
+            />
+          )
         }
         tableLayout={{
           columnsPinnable: true,
