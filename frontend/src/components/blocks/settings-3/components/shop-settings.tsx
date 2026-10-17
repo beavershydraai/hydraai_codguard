@@ -32,6 +32,8 @@ import {
   TimelineSeparator,
 } from '@/components/reui/timeline'
 import { TierBadge } from '@/components/tier-badge'
+import { TimeField } from '@/components/time-field'
+import { MinutesField } from '@/components/minutes-field'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -274,23 +276,9 @@ function ShopForm({ shop, canEdit }: { shop: Shop; canEdit: boolean }) {
                 contentClassName="@md/field-group:w-78"
               >
                 <div className="flex items-center gap-2">
-                  <Input
-                    type="time"
-                    aria-label="Start"
-                    value={form.start}
-                    onChange={set('start')}
-                    min="08:00"
-                    max="21:00"
-                  />
+                  <TimeField aria-label="Start" value={form.start} onChange={set('start')} />
                   <span className="text-muted-foreground">–</span>
-                  <Input
-                    type="time"
-                    aria-label="End"
-                    value={form.end}
-                    onChange={set('end')}
-                    min="08:00"
-                    max="21:00"
-                  />
+                  <TimeField aria-label="End" value={form.end} onChange={set('end')} />
                 </div>
               </SettingField>
             </FieldGroup>
@@ -439,24 +427,17 @@ function PolicyForm({ policy, canEdit }: { policy: Policy; canEdit: boolean }) {
                       }
                     />
                     {t.if_no_response && (
-                      <InputGroup className="sm:col-span-2">
-                        <InputGroupAddon align="inline-start">
-                          <InputGroupText>After</InputGroupText>
-                        </InputGroupAddon>
-                        <InputGroupInput
+                      <div className="flex items-center gap-2 sm:col-span-2">
+                        <span className="text-sm text-muted-foreground">After</span>
+                        <MinutesField
                           aria-label={`Wait for a response, ${RISK_TIER_LABELS[t.tier].toLowerCase()} risk`}
-                          type="number"
                           min={1}
                           max={2880}
-                          value={t.no_response_after_minutes ?? ''}
-                          onChange={(event) =>
-                            update(t.tier, { no_response_after_minutes: Number(event.target.value) || null })
-                          }
+                          step={15}
+                          value={t.no_response_after_minutes ?? null}
+                          onChange={(minutes) => update(t.tier, { no_response_after_minutes: minutes })}
                         />
-                        <InputGroupAddon align="inline-end">
-                          <InputGroupText>min</InputGroupText>
-                        </InputGroupAddon>
-                      </InputGroup>
+                      </div>
                     )}
                   </div>
                 </SettingField>
@@ -752,23 +733,17 @@ function AutomationForm({ policy, canEdit }: { policy: Policy; canEdit: boolean 
                   {callWindow && (
                     <>
                       <div className="flex items-center gap-2">
-                        <Input
-                          type="time"
+                        <TimeField
                           aria-label="Calls from"
                           value={callWindow.start ?? '08:00'}
-                          min="08:00"
-                          max="21:00"
                           onChange={(event) =>
                             update({ call_window: { ...callWindow, start: event.target.value } })
                           }
                         />
                         <span className="text-muted-foreground">–</span>
-                        <Input
-                          type="time"
+                        <TimeField
                           aria-label="Calls until"
                           value={callWindow.end ?? '21:00'}
-                          min="08:00"
-                          max="21:00"
                           onChange={(event) =>
                             update({ call_window: { ...callWindow, end: event.target.value } })
                           }
@@ -824,19 +799,13 @@ function AutomationForm({ policy, canEdit }: { policy: Policy; canEdit: boolean 
                 description="At least 30 minutes between two calls."
                 last
               >
-                <InputGroup>
-                  <InputGroupInput
-                    aria-label="Wait before calling again"
-                    type="number"
-                    min={30}
-                    max={1440}
-                    value={auto.retry_after_minutes}
-                    onChange={(event) => update({ retry_after_minutes: Number(event.target.value) || 0 })}
-                  />
-                  <InputGroupAddon align="inline-end">
-                    <InputGroupText>min</InputGroupText>
-                  </InputGroupAddon>
-                </InputGroup>
+                <MinutesField
+                  aria-label="Wait before calling again"
+                  min={30}
+                  max={1440}
+                  value={auto.retry_after_minutes}
+                  onChange={(minutes) => update({ retry_after_minutes: minutes ?? 0 })}
+                />
               </SettingField>
             </FieldGroup>
           </fieldset>

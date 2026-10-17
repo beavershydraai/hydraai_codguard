@@ -10,3 +10,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+/** ReUI's filters and cascader read `process.env.NODE_ENV`, which Vite replaces at build time. */
+declare const process: { env: { NODE_ENV?: string } }
