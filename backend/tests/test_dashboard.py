@@ -43,6 +43,14 @@ def test_summary_counts_and_estimates_savings():
     assert s.currency == "VND"
 
 
+def test_an_order_counts_as_the_contact_it_got_not_where_it_ended():
+    # A link went unanswered, the AI call too: the order now waits for review.
+    escalated = doc("hold_for_review") | {"intervention": {"contact_action": "link"}}
+    s = dashboard.summarize([escalated], VN, "VN", date(2026, 10, 1), date(2026, 10, 7))
+    assert [(a.action, a.count) for a in s.actions] == [("send_confirmation_link", 1)]
+    assert s.estimated_savings_vnd == 3700  # 0.4*10000-300
+
+
 def test_period_is_local_days_of_the_country():
     f = dashboard.filters("VN", date(2026, 10, 1), date(2026, 10, 1))
     assert f.placed_from.isoformat() == "2026-09-30T17:00:00+00:00"
