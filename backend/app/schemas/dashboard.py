@@ -148,6 +148,16 @@ class BacktestResult(ApiModel):
     comparison: list[PolicyComparison]
 
 
+class ModelUpdate(ApiModel):
+    """The last update of a country's model (`codguard-train`), whether or not it replaced it."""
+
+    at: datetime = Field(description="When the update finished.")
+    orders: int = Field(ge=0, description="Orders with a delivery result it learned from.")
+    replaced: bool = Field(
+        description="The new model replaced the current one: only when it is better."
+    )
+
+
 class ModelHealth(ApiModel):
     """How a country's risk model is doing, in plain words for the shop owner (app/risk/health.py).
     "Update" means the model learns again from all orders with a delivery result."""
@@ -165,6 +175,11 @@ class ModelHealth(ApiModel):
                     "checked_at": "2026-10-16T19:00:30Z",
                     "new_outcomes": 1240,
                     "updating": False,
+                    "last_update": {
+                        "at": "2026-10-15T17:34:50Z",
+                        "orders": 7677,
+                        "replaced": True,
+                    },
                 }
             ]
         }
@@ -185,3 +200,4 @@ class ModelHealth(ApiModel):
         default=None, description="Orders with a delivery result since it last learned."
     )
     updating: bool = Field(default=False, description="An update is running.")
+    last_update: ModelUpdate | None = Field(default=None, description="The last update.")

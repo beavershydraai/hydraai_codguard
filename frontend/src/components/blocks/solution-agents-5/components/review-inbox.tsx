@@ -58,7 +58,7 @@ import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useNow } from '@/hooks/use-now'
-import { formatDateTime, formatVnd } from '@/lib/labels'
+import { formatDateTime, formatMoney } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 
 import {
@@ -110,7 +110,10 @@ export function ReviewInbox({
   const now = useNow()
   const late = orders.filter((o) => now - Date.parse(o.updated_at) > WAIT_WARNING_MS)
   const highRisk = orders.filter((o) => o.tier === 'high' || o.tier === 'very_high')
-  const held = orders.reduce((sum, o) => sum + o.cod_amount_vnd, 0)
+  // Each currency on its own: amounts are in the currency's minor unit.
+  const held = new Map<string, number>()
+  for (const o of orders)
+    held.set(o.currency ?? 'VND', (held.get(o.currency ?? 'VND') ?? 0) + o.cod_amount_vnd)
   const oldest = [...orders].sort((a, b) => a.updated_at.localeCompare(b.updated_at))[0]
 
   const ask = (targets: OrderSummary[], action: ReviewDecision) => {
@@ -176,7 +179,9 @@ export function ReviewInbox({
               },
               {
                 title: 'COD on hold',
-                value: formatVnd(held),
+                value:
+                  [...held].map(([currency, amount]) => formatMoney(amount, currency)).join(' · ') ||
+                  formatMoney(0),
                 note: 'Total COD of the pending orders',
                 icon: <WalletIcon aria-hidden="true" />,
               },

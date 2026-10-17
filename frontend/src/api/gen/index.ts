@@ -195,6 +195,7 @@ export type {
   LoginResponses,
   Me,
   ModelHealth,
+  ModelUpdate,
   OrderCreate,
   OrderDetail,
   OrderEvent,

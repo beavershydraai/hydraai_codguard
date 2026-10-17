@@ -13,7 +13,8 @@ module turns it, with the trained model's metrics, into one of three states and 
 - no model, before the first training.
 
 Updating starts the Cloud Run job `codguard-train`, which trains every country again; a new model
-replaces the current one only if it is at least as good. The current model keeps scoring meanwhile.
+replaces the current one only if it is better. The current model keeps scoring meanwhile.
+Each run writes `latest/run.json`, promoted or not, so an update is seen to end either way.
 """
 
 import json
@@ -22,7 +23,7 @@ from datetime import UTC, datetime, timedelta
 
 from app.data import branches
 from app.risk import artifacts
-from app.schemas.dashboard import ModelHealth
+from app.schemas.dashboard import ModelHealth, ModelUpdate
 
 NEW_OUTCOMES_MIN = 200
 NEW_OUTCOMES_SHARE = 0.25
@@ -66,6 +67,12 @@ def country_health(code: str, now: datetime, requested: datetime | None = None) 
     if metrics is None:
         return ModelHealth(country=code, status="no_model", reasons=["No model has learned yet."])
     learned = trained_at(metrics.get("version"))
+    run = _json("latest/run.json", code) or metrics  # models trained before run.json existed
+    last = ModelUpdate(
+        at=trained_at(run.get("version")) or learned,
+        orders=run.get("rows") or 0,
+        replaced=run.get("promoted", True),
+    )
     monitor = _json("latest/monitor.json", code) or {}
     reasons = []
     if (monitor.get("performance") or {}).get("degraded"):
@@ -78,9 +85,7 @@ def country_health(code: str, now: datetime, requested: datetime | None = None) 
     rows = metrics.get("rows") or 0
     if new is not None and new >= max(NEW_OUTCOMES_MIN, NEW_OUTCOMES_SHARE * rows):
         reasons.append(f"{new:,} orders got a delivery result since it last learned.")
-    updating = bool(
-        requested and (learned is None or requested > learned) and now - requested < UPDATE_WINDOW
-    )
+    updating = bool(requested and requested > last.at and now - requested < UPDATE_WINDOW)
     checked = monitor.get("checked_at")
     return ModelHealth(
         country=code,
@@ -92,6 +97,7 @@ def country_health(code: str, now: datetime, requested: datetime | None = None) 
         checked_at=datetime.fromisoformat(checked) if checked else None,
         new_outcomes=new,
         updating=updating,
+        last_update=last,
     )
 
 

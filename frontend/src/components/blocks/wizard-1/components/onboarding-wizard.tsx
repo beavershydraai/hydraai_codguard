@@ -265,7 +265,7 @@ export function OnboardingWizard({
               </StepperContent>
 
               <StepperContent value={4}>
-                <TrainStep onDone={onTrained} />
+                <TrainStep trained={trained} onDone={onTrained} />
                 {errors.model && <FieldError className="mt-3">{errors.model}</FieldError>}
               </StepperContent>
 

@@ -11,6 +11,7 @@ import type { ReactNode } from 'react'
 
 import type { RiskTier } from '@/api/gen'
 import { RISK_TIER_LABELS } from '@/lib/labels'
+import { mockMode } from '@/mocks/fetch'
 
 // ── Types ──
 
@@ -49,7 +50,11 @@ export const TIER_SHORTCUTS: TierShortcut[] = [
 
 // ── Nav Secondary ──
 
+// Demo tools (reset, spam simulation) are answered only by the in-browser mock: shown with it,
+// never with the backend, where they would only show sample results.
 export const NAV_SECONDARY: NavItem[] = [
-  { id: 'demo', label: 'Demo', icon: <FlaskConicalIcon />, to: '/demo' },
+  ...(mockMode === 'all'
+    ? [{ id: 'demo', label: 'Demo', icon: <FlaskConicalIcon />, to: '/demo' as const }]
+    : []),
   { id: 'settings', label: 'Settings', icon: <SettingsIcon />, to: '/settings' },
 ]

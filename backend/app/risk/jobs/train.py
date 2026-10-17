@@ -120,6 +120,8 @@ def train_country(docs: list[dict], code: str) -> None:
             artifacts.write(f"latest/{name}", data, code)
     # GET /dashboard/backtest: always for the model now in latest/ (E9.1)
     artifacts.write("latest/backtest.json", json.dumps(result, indent=1).encode(), code)
+    # Every run, promoted or not: GET /dashboard/model-health sees that the update finished.
+    artifacts.write("latest/run.json", files["metrics.json"], code)
     print(json.dumps(report))
 
 

@@ -9,6 +9,12 @@ from app.schemas.telephony import CallJob
 
 MODEL_OUTCOMES = ("CONFIRMED", "EDITED", "CANCELLED", "NOT_ORDERED", "WRONG_PERSON", "UNCLEAR")
 ITEM_FIELDS = (CallChangeField.ITEM_VARIANT, CallChangeField.ITEM_QUANTITY)
+# The order's own limits (Address.raw, OrderUpdate): a value outside them could not be applied.
+LENGTHS = {
+    CallChangeField.DELIVERY_ADDRESS: (3, 500),
+    CallChangeField.RECIPIENT_NAME: (1, 100),
+    CallChangeField.DELIVERY_NOTE: (1, 500),
+}
 
 
 class OutcomeError(ValueError):
@@ -66,6 +72,11 @@ def validate_outcome(args: dict, job: CallJob) -> Decision:
         new_value = _text(raw.get("new_value"))
         if not new_value:
             raise OutcomeError("new_value is empty. Use the value the buyer confirmed.")
+        shortest, longest = LENGTHS.get(change_field, (1, 1000))
+        if not shortest <= len(new_value) <= longest:
+            raise OutcomeError(
+                f"new_value for {change_field.value} must be {shortest} to {longest} characters."
+            )
         item_name = _text(raw.get("item_name")) or None
         item_variant = _text(raw.get("item_variant")) or None
         quantity = None

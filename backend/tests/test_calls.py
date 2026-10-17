@@ -395,6 +395,20 @@ def test_a_confirmed_call_clears_the_order_and_keeps_the_transcript_off_the_orde
     assert conflict.value.problem.status == 409
 
 
+def test_a_result_that_failed_to_apply_is_applied_on_the_retry(calls, monkeypatch):
+    asyncio.run(run(_pipe(calls)))
+    call = calls.start_for_shop("ord_test", "shop_a", "admin@gmail.com", NOW)
+    dialing(calls, call.id)
+    real = calls.run_event
+    monkeypatch.setattr(calls, "run_event", lambda *a: (_ for _ in ()).throw(RuntimeError()))
+    with pytest.raises(RuntimeError):
+        calls.record_result(call.id, result())
+    assert order(calls)["status"] != OrderStatus.CLEARED_TO_SHIP
+    monkeypatch.setattr(calls, "run_event", real)
+    calls.record_result(call.id, result())  # the controller posts it again from its outbox
+    assert order(calls)["status"] == OrderStatus.CLEARED_TO_SHIP
+
+
 def test_an_edited_call_changes_the_address(calls):
     asyncio.run(run(_pipe(calls)))
     call = calls.start_for_shop("ord_test", "shop_a", "admin@gmail.com", NOW)

@@ -19,6 +19,7 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { invalidate, problemMessage } from '@/lib/api'
+import { CURRENCY_SYMBOLS, fromMinor, toMinor } from '@/lib/labels'
 import { toInternational } from '@/lib/phone'
 
 import { PhoneField } from './phone-field'
@@ -35,6 +36,13 @@ export function EditOrderSheet({
 }) {
   const queryClient = useQueryClient()
   const [form, setForm] = useState(() => initial(order))
+  // Each opening starts from the order as it is now (a call may have changed it since).
+  const [openFor, setOpenFor] = useState(open)
+  if (open !== openFor) {
+    setOpenFor(open)
+    if (open) setForm(initial(order))
+  }
+  const currency = order.currency ?? 'VND'
   const mutation = useMutation({
     ...updateOrderMutation(),
     onSuccess: (updated) => {
@@ -49,13 +57,7 @@ export function EditOrderSheet({
     setForm((f) => ({ ...f, [key]: event.target.value }))
 
   return (
-    <Sheet
-      open={open}
-      onOpenChange={(next) => {
-        if (next) setForm(initial(order))
-        onOpenChange(next)
-      }}
-    >
+    <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex w-full flex-col sm:max-w-md">
         <SheetHeader>
           <SheetTitle>Edit order {order.external_id ?? order.id}</SheetTitle>
@@ -76,7 +78,7 @@ export function EditOrderSheet({
                 ...(form.buyer_phone !== initial(order).buyer_phone ? { buyer_phone: form.buyer_phone } : {}),
                 recipient_name: form.recipient_name.trim() || null,
                 address: { raw: form.address.trim() },
-                prepaid_vnd: Number(form.prepaid) || 0,
+                prepaid_vnd: toMinor(form.prepaid, currency),
                 note: form.note.trim() || null,
               },
             })
@@ -112,8 +114,10 @@ export function EditOrderSheet({
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="edit-prepaid">Prepaid (₫)</FieldLabel>
-              <Input id="edit-prepaid" value={form.prepaid} onChange={set('prepaid')} inputMode="numeric" />
+              <FieldLabel htmlFor="edit-prepaid">
+                Prepaid ({CURRENCY_SYMBOLS[currency] ?? currency})
+              </FieldLabel>
+              <Input id="edit-prepaid" value={form.prepaid} onChange={set('prepaid')} inputMode="decimal" />
               <FieldDescription>
                 Raising the prepaid amount lowers the amount left to collect.
               </FieldDescription>
@@ -149,7 +153,7 @@ function initial(order: OrderDetail) {
     buyer_phone: toInternational(order.buyer_phone),
     recipient_name: order.recipient_name ?? '',
     address: order.address.raw,
-    prepaid: String(order.prepaid_vnd),
+    prepaid: fromMinor(order.prepaid_vnd, order.currency),
     note: order.note ?? '',
   }
 }

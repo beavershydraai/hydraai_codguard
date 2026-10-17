@@ -1515,6 +1515,36 @@ export type ModelHealth = {
    * An update is running.
    */
   updating?: boolean
+  /**
+   * The last update.
+   */
+  last_update?: ModelUpdate | null
+}
+
+/**
+ * ModelUpdate
+ *
+ * The last update of a country's model (`codguard-train`), whether or not it replaced it.
+ */
+export type ModelUpdate = {
+  /**
+   * At
+   *
+   * When the update finished.
+   */
+  at: string
+  /**
+   * Orders
+   *
+   * Orders with a delivery result it learned from.
+   */
+  orders: number
+  /**
+   * Replaced
+   *
+   * The new model replaced the current one: only when it is better.
+   */
+  replaced: boolean
 }
 
 /**

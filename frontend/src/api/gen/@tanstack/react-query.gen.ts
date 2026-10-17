@@ -808,7 +808,7 @@ export const getModelHealthOptions = (options?: Options<GetModelHealthData>) =>
 /**
  * Update the risk models (owner only)
  *
- * Starts codguard-train: every country's model learns again from all orders with a delivery result, in about two minutes. A new model replaces the current one only if it is at least as good; the current one keeps scoring meanwhile. 409 while an update is running.
+ * Starts codguard-train: every country's model learns again from all orders with a delivery result, in about two minutes. A new model replaces the current one only if it is better; the current one keeps scoring meanwhile. 409 while an update is running.
  */
 export const updateModelsMutation = (
   options?: Partial<Options<UpdateModelsData>>,
