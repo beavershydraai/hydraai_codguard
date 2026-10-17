@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router'
 import {
+  type ExpandedState,
   type PaginationState,
   type RowSelectionState,
   type SortingState,
@@ -10,6 +11,7 @@ import {
   ClockAlertIcon,
   InboxIcon,
   ListChecksIcon,
+  PartyPopperIcon,
   RefreshCwIcon,
   SearchIcon,
   WalletIcon,
@@ -18,6 +20,7 @@ import {
 import { useMemo, useState } from 'react'
 
 import type { OrderSummary } from '@/api/gen'
+import { EmptyState } from '@/components/empty-state'
 import { Badge } from '@/components/reui/badge'
 import { DataGrid, dataGridFeatures } from '@/components/reui/data-grid/data-grid'
 import { DataGridPagination } from '@/components/reui/data-grid/data-grid-pagination'
@@ -58,7 +61,14 @@ import { useNow } from '@/hooks/use-now'
 import { formatDateTime, formatVnd } from '@/lib/labels'
 import { cn } from '@/lib/utils'
 
-import { createReviewColumns, REVIEW_DECISIONS, type ReviewDecision, WAIT_WARNING_MS } from './review-columns'
+import {
+  createReviewColumns,
+  groupByReason,
+  REVIEW_DECISIONS,
+  type ReviewDecision,
+  type ReviewRow,
+  WAIT_WARNING_MS,
+} from './review-columns'
 import { SummaryTiles } from './summary-tiles'
 
 // Manual review queue (E7.4), adapted from ReUI solution-agents-5 (approval inbox): a header with
@@ -179,7 +189,24 @@ export function ReviewInbox({
             ]}
           />
 
-          <ReviewQueue orders={orders} isLoading={isLoading} onDecide={ask} onAccept={onAccept} />
+          {!isLoading && orders.length === 0 ? (
+            <Frame variant="default" spacing="sm" className="w-full">
+              <FramePanel>
+                <EmptyState
+                  icon={PartyPopperIcon}
+                  title="No orders need a decision"
+                  description="Orders land here when a buyer does not answer, a deposit is not paid, a phone is invalid, or a contact waits for your approval."
+                  actions={
+                    <Button variant="outline" onClick={() => navigate({ to: '/orders' })}>
+                      Go to Orders
+                    </Button>
+                  }
+                />
+              </FramePanel>
+            </Frame>
+          ) : (
+            <ReviewQueue orders={orders} isLoading={isLoading} onDecide={ask} onAccept={onAccept} />
+          )}
 
           <RecentDecisions decisions={decisions} />
         </div>
@@ -252,6 +279,11 @@ function ReviewQueue({
 }) {
   const [search, setSearch] = useState('')
   const [lateOnly, setLateOnly] = useState(false)
+  const [grouped, setGrouped] = useState(true)
+  // Groups start open; orders open one at a time to show their details.
+  const [expanded, setExpanded] = useState<ExpandedState>({})
+  const isExpanded = (id: string) =>
+    expanded === true || (expanded[id] ?? (id.startsWith('group:') ? true : false))
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 })
   // Newest first, so an order that just arrived is on the first page.
   const [sorting, setSorting] = useState<SortingState>([{ id: 'updated_at', desc: true }])
@@ -268,21 +300,37 @@ function ReviewQueue({
     )
   }, [orders, search, lateOnly, now])
 
+  const rows: ReviewRow[] = useMemo(() => (grouped ? groupByReason(filtered) : filtered), [grouped, filtered])
   const columns = useMemo(
     () => createReviewColumns({ onDecide: (order, action) => onDecide([order], action), onAccept }),
     [onDecide, onAccept],
   )
+  const expandedMap = Object.fromEntries(
+    [...rows.map((r) => r.id), ...filtered.map((o) => o.id)].map((id) => [id, isExpanded(id)]),
+  )
   const table = useTable({
     features: dataGridFeatures,
     columns,
-    data: filtered,
-    state: { pagination, sorting, rowSelection },
+    data: rows,
+    // Grouped, the whole queue shows at once (at most 200 orders): a page break inside a group
+    // would hide part of it.
+    manualPagination: grouped,
+    state: {
+      pagination,
+      sorting,
+      rowSelection,
+      expanded: expandedMap,
+    },
     getRowId: (row) => row.id,
-    pageCount: Math.ceil(filtered.length / pagination.pageSize),
+    getSubRows: (row) => ('subRows' in row ? row.subRows : undefined),
+    getRowCanExpand: () => true,
+    pageCount: grouped ? 1 : Math.ceil(filtered.length / pagination.pageSize),
     enableRowSelection: true,
     onPaginationChange: setPagination,
     onSortingChange: setSorting,
     onRowSelectionChange: setRowSelection,
+    onExpandedChange: (updater) =>
+      setExpanded(typeof updater === 'function' ? updater(expandedMap) : updater),
   })
   const selected = filtered.filter((o) => rowSelection[o.id])
 
@@ -291,8 +339,14 @@ function ReviewQueue({
       table={table}
       recordCount={filtered.length}
       isLoading={isLoading}
-      emptyMessage={orders.length === 0 ? 'No orders pending review. 🎉' : 'No orders match the filter.'}
+      emptyMessage="No orders match the filter."
       tableLayout={{ headerSticky: true, dense: true, width: 'auto' }}
+      tableClassNames={{
+        // A group's own detail row is empty (data-grid-grouping-1); group rows get a muted band.
+        body: '[&>tr:has(>td:only-child:empty)]:hidden',
+        bodyRow:
+          '[&:has([data-review-row=group])>td]:h-11 [&:has([data-review-row=group])>td]:bg-muted/45 [&:has([data-review-row=group])>td]:hover:bg-muted/45',
+      }}
     >
       <Frame variant="default" spacing="sm" className="w-full">
         <FrameHeader className="flex-row items-center justify-between gap-3">
@@ -302,14 +356,24 @@ function ReviewQueue({
               {filtered.length} orders in this list
             </FrameDescription>
           </div>
-          <Button
-            variant="outline"
-            aria-pressed={lateOnly}
-            onClick={() => setLateOnly((v) => !v)}
-            className={cn(lateOnly && 'bg-muted')}
-          >
-            Waiting over 2 hours
-          </Button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              variant="outline"
+              aria-pressed={grouped}
+              onClick={() => setGrouped((v) => !v)}
+              className={cn(grouped && 'bg-muted')}
+            >
+              Group by reason
+            </Button>
+            <Button
+              variant="outline"
+              aria-pressed={lateOnly}
+              onClick={() => setLateOnly((v) => !v)}
+              className={cn(lateOnly && 'bg-muted')}
+            >
+              Waiting over 2 hours
+            </Button>
+          </div>
         </FrameHeader>
         <FramePanel className="bg-card p-0! shadow-none!">
           <div className="px-4 py-3">
@@ -366,14 +430,16 @@ function ReviewQueue({
             <DataGridTable />
           </DataGridScrollArea>
         </FramePanel>
-        <FrameFooter>
-          <DataGridPagination
-            info="{from}–{to} of {count} orders"
-            rowsPerPageLabel="Orders per page"
-            previousPageLabel="Previous page"
-            nextPageLabel="Next page"
-          />
-        </FrameFooter>
+        {!grouped && (
+          <FrameFooter>
+            <DataGridPagination
+              info="{from}–{to} of {count} orders"
+              rowsPerPageLabel="Orders per page"
+              previousPageLabel="Previous page"
+              nextPageLabel="Next page"
+            />
+          </FrameFooter>
+        )}
       </Frame>
     </DataGrid>
   )
